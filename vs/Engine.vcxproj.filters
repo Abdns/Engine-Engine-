@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Engine">
+      <UniqueIdentifier>{1a111111-1111-1111-1111-111111111111}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Helpers">
+      <UniqueIdentifier>{2b222222-2222-2222-2222-222222222222}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Win32">
+      <UniqueIdentifier>{3c333333-3333-3333-3333-333333333333}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Win32\include">
+      <UniqueIdentifier>{3c333333-3333-3333-3333-333333333334}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Win32\src">
+      <UniqueIdentifier>{3c333333-3333-3333-3333-333333333335}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Build">
+      <UniqueIdentifier>{4d444444-4444-4444-4444-444444444444}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ClCompile Include="..\source\Engine\EngineLayer.cpp">
+      <Filter>Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\win32\src\Source.cpp">
+      <Filter>Win32\src</Filter>
+    </ClCompile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ClInclude Include="..\source\Engine\EngineLayer.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\Engine\GameInput.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\Engine\GameMemory.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\Engine\GameRender.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\Engine\GameSound.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\Engine\GameState.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\helpers\HandmadeMath.h">
+      <Filter>Helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\helpers\Intrinsics.h">
+      <Filter>Helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\helpers\Types.h">
+      <Filter>Helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\win32\include\Win32FileIO.h">
+      <Filter>Win32\include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\win32\include\Win32GameCode.h">
+      <Filter>Win32\include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\win32\include\Win32GDI.h">
+      <Filter>Win32\include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\win32\include\Win32Input.h">
+      <Filter>Win32\include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\win32\include\Win32Replay.h">
+      <Filter>Win32\include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\win32\include\Win32Sound.h">
+      <Filter>Win32\include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\win32\include\Win32Timer.h">
+      <Filter>Win32\include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\win32\include\Win32Window.h">
+      <Filter>Win32\include</Filter>
+    </ClInclude>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\source\win32\src\Win32FileIO.cpp">
+      <Filter>Win32\src</Filter>
+    </None>
+    <None Include="..\source\win32\src\Win32GameCode.cpp">
+      <Filter>Win32\src</Filter>
+    </None>
+    <None Include="..\source\win32\src\Win32GDI.cpp">
+      <Filter>Win32\src</Filter>
+    </None>
+    <None Include="..\source\win32\src\Win32Input.cpp">
+      <Filter>Win32\src</Filter>
+    </None>
+    <None Include="..\source\win32\src\Win32Replay.cpp">
+      <Filter>Win32\src</Filter>
+    </None>
+    <None Include="..\source\win32\src\Win32Sound.cpp">
+      <Filter>Win32\src</Filter>
+    </None>
+    <None Include="..\source\win32\src\Win32Timer.cpp">
+      <Filter>Win32\src</Filter>
+    </None>
+    <None Include="..\source\win32\src\Win32Window.cpp">
+      <Filter>Win32\src</Filter>
+    </None>
+    <None Include="..\build.bat">
+      <Filter>Build</Filter>
+    </None>
+  </ItemGroup>
+</Project>

@@ -1,0 +1,32 @@
+# Default: пусть Git сам решает, текстовый ли файл, без нормализации EOL
+* -text
+
+# Исходники — LF
+*.h    text eol=lf
+*.hpp  text eol=lf
+*.c    text eol=lf
+*.cpp  text eol=lf
+
+# Проектные файлы VS — CRLF (так делает MSBuild)
+*.sln       text eol=crlf
+*.vcxproj   text eol=crlf
+*.filters   text eol=crlf
+*.props     text eol=crlf
+
+# Batch — CRLF (cmd.exe иногда капризничает)
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Бинарники — без нормализации
+*.png    binary
+*.jpg    binary
+*.bmp    binary
+*.ico    binary
+*.wav    binary
+*.ogg    binary
+*.hmi    binary
+*.exe    binary
+*.dll    binary
+*.lib    binary
+*.pdb    binary
+*.obj    binary
