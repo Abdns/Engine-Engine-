@@ -74,4 +74,20 @@ void Win32RecordDebugMarker(win32_debug_time_marker* Markers,
                             int MarkerCount,
                             win32_sound_lock_region* LockRegion);
 
+// ---- High-level helpers ---------------------------------------------------
+
+// Полная инициализация звука: Init + Clear + Play + аллокация Samples-буфера.
+// Возвращает указатель на массив Samples (VirtualAlloc'нутый).
+int16* Win32StartSound(HWND Window, win32_sound_output* SoundOutput);
+
+// Весь аудио-кадр одним вызовом: посчитать окно, дёрнуть игру за сэмплами,
+// записать в DirectSound. Возвращает LockRegion для отладочных маркеров.
+win32_sound_lock_region Win32UpdateAudio(win32_sound_output* SoundOutput,
+                                        LARGE_INTEGER FlipWallClock,
+                                        real32 TargetSecondsPerFrame,
+                                        bool32* SoundIsValid,
+                                        game_get_sound_samples* GetSoundSamples,
+                                        game_memory* GameMemory,
+                                        int16* Samples);
+
 #endif

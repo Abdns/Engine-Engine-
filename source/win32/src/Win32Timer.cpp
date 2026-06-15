@@ -47,3 +47,14 @@ real32 Win32WaitForFrameEnd(LARGE_INTEGER* LastCounter,
     *LastCounter = EndCounter;
     return MSPerFrame;
 }
+
+void Win32OutputFrameStats(real32 MSPerFrame, int64 CycleElapsed)
+{
+    real32 FPS  = 1000.0f / MSPerFrame;
+    real32 MCPF = (real32)CycleElapsed / (1000.0f * 1000.0f);
+
+    char TextBuffer[256];
+    wsprintfA(TextBuffer, "%dms/f, %dF/s, %dmc/f\n",
+              (int)MSPerFrame, (int)FPS, (int)MCPF);
+    OutputDebugStringA(TextBuffer);
+}

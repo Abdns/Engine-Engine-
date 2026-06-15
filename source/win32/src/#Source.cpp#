@@ -9,7 +9,6 @@
 #include "Win32Timer.h"
 #include "Win32GameCode.h"
 #include "Win32Replay.h"
-#include "VulkanApi.h"
 
 #include "Win32Window.cpp"
 #include "Win32Input.cpp"
@@ -19,7 +18,17 @@
 #include "Win32Timer.cpp"
 #include "Win32GameCode.cpp"
 #include "Win32Replay.cpp"
-#include "VulkanApi.cpp"
+#include <vulkan/vulkan.h>
+
+internal void InitVulkan()
+{
+    uint32 extensionCount;
+
+
+    vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+    
+}
+
 
 
 int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowCode)

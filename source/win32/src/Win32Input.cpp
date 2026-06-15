@@ -1,4 +1,5 @@
 #include "Win32Input.h"
+#include "Win32Window.h"   // для Win32ProcessPendingMessages
 
 X_INPUT_GET_STATE(XInputGetStateStub)
 {
@@ -97,4 +98,52 @@ void Win32ProcessXInput(game_input* NewInput, game_input* OldInput)
             NewController->IsConnected = false;
         }
     }
+}
+
+void Win32PrepareKeyboardInput(game_input* NewInput, game_input* OldInput)
+{
+    game_controller_input* OldKb = &OldInput->Controllers[0];
+    game_controller_input* NewKb = &NewInput->Controllers[0];
+    *NewKb = {};
+    NewKb->IsConnected = true;
+    for (int i = 0; i < ArrayCount(NewKb->Buttons); ++i)
+    {
+        NewKb->Buttons[i].EndedDown = OldKb->Buttons[i].EndedDown;
+    }
+}
+
+internal void Win32ProcessMouseButton(game_button_state* NewState, game_button_state* OldState, bool32 IsDown)
+{
+    NewState->EndedDown = IsDown;
+    NewState->HalfTransitionCount = (OldState->EndedDown != IsDown) ? 1 : 0;
+}
+
+void Win32ProcessMouseInput(HWND Window, game_input* NewInput, game_input* OldInput)
+{
+    POINT MouseP;
+    GetCursorPos(&MouseP);
+    ScreenToClient(Window, &MouseP);
+    NewInput->MouseX = MouseP.x;
+    NewInput->MouseY = MouseP.y;
+    NewInput->MouseZ = 0;
+
+    Win32ProcessMouseButton(&NewInput->MouseButtons[0], &OldInput->MouseButtons[0],
+                            GetKeyState(VK_LBUTTON) & (1 << 15));
+    Win32ProcessMouseButton(&NewInput->MouseButtons[1], &OldInput->MouseButtons[1],
+                            GetKeyState(VK_MBUTTON) & (1 << 15));
+    Win32ProcessMouseButton(&NewInput->MouseButtons[2], &OldInput->MouseButtons[2],
+                            GetKeyState(VK_RBUTTON) & (1 << 15));
+    Win32ProcessMouseButton(&NewInput->MouseButtons[3], &OldInput->MouseButtons[3],
+                            GetKeyState(VK_XBUTTON1) & (1 << 15));
+    Win32ProcessMouseButton(&NewInput->MouseButtons[4], &OldInput->MouseButtons[4],
+                            GetKeyState(VK_XBUTTON2) & (1 << 15));
+}
+
+void Win32ProcessInput(game_input* NewInput, game_input* OldInput,
+                      win32_state* State, HWND Window)
+{
+    Win32PrepareKeyboardInput(NewInput, OldInput);
+    Win32ProcessPendingMessages(State, &NewInput->Controllers[0]);
+    Win32ProcessMouseInput(Window, NewInput, OldInput);
+    Win32ProcessXInput(NewInput, OldInput);
 }

@@ -1,4 +1,5 @@
 #include "EngineLayer.h"
+#include <vulkan/vulkan.h>
 
 internal void GameOutputSound(game_state* GameState, game_sound_output_buffer* SoundBuffer, int ToneHz)
 {
