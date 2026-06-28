@@ -31,4 +31,11 @@ void Win32EndInputPlayBack    (win32_state* State);
 void Win32RecordInput   (win32_state* State, game_input* NewInput);
 void Win32PlayBackInput (win32_state* State, game_input* NewInput);
 
+// Аллоцировать единый блок памяти для игры через VirtualAlloc + назначить
+// platform-указатели и сохранить блок в win32_state для snapshot'ов.
+void Win32AllocateGameMemory(game_memory* GameMemory, win32_state* State);
+
+// Один вызов в цикле: если записываем — пишем ввод, если воспроизводим — читаем.
+void Win32UpdateRecordAndPlayback(win32_state* State, game_input* NewInput);
+
 #endif

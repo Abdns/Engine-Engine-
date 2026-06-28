@@ -5,76 +5,45 @@
       <Configuration>Debug</Configuration>
       <Platform>x64</Platform>
     </ProjectConfiguration>
-    <ProjectConfiguration Include="Release|x64">
-      <Configuration>Release</Configuration>
-      <Platform>x64</Platform>
-    </ProjectConfiguration>
   </ItemGroup>
-
   <PropertyGroup Label="Globals">
-    <VCProjectVersion>17.0</VCProjectVersion>
-    <ProjectGuid>{8A7E5F3C-2D1B-4E6A-9C8F-1234567890AB}</ProjectGuid>
+    <ProjectGuid>{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}</ProjectGuid>
     <RootNamespace>Engine</RootNamespace>
     <Keyword>MakeFileProj</Keyword>
-    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
-
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
-
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Makefile</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
-    <ConfigurationType>Makefile</ConfigurationType>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
-  </PropertyGroup>
-
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
-
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
-  </ImportGroup>
-
-  <PropertyGroup Label="UserMacros" />
-
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <OutDir>$(SolutionDir)..\build\</OutDir>
-    <IntDir>$(SolutionDir)..\build\</IntDir>
-    <NMakeBuildCommandLine>cd /d "$(SolutionDir).." &amp;&amp; call build.bat</NMakeBuildCommandLine>
-    <NMakeReBuildCommandLine>cd /d "$(SolutionDir).." &amp;&amp; if exist build\*.obj del /Q build\*.obj &amp;&amp; if exist build\*.pdb del /Q build\*.pdb &amp;&amp; if exist build\Engine.exe del /Q build\Engine.exe &amp;&amp; call build.bat</NMakeReBuildCommandLine>
-    <NMakeCleanCommandLine>cd /d "$(SolutionDir).." &amp;&amp; if exist build\*.obj del /Q build\*.obj &amp;&amp; if exist build\*.pdb del /Q build\*.pdb &amp;&amp; if exist build\Engine.exe del /Q build\Engine.exe</NMakeCleanCommandLine>
-    <NMakeOutput>$(SolutionDir)..\build\Engine.exe</NMakeOutput>
-    <NMakePreprocessorDefinitions>HANDMADE_INTERNAL=1;HANDMADE_SLOW=1;HANDMADE_WIN32=1;UNICODE;_UNICODE;_DEBUG;_MBCS;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
-    <NMakeIncludeSearchPath>$(SolutionDir)..\source\helpers;$(SolutionDir)..\source\Engine;$(SolutionDir)..\source\win32\include;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
-    <AdditionalOptions>/std:c++17 %(AdditionalOptions)</AdditionalOptions>
+    <NMakeBuildCommandLine>cd /d "$(ProjectDir).." &amp;&amp; build.bat</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>cd /d "$(ProjectDir).." &amp;&amp; build.bat</NMakeReBuildCommandLine>
+    <NMakeCleanCommandLine>if exist "$(ProjectDir)..\build" rd /s /q "$(ProjectDir)..\build"</NMakeCleanCommandLine>
+    <NMakeOutput>$(ProjectDir)..\build\Engine.exe</NMakeOutput>
+    <NMakePreprocessorDefinitions>HANDMADE_INTERNAL=1;HANDMADE_SLOW=1;HANDMADE_WIN32=1;VK_USE_PLATFORM_WIN32_KHR;UNICODE;_UNICODE;_DEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+    <NMakeIncludeSearchPath>$(ProjectDir)..\source;$(ProjectDir)..\source\helpers;$(ProjectDir)..\source\Engine;$(ProjectDir)..\source\win32\include;$(ProjectDir)..\source\Graphics\Vulkan;$(VULKAN_SDK)\Include;$(VC_IncludePath);$(WindowsSDK_IncludePath);$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+    <LocalDebuggerCommand>$(ProjectDir)..\build\Engine.exe</LocalDebuggerCommand>
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)..\build</LocalDebuggerWorkingDirectory>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
-
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>$(SolutionDir)..\build\</OutDir>
-    <IntDir>$(SolutionDir)..\build\</IntDir>
-    <NMakeBuildCommandLine>cd /d "$(SolutionDir).." &amp;&amp; call build.bat</NMakeBuildCommandLine>
-    <NMakeReBuildCommandLine>cd /d "$(SolutionDir).." &amp;&amp; if exist build\*.obj del /Q build\*.obj &amp;&amp; if exist build\*.pdb del /Q build\*.pdb &amp;&amp; if exist build\Engine.exe del /Q build\Engine.exe &amp;&amp; call build.bat</NMakeReBuildCommandLine>
-    <NMakeCleanCommandLine>cd /d "$(SolutionDir).." &amp;&amp; if exist build\*.obj del /Q build\*.obj &amp;&amp; if exist build\*.pdb del /Q build\*.pdb &amp;&amp; if exist build\Engine.exe del /Q build\Engine.exe</NMakeCleanCommandLine>
-    <NMakeOutput>$(SolutionDir)..\build\Engine.exe</NMakeOutput>
-    <NMakePreprocessorDefinitions>HANDMADE_INTERNAL=1;HANDMADE_SLOW=1;HANDMADE_WIN32=1;UNICODE;_UNICODE;NDEBUG;_MBCS;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
-    <NMakeIncludeSearchPath>$(SolutionDir)..\source\helpers;$(SolutionDir)..\source\Engine;$(SolutionDir)..\source\win32\include;$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
-    <AdditionalOptions>/std:c++17 %(AdditionalOptions)</AdditionalOptions>
-  </PropertyGroup>
-
   <ItemDefinitionGroup>
   </ItemDefinitionGroup>
-
   <ItemGroup>
     <ClCompile Include="..\source\Engine\EngineLayer.cpp" />
+    <ClCompile Include="..\source\Graphics\Vulkan\VulkanApi.cpp" />
+    <ClCompile Include="..\source\Graphics\Vulkan\VulkanShaders.cpp" />
     <ClCompile Include="..\source\win32\src\Source.cpp" />
+    <ClCompile Include="..\source\win32\src\Win32FileIO.cpp" />
+    <ClCompile Include="..\source\win32\src\Win32GameCode.cpp" />
+    <ClCompile Include="..\source\win32\src\Win32GDI.cpp" />
+    <ClCompile Include="..\source\win32\src\Win32Input.cpp" />
+    <ClCompile Include="..\source\win32\src\Win32Replay.cpp" />
+    <ClCompile Include="..\source\win32\src\Win32Sound.cpp" />
+    <ClCompile Include="..\source\win32\src\Win32Timer.cpp" />
+    <ClCompile Include="..\source\win32\src\Win32Window.cpp" />
   </ItemGroup>
-
   <ItemGroup>
     <ClInclude Include="..\source\Engine\EngineLayer.h" />
     <ClInclude Include="..\source\Engine\GameInput.h" />
@@ -82,8 +51,12 @@
     <ClInclude Include="..\source\Engine\GameRender.h" />
     <ClInclude Include="..\source\Engine\GameSound.h" />
     <ClInclude Include="..\source\Engine\GameState.h" />
+    <ClInclude Include="..\source\Graphics\Vulkan\VulkanApi.h" />
+    <ClInclude Include="..\source\Graphics\Vulkan\VulkanShaders.h" />
+    <ClInclude Include="..\source\helpers\Debug.h" />
     <ClInclude Include="..\source\helpers\HandmadeMath.h" />
     <ClInclude Include="..\source\helpers\Intrinsics.h" />
+    <ClInclude Include="..\source\helpers\Strings.h" />
     <ClInclude Include="..\source\helpers\Types.h" />
     <ClInclude Include="..\source\win32\include\Win32FileIO.h" />
     <ClInclude Include="..\source\win32\include\Win32GameCode.h" />
@@ -94,18 +67,10 @@
     <ClInclude Include="..\source\win32\include\Win32Timer.h" />
     <ClInclude Include="..\source\win32\include\Win32Window.h" />
   </ItemGroup>
-
   <ItemGroup>
-    <None Include="..\source\win32\src\Win32FileIO.cpp" />
-    <None Include="..\source\win32\src\Win32GameCode.cpp" />
-    <None Include="..\source\win32\src\Win32GDI.cpp" />
-    <None Include="..\source\win32\src\Win32Input.cpp" />
-    <None Include="..\source\win32\src\Win32Replay.cpp" />
-    <None Include="..\source\win32\src\Win32Sound.cpp" />
-    <None Include="..\source\win32\src\Win32Timer.cpp" />
-    <None Include="..\source\win32\src\Win32Window.cpp" />
+    <None Include="..\source\Graphics\Vulkan\shaders\default.vert" />
+    <None Include="..\source\Graphics\Vulkan\shaders\default.frag" />
     <None Include="..\build.bat" />
   </ItemGroup>
-
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

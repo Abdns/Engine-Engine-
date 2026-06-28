@@ -53,6 +53,21 @@ void Win32DisplayBufferInWindow(win32_offscreen_buffer* Buffer, HDC DeviceContex
 	              Buffer->Memory, &Buffer->Info, DIB_RGB_COLORS, SRCCOPY);
 }
 
+void Win32FillGameOffscreenBuffer(game_offscreen_buffer* Out, win32_offscreen_buffer* Src)
+{
+	Out->Memory        = Src->Memory;
+	Out->Width         = Src->Width;
+	Out->Height        = Src->Height;
+	Out->Pitch         = Src->Pitch;
+	Out->BytesPerPixel = Src->BytesPerPixel;
+}
+
+void Win32DisplayFrame(HWND Window, HDC DeviceContext)
+{
+	win32_window_dimensions Dim = GetWindowDimension(Window);
+	Win32DisplayBufferInWindow(&GlobalBackBuffer, DeviceContext, Dim.Width, Dim.Height);
+}
+
 void Win32ResizeDIB(win32_offscreen_buffer* Buffer, int Width, int Height)
 {
 	if (Buffer->Memory)

@@ -1,5 +1,6 @@
 #include "Win32Sound.h"
 #include "Win32GDI.h"
+#include "Win32Timer.h"   // Win32GetWallClock / Win32GetSecondsElapsed
 
 LPDIRECTSOUNDBUFFER GlobalSecondaryBuffer;
 
@@ -304,4 +305,51 @@ void Win32DebugSyncDisplay(win32_offscreen_buffer* Buffer,
                                             ExpectedFlipColor);
         }
     }
+}
+
+// ============================================================
+//   High-level helpers
+// ============================================================
+
+int16* Win32StartSound(HWND Window, win32_sound_output* SoundOutput)
+{
+    Win32InitDSound(Window, SoundOutput->SamplesPerSecond, SoundOutput->SecondaryBufferSize);
+    Win32ClearSoundBuffer(SoundOutput);
+    if (GlobalSecondaryBuffer)
+    {
+        GlobalSecondaryBuffer->Play(0, 0, DSBPLAY_LOOPING);
+    }
+    return (int16*)VirtualAlloc(0, SoundOutput->SecondaryBufferSize,
+                                MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+}
+
+win32_sound_lock_region Win32UpdateAudio(win32_sound_output* SoundOutput,
+                                        LARGE_INTEGER FlipWallClock,
+                                        real32 TargetSecondsPerFrame,
+                                        bool32* SoundIsValid,
+                                        game_get_sound_samples* GetSoundSamples,
+                                        game_memory* GameMemory,
+                                        int16* Samples)
+{
+    real32 FromBeginToAudioSeconds = Win32GetSecondsElapsed(FlipWallClock, Win32GetWallClock());
+    real32 SecondsLeftUntilFlip    = TargetSecondsPerFrame - FromBeginToAudioSeconds;
+    if (SecondsLeftUntilFlip < 0) SecondsLeftUntilFlip = 0;
+
+    win32_sound_lock_region LockRegion =
+        Win32GetSoundLockRegion(SoundOutput, SecondsLeftUntilFlip,
+                                TargetSecondsPerFrame, SoundIsValid);
+
+    if (LockRegion.IsValid)
+    {
+        game_sound_output_buffer SoundBuffer = {};
+        SoundBuffer.SamplesPerSecond = SoundOutput->SamplesPerSecond;
+        SoundBuffer.SampleCount      = LockRegion.BytesToWrite / SoundOutput->BytesPerSample;
+        SoundBuffer.Samples          = Samples;
+
+        GetSoundSamples(GameMemory, &SoundBuffer);
+        Win32FillSoundBuffer(SoundOutput, LockRegion.ByteToLock,
+                             LockRegion.BytesToWrite, &SoundBuffer);
+    }
+
+    return LockRegion;
 }

@@ -25,4 +25,7 @@ real32 Win32WaitForFrameEnd(LARGE_INTEGER* LastCounter,
                             real32 TargetSecondsPerFrame,
                             bool32 SleepIsGranular);
 
+// Распечатать "Xms/f, YF/s, Zmc/f" в OutputDebugString.
+void Win32OutputFrameStats(real32 MSPerFrame, int64 CycleElapsed);
+
 #endif
