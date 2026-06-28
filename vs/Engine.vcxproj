@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}</ProjectGuid>
+    <RootNamespace>Engine</RootNamespace>
+    <Keyword>MakeFileProj</Keyword>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <NMakeBuildCommandLine>cd /d "$(ProjectDir).." &amp;&amp; build.bat</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>cd /d "$(ProjectDir).." &amp;&amp; build.bat</NMakeReBuildCommandLine>
+    <NMakeCleanCommandLine>if exist "$(ProjectDir)..\build" rd /s /q "$(ProjectDir)..\build"</NMakeCleanCommandLine>
+    <NMakeOutput>$(ProjectDir)..\build\Engine.exe</NMakeOutput>
+    <NMakePreprocessorDefinitions>HANDMADE_INTERNAL=1;HANDMADE_SLOW=1;HANDMADE_WIN32=1;VK_USE_PLATFORM_WIN32_KHR;UNICODE;_UNICODE;_DEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+    <NMakeIncludeSearchPath>$(ProjectDir)..\source;$(ProjectDir)..\source\helpers;$(ProjectDir)..\source\Engine;$(ProjectDir)..\source\win32\include;$(ProjectDir)..\source\Graphics\Vulkan;$(VULKAN_SDK)\Include;$(VC_IncludePath);$(WindowsSDK_IncludePath);$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+    <LocalDebuggerCommand>$(ProjectDir)..\build\Engine.exe</LocalDebuggerCommand>
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)..\build</LocalDebuggerWorkingDirectory>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="..\source\Engine\EngineLayer.cpp" />
+    <ClCompile Include="..\source\Graphics\Vulkan\VulkanApi.cpp" />
+    <ClCompile Include="..\source\Graphics\Vulkan\VulkanShaders.cpp" />
+    <ClCompile Include="..\source\win32\src\Source.cpp" />
+    <ClCompile Include="..\source\win32\src\Win32FileIO.cpp" />
+    <ClCompile Include="..\source\win32\src\Win32GameCode.cpp" />
+    <ClCompile Include="..\source\win32\src\Win32GDI.cpp" />
+    <ClCompile Include="..\source\win32\src\Win32Input.cpp" />
+    <ClCompile Include="..\source\win32\src\Win32Replay.cpp" />
+    <ClCompile Include="..\source\win32\src\Win32Sound.cpp" />
+    <ClCompile Include="..\source\win32\src\Win32Timer.cpp" />
+    <ClCompile Include="..\source\win32\src\Win32Window.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\source\Engine\EngineLayer.h" />
+    <ClInclude Include="..\source\Engine\GameInput.h" />
+    <ClInclude Include="..\source\Engine\GameMemory.h" />
+    <ClInclude Include="..\source\Engine\GameRender.h" />
+    <ClInclude Include="..\source\Engine\GameSound.h" />
+    <ClInclude Include="..\source\Engine\GameState.h" />
+    <ClInclude Include="..\source\Graphics\Vulkan\VulkanApi.h" />
+    <ClInclude Include="..\source\Graphics\Vulkan\VulkanShaders.h" />
+    <ClInclude Include="..\source\helpers\Debug.h" />
+    <ClInclude Include="..\source\helpers\HandmadeMath.h" />
+    <ClInclude Include="..\source\helpers\Intrinsics.h" />
+    <ClInclude Include="..\source\helpers\Strings.h" />
+    <ClInclude Include="..\source\helpers\Types.h" />
+    <ClInclude Include="..\source\win32\include\Win32FileIO.h" />
+    <ClInclude Include="..\source\win32\include\Win32GameCode.h" />
+    <ClInclude Include="..\source\win32\include\Win32GDI.h" />
+    <ClInclude Include="..\source\win32\include\Win32Input.h" />
+    <ClInclude Include="..\source\win32\include\Win32Replay.h" />
+    <ClInclude Include="..\source\win32\include\Win32Sound.h" />
+    <ClInclude Include="..\source\win32\include\Win32Timer.h" />
+    <ClInclude Include="..\source\win32\include\Win32Window.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\source\Graphics\Vulkan\shaders\default.vert" />
+    <None Include="..\source\Graphics\Vulkan\shaders\default.frag" />
+    <None Include="..\build.bat" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

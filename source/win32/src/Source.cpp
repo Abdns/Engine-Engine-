@@ -10,6 +10,7 @@
 #include "Win32GameCode.h"
 #include "Win32Replay.h"
 #include "VulkanApi.h"
+#include "VulkanShaders.h"
 
 #include "Win32Window.cpp"
 #include "Win32Input.cpp"
@@ -19,6 +20,7 @@
 #include "Win32Timer.cpp"
 #include "Win32GameCode.cpp"
 #include "Win32Replay.cpp"
+#include "VulkanShaders.cpp"
 #include "VulkanApi.cpp"
 
 
@@ -56,7 +58,7 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
     game_input* NewInput = &Input[0];
     game_input* OldInput = &Input[1];
 
-    InitVulkan();
+    InitVulkan(Instance, Window);
 
     isRunning = true;
     bool32 SoundIsValid = false;
@@ -114,6 +116,8 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
         LastCycleCount      = EndCycleCount;
         Win32OutputFrameStats(MSPerFrame, CycleElapsed);
     }
+
+    ShutdownVulkan();
 
     return 0;
 }

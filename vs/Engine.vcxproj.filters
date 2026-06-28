@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="source">
+      <UniqueIdentifier>{a1000000-0000-0000-0000-000000000001}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\Engine">
+      <UniqueIdentifier>{a1000000-0000-0000-0000-000000000002}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\Graphics">
+      <UniqueIdentifier>{a1000000-0000-0000-0000-000000000003}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\Graphics\Vulkan">
+      <UniqueIdentifier>{a1000000-0000-0000-0000-000000000004}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\Graphics\Vulkan\shaders">
+      <UniqueIdentifier>{a1000000-0000-0000-0000-000000000005}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\helpers">
+      <UniqueIdentifier>{a1000000-0000-0000-0000-000000000006}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\win32">
+      <UniqueIdentifier>{a1000000-0000-0000-0000-000000000007}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\win32\include">
+      <UniqueIdentifier>{a1000000-0000-0000-0000-000000000008}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="source\win32\src">
+      <UniqueIdentifier>{a1000000-0000-0000-0000-000000000009}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\source\Engine\EngineLayer.cpp">
+      <Filter>source\Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\Graphics\Vulkan\VulkanApi.cpp">
+      <Filter>source\Graphics\Vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\Graphics\Vulkan\VulkanShaders.cpp">
+      <Filter>source\Graphics\Vulkan</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\win32\src\Source.cpp">
+      <Filter>source\win32\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\win32\src\Win32FileIO.cpp">
+      <Filter>source\win32\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\win32\src\Win32GameCode.cpp">
+      <Filter>source\win32\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\win32\src\Win32GDI.cpp">
+      <Filter>source\win32\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\win32\src\Win32Input.cpp">
+      <Filter>source\win32\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\win32\src\Win32Replay.cpp">
+      <Filter>source\win32\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\win32\src\Win32Sound.cpp">
+      <Filter>source\win32\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\win32\src\Win32Timer.cpp">
+      <Filter>source\win32\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\source\win32\src\Win32Window.cpp">
+      <Filter>source\win32\src</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\source\Engine\EngineLayer.h">
+      <Filter>source\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\Engine\GameInput.h">
+      <Filter>source\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\Engine\GameMemory.h">
+      <Filter>source\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\Engine\GameRender.h">
+      <Filter>source\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\Engine\GameSound.h">
+      <Filter>source\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\Engine\GameState.h">
+      <Filter>source\Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\Graphics\Vulkan\VulkanApi.h">
+      <Filter>source\Graphics\Vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\Graphics\Vulkan\VulkanShaders.h">
+      <Filter>source\Graphics\Vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\helpers\Debug.h">
+      <Filter>source\helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\helpers\HandmadeMath.h">
+      <Filter>source\helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\helpers\Intrinsics.h">
+      <Filter>source\helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\helpers\Strings.h">
+      <Filter>source\helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\helpers\Types.h">
+      <Filter>source\helpers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\win32\include\Win32FileIO.h">
+      <Filter>source\win32\include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\win32\include\Win32GameCode.h">
+      <Filter>source\win32\include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\win32\include\Win32GDI.h">
+      <Filter>source\win32\include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\win32\include\Win32Input.h">
+      <Filter>source\win32\include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\win32\include\Win32Replay.h">
+      <Filter>source\win32\include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\win32\include\Win32Sound.h">
+      <Filter>source\win32\include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\win32\include\Win32Timer.h">
+      <Filter>source\win32\include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\source\win32\include\Win32Window.h">
+      <Filter>source\win32\include</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\source\Graphics\Vulkan\shaders\default.vert">
+      <Filter>source\Graphics\Vulkan\shaders</Filter>
+    </None>
+    <None Include="..\source\Graphics\Vulkan\shaders\default.frag">
+      <Filter>source\Graphics\Vulkan\shaders</Filter>
+    </None>
+  </ItemGroup>
+</Project>
