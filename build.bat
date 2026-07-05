@@ -12,6 +12,10 @@ if not exist CompiledShaders mkdir CompiledShaders
 for %%f in (..\source\Graphics\Vulkan\shaders\*.vert) do "%VULKAN_SDK%\Bin\glslc.exe" "%%f" -o "CompiledShaders\%%~nf.vert.spv"
 for %%f in (..\source\Graphics\Vulkan\shaders\*.frag) do "%VULKAN_SDK%\Bin\glslc.exe" "%%f" -o "CompiledShaders\%%~nf.frag.spv"
 
+REM ---- Assets: копируем модели/ресурсы рядом с exe (build\assets\models\) ----
+if not exist assets\models mkdir assets\models
+xcopy /Y /D "..\assets\models\*.*" "assets\models\" > NUL 2> NUL
+
 set CommonCompilerFlags=-MTd^
  -nologo^
  -Gm-^
@@ -36,9 +40,12 @@ set CommonCompilerFlags=-MTd^
  -Z7^
  -I..\source^
  -I..\source\helpers^
- -I..\source\Engine^
+ -I..\source\Game^
+ -I..\source\PlatformApi^
  -I..\source\win32\include^
+ -I..\source\win32\src^
  -I..\source\Graphics\Vulkan^
+ -I..\source\Graphics\SoftwareRender^
  -I"%VULKAN_SDK%\Include"
 
 set CommonLinkerFlags=-incremental:no^
@@ -48,18 +55,18 @@ set CommonLinkerFlags=-incremental:no^
 REM ---- Game DLL ----
 echo WAITING_FOR_PDB > lock.tmp
 cl %CommonCompilerFlags%^
- -LD ..\source\Engine\EngineLayer.cpp^
- -Fmengine_game.map^
- -FeEngine_game.dll^
+ -LD ..\source\Game\Game.cpp^
+ -FmGame.map^
+ -FeGame.dll^
  /link %CommonLinkerFlags%^
- -PDB:engine_game_%random%.pdb^
+ -PDB:game_%random%.pdb^
  -EXPORT:GameUpdateAndRender^
  -EXPORT:GameGetSoundSamples
 del lock.tmp
 
 REM ---- Platform EXE ----
 cl %CommonCompilerFlags%^
- ..\source\win32\src\Source.cpp^
+ ..\source\win32\Program.cpp^
  -FmEngine.map^
  -FeEngine.exe^
  /link %CommonLinkerFlags%^

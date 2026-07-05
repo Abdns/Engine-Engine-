@@ -4,7 +4,7 @@
 #include <windows.h>
 #include <Xinput.h>
 #include "Types.h"
-#include "EngineLayer.h"
+#include "PlatformAPI.h"   // game_input
 #include "Win32Replay.h"  // нужен win32_state для Win32ProcessInput
 
 #define X_INPUT_GET_STATE(name) DWORD WINAPI name(DWORD dwUserIndex, XINPUT_STATE* pState)

@@ -4,7 +4,7 @@
 #include <windows.h>
 #include <dsound.h>
 #include "Types.h"
-#include "EngineLayer.h"
+#include "PlatformAPI.h"   // game_sound_output_buffer / game_memory
 #include "Win32GDI.h"
 
 extern LPDIRECTSOUNDBUFFER GlobalSecondaryBuffer;

@@ -24,8 +24,8 @@ LRESULT CALLBACK Win32MainWindowCallback(HWND Window, UINT Message, WPARAM WPara
         {
             PAINTSTRUCT Paint;
             HDC DeviceContext = BeginPaint(Window, &Paint);
-            win32_window_dimensions Dimension = GetWindowDimension(Window);
-            Win32DisplayBufferInWindow(&GlobalBackBuffer, DeviceContext, Dimension.Width, Dimension.Height);
+           /* win32_window_dimensions Dimension = GetWindowDimension(Window);
+            Win32DisplayBufferInWindow(&GlobalBackBuffer, DeviceContext, Dimension.Width, Dimension.Height);*/
             EndPaint(Window, &Paint);
         } break;
 
@@ -72,11 +72,7 @@ HWND Win32CreateMainWindow(HINSTANCE Instance, LPCWSTR ClassName, LPCWSTR Title,
     WNDCLASS WindowsClass = CreateWindowClass(CS_HREDRAW | CS_VREDRAW, Win32MainWindowCallback, Instance, ClassName);
     RegisterClass(&WindowsClass);
 
-    return CreateWindowEx(
-        0, ClassName, Title,
-        WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-        50, 50, Width, Height,
-        0, 0, Instance, 0);
+    return CreateWindowEx(0, ClassName, Title, WS_OVERLAPPEDWINDOW | WS_VISIBLE, 50, 50, Width, Height,0, 0, Instance, 0);
 }
 
 // Day 025: техника Raymond Chen — fullscreen toggle через сохранение/восстановление
@@ -104,9 +100,7 @@ void Win32ToggleFullscreen(HWND Window)
     {
         SetWindowLong(Window, GWL_STYLE, Style | WS_OVERLAPPEDWINDOW);
         SetWindowPlacement(Window, &GlobalWindowPosition);
-        SetWindowPos(Window, 0, 0, 0, 0, 0,
-                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
-                     SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+        SetWindowPos(Window, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
     }
 }
 
