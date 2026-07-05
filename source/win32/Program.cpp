@@ -1,6 +1,7 @@
 #include <windows.h>
 #include "Types.h"
-#include "EngineLayer.h"
+#include "Memory.h"
+#include "PlatformAPI.h"   // граница игра<->платформа (данные + функции игры)
 #include "Win32Window.h"
 #include "Win32Input.h"
 #include "Win32Sound.h"
@@ -8,9 +9,9 @@
 #include "Win32FileIO.h"
 #include "Win32Timer.h"
 #include "Win32GameCode.h"
+#include "Win32Memory.h"
 #include "Win32Replay.h"
 #include "VulkanApi.h"
-#include "VulkanShaders.h"
 
 #include "Win32Window.cpp"
 #include "Win32Input.cpp"
@@ -19,10 +20,15 @@
 #include "Win32FileIO.cpp"
 #include "Win32Timer.cpp"
 #include "Win32GameCode.cpp"
+#include "Win32Memory.cpp"
 #include "Win32Replay.cpp"
 #include "VulkanShaders.cpp"
+#include "VulkanRender.cpp"
 #include "VulkanApi.cpp"
+#include "SoftwareRender.cpp"
 
+// Выбор графического бэкенда (компиляционно): 1 = Vulkan, 0 = Software (CPU) + GDI.
+#define RENDER_BACKEND_VULKAN 1
 
 int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowCode)
 {
@@ -54,11 +60,21 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
     Win32AllocateGameMemory(&GameMemory, &State);
     Assert(Samples && GameMemory.PermanentStorage);
 
+    uint32 PlatformMemorySize = (uint32)Megabytes(16);
+    memory_arena PlatformArena;
+    InitializeArena(&PlatformArena, PlatformMemorySize, VirtualAlloc(0, PlatformMemorySize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+
+    // Буфер команд рендера выделяем ИЗ платформенной арены (как push-buffer render_group у Кейси).
+    uint32 RenderMemorySize = (uint32)Megabytes(4);
+    void  *RenderMemory     = PushSize(&PlatformArena, RenderMemorySize);
+
     game_input  Input[2] = {};
     game_input* NewInput = &Input[0];
     game_input* OldInput = &Input[1];
 
+#if RENDER_BACKEND_VULKAN
     InitVulkan(Instance, Window);
+#endif
 
     isRunning = true;
     bool32 SoundIsValid = false;
@@ -77,8 +93,7 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
     while (isRunning)
     {
         HMODULE PreviousDLL = Game.GameCodeDLL;
-        Win32ReloadGameCodeIfChanged(&Game, Paths.SourceGameCodeDLLFullPath,
-                                     Paths.TempGameCodeDLLFullPath, Paths.GameCodeLockFullPath);
+        Win32ReloadGameCodeIfChanged(&Game, Paths.SourceGameCodeDLLFullPath, Paths.TempGameCodeDLLFullPath, Paths.GameCodeLockFullPath);
         GameMemory.ExecutableReloaded = (Game.GameCodeDLL != PreviousDLL);
 
         NewInput->dtForFrame = TargetSecondsPerFrame;
@@ -87,26 +102,31 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
         Win32UpdateRecordAndPlayback(&State, NewInput);
 #endif
 
-        game_offscreen_buffer Buffer = {};
-        Win32FillGameOffscreenBuffer(&Buffer, &GlobalBackBuffer);
-        Game.UpdateAndRender(&GameMemory, NewInput, &Buffer);
+        RECT ClientRect;
+        GetClientRect(Window, &ClientRect);
+        render_commands RenderCommands = InitRenderCommands(RenderMemory, RenderMemorySize, (uint32)(ClientRect.right - ClientRect.left), (uint32)(ClientRect.bottom - ClientRect.top));
+        Game.UpdateAndRender(&GameMemory, NewInput, &RenderCommands);
 
-        win32_sound_lock_region LockRegion = Win32UpdateAudio(
-            &SoundOutput, FlipWallClock, TargetSecondsPerFrame, &SoundIsValid,
-            Game.GetSoundSamples, &GameMemory, Samples);
+        win32_sound_lock_region LockRegion = Win32UpdateAudio(&SoundOutput, FlipWallClock, TargetSecondsPerFrame, &SoundIsValid, Game.GetSoundSamples, &GameMemory, Samples);
 
         real32 MSPerFrame = Win32WaitForFrameEnd(&LastCounter, TargetSecondsPerFrame, SleepIsGranular);
 
 #if HANDMADE_INTERNAL
-        Win32DebugSyncDisplay(&GlobalBackBuffer, ArrayCount(DebugTimeMarkers), DebugTimeMarkers,
-                              DebugTimeMarkerIndex - 1, &SoundOutput, TargetSecondsPerFrame);
+        Win32DebugSyncDisplay(&GlobalBackBuffer, ArrayCount(DebugTimeMarkers), DebugTimeMarkers, DebugTimeMarkerIndex - 1, &SoundOutput, TargetSecondsPerFrame);
 #endif
+#if RENDER_BACKEND_VULKAN
+        RenderVulkanFrame(&RenderCommands);
+#else
+        // Software-бэкенд: исполняем команды в CPU-буфер и показываем через GDI.
+        game_offscreen_buffer Buffer = {};
+        Win32FillGameOffscreenBuffer(&Buffer, &GlobalBackBuffer);
+        SoftwareRenderCommands(&RenderCommands, &Buffer);
         Win32DisplayFrame(Window, DeviceContext);
+#endif
         FlipWallClock = Win32GetWallClock();
 
 #if HANDMADE_INTERNAL
-        Win32RecordDebugMarker(DebugTimeMarkers, &DebugTimeMarkerIndex,
-                               ArrayCount(DebugTimeMarkers), &LockRegion);
+        Win32RecordDebugMarker(DebugTimeMarkers, &DebugTimeMarkerIndex, ArrayCount(DebugTimeMarkers), &LockRegion);
 #endif
 
         game_input* Temp = NewInput; NewInput = OldInput; OldInput = Temp;
@@ -117,7 +137,9 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
         Win32OutputFrameStats(MSPerFrame, CycleElapsed);
     }
 
+#if RENDER_BACKEND_VULKAN
     ShutdownVulkan();
+#endif
 
     return 0;
 }

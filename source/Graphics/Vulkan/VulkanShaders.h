@@ -1,8 +1,11 @@
 #ifndef VULKANSHADERS_H
 #define VULKANSHADERS_H
 
-#include "Win32FileIO.h"   // debug_read_file_result (поля структуры) + файловый I/O
+#include "Win32FileIO.h"   // debug_read_file_result (+ DEBUGPlatformReadEntireFile/Free)
 
+// Интерфейс отдельного модуля загрузки шейдеров. Это НЕ тот анти-паттерн, что был
+// в VulkanCommon.h (forward-decl static-функций разрезанной подсистемы) — здесь
+// заголовок = настоящий интерфейс самостоятельного модуля (как VulkanApi.h).
 struct vulkan_shader
 {
     debug_read_file_result vert;

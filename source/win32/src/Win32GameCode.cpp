@@ -8,8 +8,7 @@ internal GAME_GET_SOUND_SAMPLES(GameGetSoundSamplesStub)
 {
 }
 
-internal void Win32BuildEXEPathFileName(char* EXEPath, char* OnePastLastSlash,
-                                        char* FileName, int DestCount, char* Dest)
+internal void Win32BuildEXEPathFileName(char* EXEPath, char* OnePastLastSlash, char* FileName, int DestCount, char* Dest)
 {
     int PrefixLen = (int)(OnePastLastSlash - EXEPath);
     int i = 0;
@@ -28,20 +27,9 @@ void Win32GetEXEPaths(win32_exe_paths* Paths)
         if (*Scan == '\\') Paths->OnePastLastSlash = Scan + 1;
     }
 
-    Win32BuildEXEPathFileName(Paths->EXEFileName, Paths->OnePastLastSlash,
-                              (char*)"Engine_game.dll",
-                              sizeof(Paths->SourceGameCodeDLLFullPath),
-                              Paths->SourceGameCodeDLLFullPath);
-
-    Win32BuildEXEPathFileName(Paths->EXEFileName, Paths->OnePastLastSlash,
-                              (char*)"Engine_game_temp.dll",
-                              sizeof(Paths->TempGameCodeDLLFullPath),
-                              Paths->TempGameCodeDLLFullPath);
-
-    Win32BuildEXEPathFileName(Paths->EXEFileName, Paths->OnePastLastSlash,
-                              (char*)"lock.tmp",
-                              sizeof(Paths->GameCodeLockFullPath),
-                              Paths->GameCodeLockFullPath);
+    Win32BuildEXEPathFileName(Paths->EXEFileName, Paths->OnePastLastSlash, (char*)"Game.dll", sizeof(Paths->SourceGameCodeDLLFullPath), Paths->SourceGameCodeDLLFullPath);
+    Win32BuildEXEPathFileName(Paths->EXEFileName, Paths->OnePastLastSlash, (char*)"Game_temp.dll", sizeof(Paths->TempGameCodeDLLFullPath), Paths->TempGameCodeDLLFullPath);
+    Win32BuildEXEPathFileName(Paths->EXEFileName, Paths->OnePastLastSlash, (char*)"lock.tmp", sizeof(Paths->GameCodeLockFullPath), Paths->GameCodeLockFullPath);
 }
 
 FILETIME Win32GetLastWriteTime(char* Filename)
@@ -66,10 +54,8 @@ win32_game_code Win32LoadGameCode(char* SourceDLLName, char* TempDLLName)
     Result.GameCodeDLL = LoadLibraryA(TempDLLName);
     if (Result.GameCodeDLL)
     {
-        Result.UpdateAndRender = (game_update_and_render*)
-            GetProcAddress(Result.GameCodeDLL, "GameUpdateAndRender");
-        Result.GetSoundSamples = (game_get_sound_samples*)
-            GetProcAddress(Result.GameCodeDLL, "GameGetSoundSamples");
+        Result.UpdateAndRender = (game_update_and_render*)GetProcAddress(Result.GameCodeDLL, "GameUpdateAndRender");
+        Result.GetSoundSamples = (game_get_sound_samples*)GetProcAddress(Result.GameCodeDLL, "GameGetSoundSamples");
         Result.IsValid = (Result.UpdateAndRender != 0) && (Result.GetSoundSamples != 0);
     }
 

@@ -1,6 +1,6 @@
-#include "VulkanShaders.h"
-#include "Strings.h"       // AppendString
-#include "Debug.h"         // DebugLog (вместо stdio.h)
+#include "VulkanShaders.h"  // vulkan_shader + интерфейс модуля
+#include "Strings.h"        // AppendString
+#include "Debug.h"          // DebugLog (вместо stdio.h)
 
 internal vulkan_shader LoadShader(const char *name)
 {

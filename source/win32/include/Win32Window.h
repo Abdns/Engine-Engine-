@@ -2,7 +2,7 @@
 #define WIN32WINDOW_H
 
 #include "Types.h"
-#include "EngineLayer.h"
+#include "PlatformAPI.h"   // game_controller_input
 #include "Win32Replay.h"
 #include <windows.h>
 

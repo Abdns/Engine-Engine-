@@ -1,8 +1,6 @@
 #include "Win32Replay.h"
-#include "Win32FileIO.h"   // DEBUGPlatform* для game_memory functions
 
-internal void Win32BuildPath(char* EXEPath, char* OnePastLastSlash,
-                              char* FileName, int DestCount, char* Dest)
+internal void Win32BuildPath(char* EXEPath, char* OnePastLastSlash, char* FileName, int DestCount, char* Dest)
 {
     int PrefixLen = (int)(OnePastLastSlash - EXEPath);
     int i = 0;
@@ -11,8 +9,7 @@ internal void Win32BuildPath(char* EXEPath, char* OnePastLastSlash,
     Dest[i] = 0;
 }
 
-void Win32GetInputFileLocation(win32_state* State, bool32 InputStream, int SlotIndex,
-                                int DestCount, char* Dest)
+void Win32GetInputFileLocation(win32_state* State, bool32 InputStream, int SlotIndex, int DestCount, char* Dest)
 {
     char Filename[64];
     wsprintfA(Filename, "replay_%d_%s.hmi", SlotIndex, InputStream ? "input" : "state");
@@ -26,19 +23,16 @@ void Win32BeginRecordingInput(win32_state* State, int InputRecordingIndex)
     State->InputRecordingIndex = InputRecordingIndex;
 
     Win32GetInputFileLocation(State, false, InputRecordingIndex, sizeof(Filename), Filename);
-    HANDLE SnapshotHandle = CreateFileA(Filename, GENERIC_WRITE, 0, 0,
-                                        CREATE_ALWAYS, 0, 0);
+    HANDLE SnapshotHandle = CreateFileA(Filename, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
     if (SnapshotHandle != INVALID_HANDLE_VALUE)
     {
         DWORD BytesWritten;
-        WriteFile(SnapshotHandle, State->GameMemoryBlock,
-                  (DWORD)State->TotalSize, &BytesWritten, 0);
+        WriteFile(SnapshotHandle, State->GameMemoryBlock, (DWORD)State->TotalSize, &BytesWritten, 0);
         CloseHandle(SnapshotHandle);
     }
 
     Win32GetInputFileLocation(State, true, InputRecordingIndex, sizeof(Filename), Filename);
-    State->RecordingHandle = CreateFileA(Filename, GENERIC_WRITE, 0, 0,
-                                         CREATE_ALWAYS, 0, 0);
+    State->RecordingHandle = CreateFileA(Filename, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, 0);
 }
 
 void Win32EndRecordingInput(win32_state* State)
@@ -63,8 +57,7 @@ void Win32BeginInputPlayBack(win32_state* State, int InputPlayingIndex)
     if (SnapshotHandle != INVALID_HANDLE_VALUE)
     {
         DWORD BytesRead;
-        ReadFile(SnapshotHandle, State->GameMemoryBlock,
-                 (DWORD)State->TotalSize, &BytesRead, 0);
+        ReadFile(SnapshotHandle, State->GameMemoryBlock,(DWORD)State->TotalSize, &BytesRead, 0);
         CloseHandle(SnapshotHandle);
     }
 
@@ -104,31 +97,6 @@ void Win32PlayBackInput(win32_state* State, game_input* NewInput)
             ReadFile(State->PlaybackHandle, NewInput, sizeof(*NewInput), &BytesRead, 0);
         }
     }
-}
-
-void Win32AllocateGameMemory(game_memory* GameMemory, win32_state* State)
-{
-#if HANDMADE_INTERNAL
-    LPVOID BaseAddress = (LPVOID)Terabytes(2);
-#else
-    LPVOID BaseAddress = 0;
-#endif
-
-    GameMemory->PermanentStorageSize = Megabytes(64);
-    GameMemory->TransientStorageSize = Gigabytes(1);
-
-    State->TotalSize = GameMemory->PermanentStorageSize + GameMemory->TransientStorageSize;
-    State->GameMemoryBlock = VirtualAlloc(BaseAddress, (size_t)State->TotalSize,
-                                          MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-    GameMemory->PermanentStorage = State->GameMemoryBlock;
-    GameMemory->TransientStorage = (uint8*)GameMemory->PermanentStorage +
-                                   GameMemory->PermanentStorageSize;
-
-#if HANDMADE_INTERNAL
-    GameMemory->DEBUGPlatformReadEntireFile  = DEBUGPlatformReadEntireFile;
-    GameMemory->DEBUGPlatformFreeFileMemory  = DEBUGPlatformFreeFileMemory;
-    GameMemory->DEBUGPlatformWriteEntireFile = DEBUGPlatformWriteEntireFile;
-#endif
 }
 
 void Win32UpdateRecordAndPlayback(win32_state* State, game_input* NewInput)

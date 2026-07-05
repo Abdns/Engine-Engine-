@@ -4,7 +4,7 @@
 #include <windows.h>
 #include <Wingdi.h>
 #include "Types.h"
-#include "EngineLayer.h"  // game_offscreen_buffer
+#include "PlatformAPI.h"  // game_offscreen_buffer
 
 struct win32_offscreen_buffer
 {
