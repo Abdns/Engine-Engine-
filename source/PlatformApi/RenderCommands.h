@@ -2,84 +2,85 @@
 #define RENDERCOMMANDS_H
 
 #include "Types.h"
+#include "EngineMath.h"
 
-
-enum render_command_type
+enum mesh_id
 {
-    RenderCommand_Clear,
-    RenderCommand_Rect,
+    Mesh_Cube = 0,
+    Mesh_Pyramid,
+    Mesh_Count,
 };
 
-struct render_command_header
+enum texture_id
 {
-    render_command_type Type;
+    Texture_Photo = 0,
+    Texture_Checker,
+    Texture_Count,
 };
 
-struct render_command_clear
+struct render_entry_mesh
 {
-    render_command_header Header;
-    real32 R, G, B;
-};
-
-// Прямоугольник в ПИКСЕЛЯХ (origin — верхний левый угол, y вниз).
-struct render_command_rect
-{
-    render_command_header Header;
-    real32 MinX, MinY, MaxX, MaxY;
-    real32 R, G, B;
+    Vector3 Position;
+    real32  Rotation;
+    uint32  MeshID;
+    uint32  TextureID;
 };
 
 struct render_commands
 {
-    uint8 *BufferBase;
-    uint32 BufferSize;
-    uint32 BufferUsed;
-
     uint32 Width;
     uint32 Height;
+
+    real32 ClearR;
+    real32 ClearG;
+    real32 ClearB;
+
+    Matrix4 CameraView;
+    real32  CameraFovY;
+
+    render_entry_mesh *Meshes;
+    uint32 MeshCount;
+    uint32 MaxMeshes;
 };
 
 inline render_commands InitRenderCommands(void *Memory, uint32 Size, uint32 Width, uint32 Height)
 {
-    render_commands Result;
-    Result.BufferBase = (uint8 *)Memory;
-    Result.BufferSize = Size;
-    Result.BufferUsed = 0;
+    render_commands Result = {};
     Result.Width  = Width;
     Result.Height = Height;
-    return Result;
-}
 
-// Зарезервировать место под одну команду (bump внутри буфера).
-inline void *PushRenderCommand_(render_commands *Commands, uint32 Size)
-{
-    void *Result = 0;
-    if (Commands->BufferUsed + Size <= Commands->BufferSize)
-    {
-        Result = Commands->BufferBase + Commands->BufferUsed;
-        Commands->BufferUsed += Size;
-    }
+    Result.CameraView = Mat4Identity();
+    Result.CameraFovY = 0.785398f;
+
+    Result.Meshes    = (render_entry_mesh *)Memory;
+    Result.MeshCount = 0;
+    Result.MaxMeshes = Size / (uint32)sizeof(render_entry_mesh);
+
     return Result;
 }
 
 inline void PushRenderClear(render_commands *Commands, real32 R, real32 G, real32 B)
 {
-    render_command_clear *Cmd = (render_command_clear *)PushRenderCommand_(Commands, (uint32)sizeof(render_command_clear));
-    if (Cmd)
-    {
-        Cmd->Header.Type = RenderCommand_Clear;
-        Cmd->R = R; Cmd->G = G; Cmd->B = B;
-    }
+    Commands->ClearR = R;
+    Commands->ClearG = G;
+    Commands->ClearB = B;
 }
 
-inline void PushRenderRect(render_commands *Commands, real32 MinX, real32 MinY, real32 MaxX, real32 MaxY, real32 R, real32 G, real32 B)
+inline void PushRenderCamera(render_commands *Commands, Matrix4 View, real32 FovY)
 {
-    render_command_rect *Cmd = (render_command_rect *)PushRenderCommand_(Commands, (uint32)sizeof(render_command_rect));
-    if (Cmd)
+    Commands->CameraView = View;
+    Commands->CameraFovY = FovY;
+}
+
+inline void PushRenderMesh(render_commands *Commands, Vector3 Position, real32 Rotation, uint32 MeshID, uint32 TextureID)
+{
+    if (Commands->MeshCount < Commands->MaxMeshes)
     {
-        Cmd->Header.Type = RenderCommand_Rect;
-        Cmd->MinX = MinX; Cmd->MinY = MinY; Cmd->MaxX = MaxX; Cmd->MaxY = MaxY;
-        Cmd->R = R; Cmd->G = G; Cmd->B = B;
+        render_entry_mesh *Mesh = &Commands->Meshes[Commands->MeshCount++];
+        Mesh->Position = Position;
+        Mesh->Rotation = Rotation;
+        Mesh->MeshID = MeshID;
+        Mesh->TextureID = TextureID;
     }
 }
 
