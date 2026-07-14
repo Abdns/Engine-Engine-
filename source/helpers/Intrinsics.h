@@ -6,10 +6,6 @@
 #include <intrin.h>
 #include <stdlib.h>
 
-// Day 026: low-level math intrinsics. Платформо-зависимые быстрые операции.
-// Сейчас простая реализация через стандартный <math.h> + cast. Позже Кейси
-// заменяет на SSE-интринсики (_mm_cvtss_si32 и пр.).
-
 inline int32 SignOf(int32 Value)
 {
     return (Value >= 0) ? 1 : -1;
@@ -37,7 +33,7 @@ inline uint32 RotateRight(uint32 Value, int32 Amount)
 
 inline int32 RoundReal32ToInt32(real32 Real32)
 {
-    // Округление к ближайшему. (int)(x + 0.5f) для положительных x.
+
     return (int32)(Real32 + 0.5f);
 }
 
@@ -53,7 +49,7 @@ inline int32 FloorReal32ToInt32(real32 Real32)
 
 inline int32 TruncateReal32ToInt32(real32 Real32)
 {
-    // Truncate отбрасывает дробную часть в сторону нуля.
+
     return (int32)Real32;
 }
 
