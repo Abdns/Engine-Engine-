@@ -9,14 +9,8 @@ del *.pdb > NUL 2> NUL
 
 REM ---- Shaders: каждый <имя>.vert/.frag -> CompiledShaders\<имя>.vert.spv/.frag.spv ----
 if not exist CompiledShaders mkdir CompiledShaders
-for %%f in (..\source\Graphics\Vulkan\shaders\*.vert) do "%VULKAN_SDK%\Bin\glslc.exe" "%%f" -o "CompiledShaders\%%~nf.vert.spv"
-for %%f in (..\source\Graphics\Vulkan\shaders\*.frag) do "%VULKAN_SDK%\Bin\glslc.exe" "%%f" -o "CompiledShaders\%%~nf.frag.spv"
-
-REM ---- Assets: копируем модели/ресурсы рядом с exe (build\assets\models\) ----
-if not exist assets\models mkdir assets\models
-xcopy /Y /D "..\assets\models\*.*" "assets\models\" > NUL 2> NUL
-if not exist assets\images mkdir assets\images
-xcopy /Y /D "..\assets\images\*.*" "assets\images\" > NUL 2> NUL
+for %%f in (..\engine\source\Graphics\Vulkan\shaders\*.vert) do "%VULKAN_SDK%\Bin\glslc.exe" "%%f" -o "CompiledShaders\%%~nf.vert.spv"
+for %%f in (..\engine\source\Graphics\Vulkan\shaders\*.frag) do "%VULKAN_SDK%\Bin\glslc.exe" "%%f" -o "CompiledShaders\%%~nf.frag.spv"
 
 set CommonCompilerFlags=-MTd^
  -nologo^
@@ -40,25 +34,32 @@ set CommonCompilerFlags=-MTd^
  -D_UNICODE^
  -FC^
  -Z7^
- -I..\source^
- -I..\source\Helpers^
- -I..\source\Helpers\Loaders^
- -I..\source\Game\include^
- -I..\source\Game\src^
- -I..\source\PlatformApi^
- -I..\source\Platform\win32\include^
- -I..\source\Platform\win32\src^
- -I..\source\Graphics\Vulkan^
+ -I..\engine\source^
+ -I..\engine\source\Helpers^
+ -I..\engine\source\Assets^
+ -I..\engine\source\Game\include^
+ -I..\engine\source\Game\src^
+ -I..\engine\source\PlatformApi^
+ -I..\engine\source\Platform\win32\include^
+ -I..\engine\source\Platform\win32\src^
+ -I..\engine\source\Graphics\Vulkan^
  -I"%VULKAN_SDK%\Include"
 
 set CommonLinkerFlags=-incremental:no^
  -opt:ref^
  -LIBPATH:"%VULKAN_SDK%\Lib"
 
+REM ---- Asset builder: пакует ..\engine\assets в build\assets.kbn ----
+cl %CommonCompilerFlags%^
+ ..\engine\tools\AssetBuilder\AssetBuilder.cpp^
+ -FeAssetBuilder.exe^
+ /link %CommonLinkerFlags%
+.\AssetBuilder.exe
+
 REM ---- Game DLL ----
 echo WAITING_FOR_PDB > lock.tmp
 cl %CommonCompilerFlags%^
- -LD ..\source\Game\src\Game.cpp^
+ -LD ..\engine\source\Game\src\Game.cpp^
  -FmGame.map^
  -FeGame.dll^
  /link %CommonLinkerFlags%^
@@ -69,7 +70,7 @@ del lock.tmp
 
 REM ---- Platform EXE ----
 cl %CommonCompilerFlags%^
- ..\source\Platform\win32\Program.cpp^
+ ..\engine\source\Platform\win32\Program.cpp^
  -FmEngine.map^
  -FeEngine.exe^
  /link %CommonLinkerFlags%^
