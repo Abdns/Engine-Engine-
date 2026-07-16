@@ -33,6 +33,7 @@
   <ItemGroup>
     <ClCompile Include="..\engine\source\Game\src\Game.cpp" />
     <ClCompile Include="..\engine\source\Game\src\Entity.cpp" />
+    <ClCompile Include="..\engine\source\Physics\Source.cpp" />
     <ClCompile Include="..\engine\source\Graphics\Vulkan\VulkanCore.cpp" />
     <ClCompile Include="..\engine\source\Graphics\Vulkan\VulkanDevice.cpp" />
     <ClCompile Include="..\engine\source\Graphics\Vulkan\VulkanSwapchain.cpp" />
@@ -60,6 +61,7 @@
     <ClInclude Include="..\engine\source\Assets\KBNFormat.h" />
     <ClInclude Include="..\engine\source\Assets\AssetPack.h" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\Vulkan.h" />
+    <ClInclude Include="..\engine\source\Graphics\Vulkan\shaders\ShaderInterop.h" />
     <ClInclude Include="..\engine\source\Helpers\EngineMath.h" />
     <ClInclude Include="..\engine\source\Helpers\Intrinsics.h" />
     <ClInclude Include="..\engine\source\Helpers\Memory.h" />
@@ -67,8 +69,8 @@
     <ClInclude Include="..\engine\source\Helpers\Types.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\engine\source\Graphics\Vulkan\shaders\primitive.vert" />
-    <None Include="..\engine\source\Graphics\Vulkan\shaders\primitive.frag" />
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\primitive.vert.hlsl" />
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\primitive.frag.hlsl" />
     <None Include="..\engine\assets\models\README.md" />
     <None Include="..\engine\assets\images\TestImage.tga" />
     <None Include="..\build.bat" />

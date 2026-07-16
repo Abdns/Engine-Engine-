@@ -25,9 +25,7 @@ internal asset_pack AssetPackFromMemory(void *Data, uint32 Size)
     }
 
     asset_file_header *Header = (asset_file_header *)Data;
-    if (Header->Magic != KBN_MAGIC ||
-        Header->Version != KBN_VERSION ||
-        Header->AssetTableOffset + Header->AssetCount * sizeof(asset_entry) > Size)
+    if (Header->Magic != KBN_MAGIC || Header->Version != KBN_VERSION || Header->AssetTableOffset + Header->AssetCount * sizeof(asset_entry) > Size)
     {
         DebugLog("Asset pack is corrupt\n");
         return Result;
@@ -90,6 +88,7 @@ internal void LoadGameAssets(game_assets *Assets, memory_arena *Arena, void *Pac
     uint32 TextureCount  = 0;
     uint32 TotalVertices = 0;
     uint32 TotalPixels   = 0;
+
     for (uint32 Index = 0; Index < Pack.Count; ++Index)
     {
         asset_entry *Entry = Pack.Entries + Index;

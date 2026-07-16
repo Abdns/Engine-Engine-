@@ -22,6 +22,9 @@
     <Filter Include="engine\source\Assets">
       <UniqueIdentifier>{a1000000-0000-0000-0000-0000000000c1}</UniqueIdentifier>
     </Filter>
+    <Filter Include="engine\source\Physics">
+      <UniqueIdentifier>{a1000000-0000-0000-0000-0000000000e0}</UniqueIdentifier>
+    </Filter>
     <Filter Include="engine\source\Graphics">
       <UniqueIdentifier>{a1000000-0000-0000-0000-000000000003}</UniqueIdentifier>
     </Filter>
@@ -59,6 +62,9 @@
     </ClCompile>
     <ClCompile Include="..\engine\source\Game\src\Entity.cpp">
       <Filter>engine\source\Game\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\engine\source\Physics\Source.cpp">
+      <Filter>engine\source\Physics</Filter>
     </ClCompile>
     <ClCompile Include="..\engine\source\Graphics\Vulkan\VulkanCore.cpp">
       <Filter>engine\source\Graphics\Vulkan</Filter>
@@ -131,6 +137,9 @@
     <ClInclude Include="..\engine\source\Graphics\Vulkan\Vulkan.h">
       <Filter>engine\source\Graphics\Vulkan</Filter>
     </ClInclude>
+    <ClInclude Include="..\engine\source\Graphics\Vulkan\shaders\ShaderInterop.h">
+      <Filter>engine\source\Graphics\Vulkan\shaders</Filter>
+    </ClInclude>
     <ClInclude Include="..\engine\source\Assets\KBNFormat.h">
       <Filter>engine\source\Assets</Filter>
     </ClInclude>
@@ -154,10 +163,10 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\engine\source\Graphics\Vulkan\shaders\primitive.vert">
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\primitive.vert.hlsl">
       <Filter>engine\source\Graphics\Vulkan\shaders</Filter>
     </None>
-    <None Include="..\engine\source\Graphics\Vulkan\shaders\primitive.frag">
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\primitive.frag.hlsl">
       <Filter>engine\source\Graphics\Vulkan\shaders</Filter>
     </None>
     <None Include="..\engine\assets\models\README.md">

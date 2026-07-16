@@ -9,6 +9,7 @@ enum render_entry_type
     RenderEntry_Mesh = 0,
     RenderEntry_LoadMesh,
     RenderEntry_LoadTexture,
+    RenderEntry_Camera,
 };
 
 struct render_entry_header
@@ -43,6 +44,13 @@ struct render_entry_load_texture
     void  *Pixels;
 };
 
+struct render_entry_camera
+{
+    render_entry_header Header;
+    Matrix4 View;
+    real32  FovY;
+};
+
 inline uint32 RenderEntrySize(uint32 Type)
 {
     switch (Type)
@@ -50,18 +58,13 @@ inline uint32 RenderEntrySize(uint32 Type)
         case RenderEntry_Mesh:        return (uint32)sizeof(render_entry_mesh);
         case RenderEntry_LoadMesh:    return (uint32)sizeof(render_entry_load_mesh);
         case RenderEntry_LoadTexture: return (uint32)sizeof(render_entry_load_texture);
+        case RenderEntry_Camera:      return (uint32)sizeof(render_entry_camera);
     }
     return 0;
 }
 
 struct render_commands
 {
-    real32  ClearR;
-    real32  ClearG;
-    real32  ClearB;
-    Matrix4 View;
-    real32  FovY;
-
     uint32 LoadCount;
 
     uint8 *PushBufferBase;
@@ -72,9 +75,6 @@ struct render_commands
 inline render_commands InitRenderCommands(void *Memory, uint32 Size)
 {
     render_commands Result = {};
-    Result.View = Mat4Identity();
-    Result.FovY = 0.785398f;
-
     Result.PushBufferBase    = (uint8 *)Memory;
     Result.MaxPushBufferSize = Size;
 
@@ -115,17 +115,14 @@ inline render_entry_header *NextRenderEntry(render_commands *Commands, uint32 *O
     return Header;
 }
 
-inline void SetRenderClear(render_commands *Commands, real32 R, real32 G, real32 B)
+inline void PushRenderCamera(render_commands *Commands, Matrix4 View, real32 FovY)
 {
-    Commands->ClearR = R;
-    Commands->ClearG = G;
-    Commands->ClearB = B;
-}
-
-inline void SetRenderCamera(render_commands *Commands, Matrix4 View, real32 FovY)
-{
-    Commands->View = View;
-    Commands->FovY = FovY;
+    render_entry_camera *Entry = PushRenderElement(Commands, render_entry_camera, RenderEntry_Camera);
+    if (Entry)
+    {
+        Entry->View = View;
+        Entry->FovY = FovY;
+    }
 }
 
 inline void PushRenderMesh(render_commands *Commands, Matrix4 Transform, Vector4 Tint, uint32 MeshID, uint32 TextureID)
@@ -148,6 +145,7 @@ inline void PushRenderLoadMesh(render_commands *Commands, uint32 MeshID, uint32 
         Entry->MeshID      = MeshID;
         Entry->VertexCount = VertexCount;
         Entry->Vertices    = Vertices;
+
         Commands->LoadCount++;
     }
 }
@@ -162,6 +160,7 @@ inline void PushRenderLoadTexture(render_commands *Commands, uint32 TextureID, u
         Entry->Height    = Height;
         Entry->SRGB      = SRGB;
         Entry->Pixels    = Pixels;
+
         Commands->LoadCount++;
     }
 }

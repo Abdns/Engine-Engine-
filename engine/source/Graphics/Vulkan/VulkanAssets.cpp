@@ -57,7 +57,13 @@ internal bool32 CreateTexture(vulkan_context *context, gpu_texture *texture, voi
 
     texture->View = CreateColorImageView(context->device, texture->Image, format);
 
-    CreateTextureDescriptorSet(context, GetPipeline(context, "primitive"), texture);
+    render_pipeline *pipeline = GetPipeline(context, "primitive");
+    texture->DescriptorSet = AllocatePipelineSet(context, pipeline, Frequency_PerMaterial);
+    if (texture->DescriptorSet == VK_NULL_HANDLE)
+    {
+        return false;
+    }
+    WriteImageSlot(context, texture->DescriptorSet, 0, texture->View, pipeline->Sampler);
 
     return true;
 }

@@ -67,6 +67,22 @@ internal Matrix4 UpdateCamera(game_state* GameState, game_input* Input)
     return View;
 }
 
+internal void LoadAsset(char* name, game_memory *Memory, game_state* GameState)
+{
+    memory_arena* WorldArena = &GameState->WorldArena;
+
+    platform_file_raw PackFile = Memory->PlatformReadEntireFile(name);
+    LoadGameAssets(&GameState->Assets, WorldArena, PackFile.Data, PackFile.Size);
+    Memory->PlatformFreeFileMemory(PackFile.Data);
+
+    game_assets* Assets = &GameState->Assets;
+}
+
+internal void PushAssetDataInRender()
+{
+
+}
+
 extern "C" __declspec(dllexport)
 GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 {
@@ -81,12 +97,9 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         memory_arena* WorldArena = &GameState->WorldArena;
 
         entities* Entities = &GameState->Entities;
-
         InitEntities(Entities, WorldArena);
 
-        platform_file PackFile = Memory->PlatformReadEntireFile("assets.kbn");
-        LoadGameAssets(&GameState->Assets, WorldArena, PackFile.Data, PackFile.Size);
-        Memory->PlatformFreeFileMemory(PackFile.Data);
+        LoadAsset("assets.kbn", Memory, GameState);
         game_assets* Assets = &GameState->Assets;
 
         for (uint32 Index = 0; Index < Assets->MeshCount; ++Index)
@@ -107,6 +120,8 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         uint32 CubeA  = AddEntity(Entities, V3(-1.5f, 0.0f,  0.0f), MeshCube,   TexTest);
         uint32 Sphere = AddEntity(Entities, V3( 0.0f, 0.0f, -1.5f), MeshSphere, TexTest);
         uint32 CubeB  = AddEntity(Entities, V3( 1.5f, 0.0f,  0.0f), MeshCube,   TexTest);
+
+        uint32 CubeMap = AddEntity(Entities, V3(0.0f, 0.0f, 0.0f), MeshCube, TexTest);
 
         SetEntityAngularVelocity(Entities, CubeA,  TumbleSpin);
         SetEntityAngularVelocity(Entities, Sphere, TumbleSpin);
@@ -129,8 +144,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     Matrix4 View = UpdateCamera(GameState, Input);
     real32 FovY = 1.047f;
 
-    SetRenderClear(RenderCommands, 0.05f, 0.05f, 0.08f);
-    SetRenderCamera(RenderCommands, View, FovY);
+    PushRenderCamera(RenderCommands, View, FovY);
     PushEntitiesToRender(&GameState->Entities, RenderCommands);
 }
 

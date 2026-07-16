@@ -11,9 +11,9 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
     vkBeginCommandBuffer(cmd, &beginInfo);
 
     VkClearValue clearValues[2] = {};
-    clearValues[0].color.float32[0] = commands->ClearR;
-    clearValues[0].color.float32[1] = commands->ClearG;
-    clearValues[0].color.float32[2] = commands->ClearB;
+    clearValues[0].color.float32[0] = 0.05f;
+    clearValues[0].color.float32[1] = 0.05f;
+    clearValues[0].color.float32[2] = 0.08f;
     clearValues[0].color.float32[3] = 1.0f;
     clearValues[1].depthStencil.depth = 1.0f;
     clearValues[1].depthStencil.stencil = 0;
@@ -47,11 +47,10 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
     scissor.extent = context->swapchainExtent;
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-    real32  aspect = (real32)context->swapchainExtent.width / (real32)context->swapchainExtent.height;
-    Matrix4 proj   = Mat4Perspective(commands->FovY, aspect, 0.1f, 100.0f);
+    real32 aspect = (real32)context->swapchainExtent.width / (real32)context->swapchainExtent.height;
 
-    camera_uniforms *camera = (camera_uniforms *)PipelineResourceData(pipeline, Frequency_PerFrame, 0, 0);
-    camera->ViewProj = Mat4Multiply(proj, commands->View);
+    camera_uniforms *camera = (camera_uniforms *)FrameUniforms(pipeline);
+    camera->ViewProj = Mat4Multiply(Mat4Perspective(0.785398f, aspect, 0.1f, 100.0f), Mat4Identity());
 
     BindPipelineSet(cmd, pipeline, Frequency_PerFrame);
 
@@ -59,35 +58,49 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
     uint32 offset    = 0;
     for (render_entry_header *header = NextRenderEntry(commands, &offset); header; header = NextRenderEntry(commands, &offset))
     {
-        if (header->Type == RenderEntry_Mesh)
+        switch (header->Type)
         {
-            render_entry_mesh *entry = (render_entry_mesh *)header;
-
-            if (entry->MeshID >= MAX_MESHES || context->Meshes[entry->MeshID].VertexBuffer == VK_NULL_HANDLE)
+            case RenderEntry_Camera:
             {
-                continue;
-            }
+                render_entry_camera *entry = (render_entry_camera *)header;
+                Matrix4 proj = Mat4Perspective(entry->FovY, aspect, 0.1f, 100.0f);
+                camera->ViewProj = Mat4Multiply(proj, entry->View);
+            } break;
 
-            gpu_mesh *mesh = &context->Meshes[entry->MeshID];
+            case RenderEntry_Mesh:
+            {
+                render_entry_mesh *entry = (render_entry_mesh *)header;
 
-            uint32 texId = (entry->TextureID < MAX_TEXTURES && context->Textures[entry->TextureID].DescriptorSet) ? entry->TextureID : 0;
-            BindDescriptorSet(cmd, pipeline, Frequency_PerMaterial, context->Textures[texId].DescriptorSet);
+                if (entry->MeshID >= MAX_MESHES || context->Meshes[entry->MeshID].VertexBuffer == VK_NULL_HANDLE)
+                {
+                    break;
+                }
 
-            uint32 objIndex = drawIndex < MAX_OBJECTS ? drawIndex : 0;
-            object_uniforms *object = (object_uniforms *)PipelineResourceData(pipeline, Frequency_PerObject, 0, objIndex);
-            object->Tint = entry->Tint;
-            BindPipelineSetDynamic(cmd, pipeline, Frequency_PerObject, PipelineDynamicOffset(pipeline, Frequency_PerObject, 0, objIndex));
+                uint32 texId = (entry->TextureID < MAX_TEXTURES && context->Textures[entry->TextureID].DescriptorSet) ? entry->TextureID : 0;
+                BindMaterial(cmd, pipeline, context->Textures[texId].DescriptorSet);
 
-            primitive_push_constants pc;
-            pc.Model = entry->Transform;
-            vkCmdPushConstants(cmd, pipeline->Layout, VK_SHADER_STAGE_VERTEX_BIT, 0, (uint32)sizeof(pc), &pc);
+                object_uniforms *object = (object_uniforms *)BindNextObjectSlot(cmd, pipeline, drawIndex);
+                object->Tint = entry->Tint;
 
-            VkBuffer vertexBuffers[] = { mesh->VertexBuffer };
-            VkDeviceSize offsets[] = { 0 };
-            vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
-            vkCmdDraw(cmd, mesh->VertexCount, 1, 0, 0);
+                primitive_push_constants pc;
+                pc.Model = entry->Transform;
+                vkCmdPushConstants(cmd, pipeline->Layout, VK_SHADER_STAGE_VERTEX_BIT, 0, (uint32)sizeof(pc), &pc);
 
-            drawIndex++;
+                gpu_mesh *mesh = &context->Meshes[entry->MeshID];
+
+                VkBuffer vertexBuffers[] = { mesh->VertexBuffer };
+                VkDeviceSize offsets[] = { 0 };
+
+                vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
+                vkCmdDraw(cmd, mesh->VertexCount, 1, 0, 0);
+
+                drawIndex++;
+            } break;
+
+            case RenderEntry_LoadMesh:
+            case RenderEntry_LoadTexture:
+            {
+            } break;
         }
     }
 

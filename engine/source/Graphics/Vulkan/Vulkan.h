@@ -10,6 +10,8 @@
 
 #include <vulkan/vulkan.h>
 
+#include "shaders/ShaderInterop.h"
+
 #define MAX_EXTENSIONS        256
 #define MAX_DEVICES           4
 #define MAX_FAMILY_COUNT      8
@@ -27,8 +29,8 @@
 
 struct vulkan_shader
 {
-    platform_file vert;
-    platform_file frag;
+    platform_file_raw vert;
+    platform_file_raw frag;
 };
 
 struct gpu_mesh
@@ -48,10 +50,10 @@ struct gpu_texture
 
 enum descriptor_frequency
 {
-    Frequency_Global = 0,
-    Frequency_PerFrame,
-    Frequency_PerMaterial,
-    Frequency_PerObject,
+    Frequency_Global      = SET_GLOBAL,
+    Frequency_PerFrame    = SET_PER_FRAME,
+    Frequency_PerMaterial = SET_PER_MATERIAL,
+    Frequency_PerObject   = SET_PER_OBJECT,
     Frequency_Count,
 };
 
@@ -181,21 +183,6 @@ struct swapchain_support_details
     uint32 formatCount;
     VkPresentModeKHR presentModes[MAX_PRESENT_MODES];
     uint32 presentModeCount;
-};
-
-struct primitive_push_constants
-{
-    Matrix4 Model;
-};
-
-struct camera_uniforms
-{
-    Matrix4 ViewProj;
-};
-
-struct object_uniforms
-{
-    Vector4 Tint;
 };
 
 internal void InitVulkan(HINSTANCE hinstance, HWND hwnd);

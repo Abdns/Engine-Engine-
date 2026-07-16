@@ -348,20 +348,11 @@ internal uint32 PipelineDynamicOffset(render_pipeline *pipeline, descriptor_freq
     return element * FindPipelineResource(pipeline, freq, binding)->Stride;
 }
 
-internal void WriteTextureDescriptor(vulkan_context *context, render_pipeline *pipeline, gpu_texture *texture)
+internal VkDescriptorSet AllocatePipelineSet(vulkan_context *context, render_pipeline *pipeline, descriptor_frequency freq)
 {
-    WriteImageSlot(context, texture->DescriptorSet, 0, texture->View, pipeline->Sampler);
-}
-
-internal bool32 CreateTextureDescriptorSet(vulkan_context *context, render_pipeline *pipeline, gpu_texture *texture)
-{
-    if (!AllocateDescriptorSet(context, pipeline->DescriptorPool, pipeline->SetLayouts[Frequency_PerMaterial], &texture->DescriptorSet))
-    {
-        return false;
-    }
-
-    WriteTextureDescriptor(context, pipeline, texture);
-    return true;
+    VkDescriptorSet set = VK_NULL_HANDLE;
+    AllocateDescriptorSet(context, pipeline->DescriptorPool, pipeline->SetLayouts[freq], &set);
+    return set;
 }
 
 internal void BindDescriptorSet(VkCommandBuffer cmd, render_pipeline *pipeline, descriptor_frequency freq, VkDescriptorSet set)
@@ -377,6 +368,23 @@ internal void BindPipelineSet(VkCommandBuffer cmd, render_pipeline *pipeline, de
 internal void BindPipelineSetDynamic(VkCommandBuffer cmd, render_pipeline *pipeline, descriptor_frequency freq, uint32 offset)
 {
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->Layout, freq, 1, &pipeline->Sets[freq], 1, &offset);
+}
+
+internal void *FrameUniforms(render_pipeline *pipeline)
+{
+    return PipelineResourceData(pipeline, Frequency_PerFrame, 0, 0);
+}
+
+internal void BindMaterial(VkCommandBuffer cmd, render_pipeline *pipeline, VkDescriptorSet materialSet)
+{
+    BindDescriptorSet(cmd, pipeline, Frequency_PerMaterial, materialSet);
+}
+
+internal void *BindNextObjectSlot(VkCommandBuffer cmd, render_pipeline *pipeline, uint32 drawIndex)
+{
+    uint32 objIndex = drawIndex < MAX_OBJECTS ? drawIndex : 0;
+    BindPipelineSetDynamic(cmd, pipeline, Frequency_PerObject, PipelineDynamicOffset(pipeline, Frequency_PerObject, 0, objIndex));
+    return PipelineResourceData(pipeline, Frequency_PerObject, 0, objIndex);
 }
 
 internal bool32 CreatePipelineLayout(vulkan_context *context, render_pipeline *pipeline, render_pipeline_config *config)

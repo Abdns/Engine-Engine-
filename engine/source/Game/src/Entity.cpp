@@ -85,3 +85,8 @@ internal void PushEntitiesToRender(entities* Entities, render_commands* Commands
         PushRenderMesh(Commands, EntityTransform(Entities, EntityIndex), Entities->Tint[EntityIndex], Entities->MeshID[EntityIndex], Entities->TextureID[EntityIndex]);
     }
 }
+
+internal void PushCubeMapToRender(render_commands* Commands)
+{
+
+}
