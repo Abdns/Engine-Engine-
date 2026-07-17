@@ -52,10 +52,12 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
     camera_uniforms *camera = (camera_uniforms *)FrameUniforms(pipeline);
     camera->ViewProj = Mat4Multiply(Mat4Perspective(0.785398f, aspect, 0.1f, 100.0f), Mat4Identity());
 
-    BindPipelineSet(cmd, pipeline, Frequency_PerFrame);
+    BindPipelineSet(cmd, pipeline, Set_PerFrame);
+    BindPipelineSet(cmd, pipeline, Set_PerMaterial);
 
-    uint32 drawIndex = 0;
-    uint32 offset    = 0;
+    uint32 drawIndex     = 0;
+    uint32 skippedDraws  = 0;
+    uint32 offset        = 0;
     for (render_entry_header *header = NextRenderEntry(commands, &offset); header; header = NextRenderEntry(commands, &offset))
     {
         switch (header->Type)
@@ -71,16 +73,22 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
             {
                 render_entry_mesh *entry = (render_entry_mesh *)header;
 
+                if (drawIndex >= MAX_OBJECTS)
+                {
+                    skippedDraws++;
+                    break;
+                }
+
                 if (entry->MeshID >= MAX_MESHES || context->Meshes[entry->MeshID].VertexBuffer == VK_NULL_HANDLE)
                 {
                     break;
                 }
 
-                uint32 texId = (entry->TextureID < MAX_TEXTURES && context->Textures[entry->TextureID].DescriptorSet) ? entry->TextureID : 0;
-                BindMaterial(cmd, pipeline, context->Textures[texId].DescriptorSet);
+                uint32 texId = (entry->TextureID < MAX_TEXTURES && context->Textures[entry->TextureID].View) ? entry->TextureID : 0;
 
-                object_uniforms *object = (object_uniforms *)BindNextObjectSlot(cmd, pipeline, drawIndex);
-                object->Tint = entry->Tint;
+                object_uniforms *object = (object_uniforms *)BindNextObjectUniforms(cmd, pipeline, drawIndex);
+                object->Tint         = entry->Tint;
+                object->TextureIndex = texId;
 
                 primitive_push_constants pc;
                 pc.Model = entry->Transform;
@@ -104,21 +112,27 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
         }
     }
 
+    if (skippedDraws)
+    {
+        DebugLog("Draw overflow: %u meshes skipped (max %d objects)\n", skippedDraws, MAX_OBJECTS);
+    }
+
     vkCmdEndRenderPass(cmd);
     vkEndCommandBuffer(cmd);
 }
 
 internal bool32 DrawFrame(vulkan_context *context, render_commands *commands)
 {
-    render_pipeline *pipeline = GetPipeline(context, "primitive");
+    render_pipeline *pipeline = context->PrimitivePipeline;
     if (!pipeline || pipeline->Handle == VK_NULL_HANDLE)
     {
         return false;
     }
 
-    ProcessLoadCommands(context, commands);
-
     vkWaitForFences(context->device, 1, &context->inFlightFence, VK_TRUE, UINT64_MAX);
+
+    // Descriptor writes into the material set are only safe once the previous frame finished
+    ProcessLoadCommands(context, commands);
 
     uint32 imageIndex = 0;
     VkResult acquire = vkAcquireNextImageKHR(context->device, context->swapchain, UINT64_MAX,

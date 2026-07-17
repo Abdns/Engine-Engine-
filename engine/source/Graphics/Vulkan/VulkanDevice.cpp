@@ -14,6 +14,11 @@ global_variable const char *RequiredDeviceExtensions[] =
 
 #define REQUIRED_DEVICE_TYPE VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
 
+#define MAX_EXTENSIONS        256
+#define MAX_DEVICES           4
+#define MAX_FAMILY_COUNT      8
+#define MAX_DEVICE_EXTENSIONS 256
+
 global_variable vulkan_context GlobalVulkan;
 
 internal uint32 GetExtensions(VkExtensionProperties *props, uint32 maxCount)
@@ -274,11 +279,13 @@ internal bool32 SelectDevice(vulkan_context *context)
         swapchain_support_details swapchain = GetQuerySwapchainSupportDetails(devices[i], context->surface);
         bool32 swapchainOk = (swapchain.formatCount > 0) && (swapchain.presentModeCount > 0);
 
-        if (deviceProperties.deviceType == REQUIRED_DEVICE_TYPE && indices.graphicsSupported && indices.presentSupported && swapchainOk)
+        if (deviceProperties.deviceType == REQUIRED_DEVICE_TYPE && indices.graphicsSupported && indices.presentSupported && swapchainOk &&
+            features.shaderSampledImageArrayDynamicIndexing)
         {
             context->physicalDevice = devices[i];
             context->graphicsFamilyIndex = indices.graphicsIndex;
             context->presentFamilyIndex = indices.presentIndex;
+            context->uniformBufferAlignment = (uint32)deviceProperties.limits.minUniformBufferOffsetAlignment;
             return true;
         }
     }
@@ -320,6 +327,7 @@ internal bool32 CreateLogicalDevice(vulkan_context *context)
     }
 
     VkPhysicalDeviceFeatures features{};
+    features.shaderSampledImageArrayDynamicIndexing = VK_TRUE;
 
     VkDeviceCreateInfo deviceInfo{};
     deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;

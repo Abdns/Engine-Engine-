@@ -21,7 +21,7 @@ internal bool32 CreateMesh(vulkan_context *context, gpu_mesh *mesh, real32 *vert
     return true;
 }
 
-internal bool32 CreateTexture(vulkan_context *context, gpu_texture *texture, void *pixels, uint32 width, uint32 height, VkFormat format)
+internal bool32 CreateTexture(vulkan_context *context, gpu_texture *texture, uint32 textureID, void *pixels, uint32 width, uint32 height, VkFormat format)
 {
     VkDeviceSize imageSize = (VkDeviceSize)width * (VkDeviceSize)height * 4;
 
@@ -57,13 +57,13 @@ internal bool32 CreateTexture(vulkan_context *context, gpu_texture *texture, voi
 
     texture->View = CreateColorImageView(context->device, texture->Image, format);
 
-    render_pipeline *pipeline = GetPipeline(context, "primitive");
-    texture->DescriptorSet = AllocatePipelineSet(context, pipeline, Frequency_PerMaterial);
-    if (texture->DescriptorSet == VK_NULL_HANDLE)
+    render_pipeline *pipeline = context->PrimitivePipeline;
+    if (!pipeline)
     {
+        DebugLog("Texture upload skipped: pipeline 'primitive' not ready\n");
         return false;
     }
-    WriteImageSlot(context, texture->DescriptorSet, 0, texture->View, pipeline->Sampler);
+    WriteImageDescriptor(context, pipeline->Sets[Set_PerMaterial], 0, textureID, texture->View);
 
     return true;
 }
@@ -103,7 +103,7 @@ internal void ProcessLoadCommands(vulkan_context *context, render_commands *comm
             }
 
             VkFormat format = entry->SRGB ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
-            if (CreateTexture(context, &context->Textures[entry->TextureID], entry->Pixels, entry->Width, entry->Height, format) &&
+            if (CreateTexture(context, &context->Textures[entry->TextureID], entry->TextureID, entry->Pixels, entry->Width, entry->Height, format) &&
                 entry->TextureID >= context->TextureCount)
             {
                 context->TextureCount = entry->TextureID + 1;

@@ -12,16 +12,10 @@
 
 #include "shaders/ShaderInterop.h"
 
-#define MAX_EXTENSIONS        256
-#define MAX_DEVICES           4
-#define MAX_FAMILY_COUNT      8
-#define MAX_DEVICE_EXTENSIONS 256
 #define MAX_SURFACE_FORMATS   64
 #define MAX_PRESENT_MODES     8
 #define MAX_SWAPCHAIN_IMAGES  8
 #define MAX_MESHES            16
-#define MAX_TEXTURES          16
-#define MAX_VERTEX_ATTRIBUTES 8
 #define MAX_OBJECTS           256
 #define MAX_PIPELINES         8
 #define MAX_PIPELINE_RESOURCES 8
@@ -42,41 +36,33 @@ struct gpu_mesh
 
 struct gpu_texture
 {
-    VkImage         Image;
-    VkDeviceMemory  Memory;
-    VkImageView     View;
-    VkDescriptorSet DescriptorSet;
+    VkImage        Image;
+    VkDeviceMemory Memory;
+    VkImageView    View;
 };
 
-enum descriptor_frequency
+enum descriptor_set_index
 {
-    Frequency_Global      = SET_GLOBAL,
-    Frequency_PerFrame    = SET_PER_FRAME,
-    Frequency_PerMaterial = SET_PER_MATERIAL,
-    Frequency_PerObject   = SET_PER_OBJECT,
-    Frequency_Count,
+    Set_Global      = SET_GLOBAL,
+    Set_PerFrame    = SET_PER_FRAME,
+    Set_PerMaterial = SET_PER_MATERIAL,
+    Set_PerObject   = SET_PER_OBJECT,
+    Set_Count,
 };
 
-enum resource_kind
+struct resource_binding_description
 {
-    Resource_Uniform = 0,
-    Resource_UniformDynamic,
-    Resource_Texture,
-};
-
-struct resource_slot
-{
-    descriptor_frequency Frequency;
+    descriptor_set_index Set;
     uint32               Binding;
-    resource_kind        Kind;
+    VkDescriptorType     Type;
     VkShaderStageFlags   Stages;
     uint32               Size;
     uint32               Count;
 };
 
-struct pipeline_resource
+// At most one uniform buffer per set: one block per update frequency
+struct pipeline_buffer
 {
-    resource_slot  Slot;
     VkBuffer       Buffer;
     VkDeviceMemory Memory;
     void          *Mapped;
@@ -88,11 +74,12 @@ struct render_pipeline_config
     const char *ShaderName;
 
     uint32 VertexStride;
-    uint32 AttributeCount;
-    VkVertexInputAttributeDescription Attributes[MAX_VERTEX_ATTRIBUTES];
+    // Attributes and Resources borrow caller-owned arrays; they must stay alive until CreateRenderPipeline returns
+    const VkVertexInputAttributeDescription *Attributes;
+    uint32                                   AttributeCount;
 
-    const resource_slot *Resources;
-    uint32               ResourceCount;
+    const resource_binding_description *ResourcesDescription;
+    uint32                              ResourceDescriptionCount;
 
     uint32             PushConstantSize;
     VkShaderStageFlags PushConstantStages;
@@ -112,15 +99,14 @@ struct render_pipeline
 {
     char Name[MAX_PIPELINE_NAME];
 
-    VkDescriptorSetLayout SetLayouts[Frequency_Count];
-    VkDescriptorSet       Sets[Frequency_Count];
+    VkDescriptorSetLayout SetLayouts[Set_Count];
+    VkDescriptorSet       Sets[Set_Count];
     VkPipelineLayout      Layout;
     VkPipeline            Handle;
     VkDescriptorPool      DescriptorPool;
     VkSampler             Sampler;
 
-    pipeline_resource Resources[MAX_PIPELINE_RESOURCES];
-    uint32            ResourceCount;
+    pipeline_buffer Buffers[Set_Count];
 };
 
 struct vulkan_context
@@ -134,6 +120,7 @@ struct vulkan_context
     VkQueue presentQueue;
     uint32 graphicsFamilyIndex;
     uint32 presentFamilyIndex;
+    uint32 uniformBufferAlignment;
 
     VkSwapchainKHR swapchain;
     VkImage swapchainImages[MAX_SWAPCHAIN_IMAGES];
@@ -151,6 +138,7 @@ struct vulkan_context
 
     render_pipeline Pipelines[MAX_PIPELINES];
     uint32 PipelineCount;
+    render_pipeline *PrimitivePipeline;
 
     VkFramebuffer swapchainFramebuffers[MAX_SWAPCHAIN_IMAGES];
 
