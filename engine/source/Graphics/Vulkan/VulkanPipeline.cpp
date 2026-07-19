@@ -160,11 +160,6 @@ internal bool32 CreateTextureSampler(vulkan_context *context, render_pipeline *p
     return true;
 }
 
-internal bool32 IsBufferDescriptor(VkDescriptorType type)
-{
-    return type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER || type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-}
-
 internal void WriteImageDescriptor(vulkan_context *context, VkDescriptorSet set, uint32 binding, uint32 arrayElement, VkImageView view)
 {
     VkDescriptorImageInfo imageInfo{};
@@ -432,6 +427,49 @@ internal render_pipeline *FailRenderPipeline(vulkan_context *context, render_pip
     return 0;
 }
 
+internal bool32 WritePipelineResources(vulkan_context *context, render_pipeline *pipeline, render_pipeline_config *config)
+{
+    uint32 uboAlign = context->uniformBufferAlignment;
+
+    for (uint32 i = 0; i < config->ResourceDescriptionCount; ++i)
+    {
+        const resource_binding_description *resourceDesc = &config->ResourcesDescription[i];
+
+        if (resourceDesc->Type == VK_DESCRIPTOR_TYPE_SAMPLER)
+        {
+            WriteSamplerDescriptor(context, pipeline->Sets[resourceDesc->Set], resourceDesc->Binding, pipeline->Sampler);
+            continue;
+        }
+
+        if (resourceDesc->Type != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER && resourceDesc->Type != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC)
+        {
+            continue;
+        }
+
+        pipeline_buffer *buffer = &pipeline->Buffers[resourceDesc->Set];
+        if (buffer->Buffer != VK_NULL_HANDLE)
+        {
+            DebugLog("Pipeline '%s': set %u declares more than one buffer\n", config->ShaderName, (uint32)resourceDesc->Set);
+            return false;
+        }
+
+        buffer->Stride = resourceDesc->Size;
+        if (resourceDesc->Type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC)
+        {
+            buffer->Stride = AlignPow2(resourceDesc->Size, uboAlign);
+        }
+
+        if (!CreateMappedBuffer(context, (VkDeviceSize)buffer->Stride * resourceDesc->Count, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &buffer->Buffer, &buffer->Memory, &buffer->Mapped))
+        {
+            return false;
+        }
+
+        WriteBufferDescriptor(context, pipeline->Sets[resourceDesc->Set], resourceDesc->Binding, resourceDesc->Type, buffer->Buffer, resourceDesc->Size);
+    }
+
+    return true;
+}
+
 internal render_pipeline *CreateRenderPipeline(vulkan_context *context, render_pipeline_config *config)
 {
     if (config->ResourceDescriptionCount > MAX_PIPELINE_RESOURCES)
@@ -465,7 +503,7 @@ internal render_pipeline *CreateRenderPipeline(vulkan_context *context, render_p
         VkDescriptorSetLayoutBinding *binding = &ResourceSet->Bindings[ResourceSet->BindingCount++];
         binding->binding         = resourceDesc->Binding;
         binding->descriptorType  = resourceDesc->Type;
-        binding->descriptorCount = IsBufferDescriptor(resourceDesc->Type) ? 1 : resourceDesc->Count;
+        binding->descriptorCount = (resourceDesc->Type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER || resourceDesc->Type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC) ? 1 : resourceDesc->Count;
         binding->stageFlags      = resourceDesc->Stages;
     }
 
@@ -495,43 +533,7 @@ internal render_pipeline *CreateRenderPipeline(vulkan_context *context, render_p
         }
     }
 
-    uint32 uboAlign = context->uniformBufferAlignment;
-
-    for (uint32 i = 0; i < config->ResourceDescriptionCount; ++i)
-    {
-        const resource_binding_description *resource = &config->ResourcesDescription[i];
-
-        if (resource->Type == VK_DESCRIPTOR_TYPE_SAMPLER)
-        {
-            WriteSamplerDescriptor(context, pipeline->Sets[resource->Set], resource->Binding, pipeline->Sampler);
-            continue;
-        }
-
-        if (!IsBufferDescriptor(resource->Type))
-        {
-            continue;
-        }
-
-        pipeline_buffer *buffer = &pipeline->Buffers[resource->Set];
-        if (buffer->Buffer != VK_NULL_HANDLE)
-        {
-            DebugLog("Pipeline '%s': set %u declares more than one buffer\n", config->ShaderName, (uint32)resource->Set);
-            return FailRenderPipeline(context, pipeline);
-        }
-
-        buffer->Stride = resource->Size;
-        if (resource->Type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC)
-        {
-            buffer->Stride = (resource->Size + uboAlign - 1) & ~(uboAlign - 1);
-        }
-
-        if (!CreateMappedBuffer(context, (VkDeviceSize)buffer->Stride * resource->Count, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &buffer->Buffer, &buffer->Memory, &buffer->Mapped))
-        {
-            return FailRenderPipeline(context, pipeline);
-        }
-
-        WriteBufferDescriptor(context, pipeline->Sets[resource->Set], resource->Binding, resource->Type, buffer->Buffer, resource->Size);
-    }
+    if (!WritePipelineResources(context, pipeline, config)) return FailRenderPipeline(context, pipeline);
 
     DebugLog("Render pipeline '%s' ready (%u resources)\n", config->ShaderName, config->ResourceDescriptionCount);
     return pipeline;
