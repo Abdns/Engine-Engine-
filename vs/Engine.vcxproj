@@ -40,7 +40,7 @@
     <ClCompile Include="..\engine\source\Graphics\Vulkan\VulkanPipeline.cpp" />
     <ClCompile Include="..\engine\source\Graphics\Vulkan\VulkanAssets.cpp" />
     <ClCompile Include="..\engine\source\Graphics\Vulkan\VulkanFrame.cpp" />
-    <ClCompile Include="..\engine\source\Graphics\Vulkan\Vulkan.cpp" />
+    <ClCompile Include="..\engine\source\Graphics\Vulkan\VulkanRenderer.cpp" />
     <ClCompile Include="..\engine\source\Platform\win32\Program.cpp" />
     <ClCompile Include="..\engine\source\Platform\win32\src\Win32FileIO.cpp" />
     <ClCompile Include="..\engine\source\Platform\win32\src\Win32GameCode.cpp" />

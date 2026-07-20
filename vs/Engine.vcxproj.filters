@@ -84,7 +84,7 @@
     <ClCompile Include="..\engine\source\Graphics\Vulkan\VulkanFrame.cpp">
       <Filter>engine\source\Graphics\Vulkan</Filter>
     </ClCompile>
-    <ClCompile Include="..\engine\source\Graphics\Vulkan\Vulkan.cpp">
+    <ClCompile Include="..\engine\source\Graphics\Vulkan\VulkanRenderer.cpp">
       <Filter>engine\source\Graphics\Vulkan</Filter>
     </ClCompile>
     <ClCompile Include="..\engine\source\Platform\win32\Program.cpp">

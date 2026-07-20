@@ -1,5 +1,12 @@
 #include "Vulkan.h"
 
+#include "VulkanCore.cpp"
+#include "VulkanDevice.cpp"
+#include "VulkanSwapchain.cpp"
+#include "VulkanPipeline.cpp"
+#include "VulkanAssets.cpp"
+#include "VulkanFrame.cpp"
+
 internal void InitVulkan(HINSTANCE hinstance, HWND hwnd)
 {
     vulkan_context *context = &GlobalVulkan;
@@ -39,7 +46,6 @@ internal void InitVulkan(HINSTANCE hinstance, HWND hwnd)
 
 internal void RenderVulkanFrame(render_commands *Commands)
 {
-
     if (DrawFrame(&GlobalVulkan, Commands))
     {
         RecreateSwapchain(&GlobalVulkan);
