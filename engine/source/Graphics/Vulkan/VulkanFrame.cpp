@@ -58,20 +58,20 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
     uint32 drawIndex     = 0;
     uint32 skippedDraws  = 0;
     uint32 offset        = 0;
-    for (command_type *header = NextRenderCommand(commands, &offset); header; header = NextRenderCommand(commands, &offset))
+    for (command_type *cmdBase = NextRenderCommand(commands, &offset); cmdBase; cmdBase = NextRenderCommand(commands, &offset))
     {
-        switch (*header)
+        switch (*cmdBase)
         {
             case Render_Camera:
             {
-                command_render_camera *entry = (command_render_camera *)header;
-                Matrix4 proj = Mat4Perspective(entry->FovY, aspect, 0.1f, 100.0f);
-                camera->ViewProj = Mat4Multiply(proj, entry->View);
+                command_render_camera *cmd = (command_render_camera *)cmdBase;
+                Matrix4 proj = Mat4Perspective(cmd->FovY, aspect, 0.1f, 100.0f);
+                camera->ViewProj = Mat4Multiply(proj, cmd->View);
             } break;
 
             case Render_Mesh:
             {
-                command_render_mesh *entry = (command_render_mesh *)header;
+                command_render_mesh *cmd = (command_render_mesh *)cmdBase;
 
                 if (drawIndex >= MAX_OBJECTS)
                 {
@@ -79,22 +79,22 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
                     break;
                 }
 
-                if (entry->MeshID >= MAX_MESHES || context->Meshes[entry->MeshID].VertexBuffer == VK_NULL_HANDLE)
+                if (cmd->MeshID >= MAX_MESHES || context->Meshes[cmd->MeshID].VertexBuffer == VK_NULL_HANDLE)
                 {
                     break;
                 }
 
-                uint32 texId = (entry->TextureID < MAX_TEXTURES && context->Textures[entry->TextureID].View) ? entry->TextureID : 0;
+                uint32 texId = (cmd->TextureID < MAX_TEXTURES && context->Textures[cmd->TextureID].View) ? cmd->TextureID : 0;
 
                 object_uniforms *object = (object_uniforms *)BindNextObjectUniforms(cmd, pipeline, drawIndex);
-                object->Tint         = entry->Tint;
+                object->Tint         = cmd->Tint;
                 object->TextureIndex = texId;
 
                 primitive_push_constants pc;
-                pc.Model = entry->Transform;
+                pc.Model = cmd->Transform;
                 vkCmdPushConstants(cmd, pipeline->Layout, VK_SHADER_STAGE_VERTEX_BIT, 0, (uint32)sizeof(pc), &pc);
 
-                gpu_mesh *mesh = &context->Meshes[entry->MeshID];
+                gpu_mesh *mesh = &context->Meshes[cmd->MeshID];
 
                 VkBuffer vertexBuffers[] = { mesh->VertexBuffer };
                 VkDeviceSize offsets[] = { 0 };

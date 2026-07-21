@@ -80,15 +80,15 @@ inline void *PushRenderCommand(render_commands *Commands, command_type Type)
 {
     uint32 Size = CommandSize(Type);
 
-    void *CmdBase = 0;
+    void *Base = 0;
     if (Commands->PushBufferSize + Size <= Commands->MaxPushBufferSize)
     {
-        command_type *CmdType = (command_type *)(Commands->PushBufferBase + Commands->PushBufferSize);
-        *CmdType = Type;
-        CmdBase = CmdType;
+        command_type *CmdBase = (command_type *)(Commands->PushBufferBase + Commands->PushBufferSize);
+        *CmdBase = Type;
+        Base = CmdBase;
         Commands->PushBufferSize += Size;
     }
-    return CmdBase;
+    return Base;
 }
 
 inline command_type *NextRenderCommand(render_commands *Commands, uint32 *Offset)
@@ -98,8 +98,8 @@ inline command_type *NextRenderCommand(render_commands *Commands, uint32 *Offset
         return 0;
     }
 
-    command_type *CmdType = (command_type *)(Commands->PushBufferBase + *Offset);
-    uint32 Size = CommandSize(*CmdType);
+    command_type *CmdBase = (command_type *)(Commands->PushBufferBase + *Offset);
+    uint32 Size = CommandSize(*CmdBase);
     if (!Size)
     {
         Assert(!"Unknown render cmd");
@@ -107,7 +107,7 @@ inline command_type *NextRenderCommand(render_commands *Commands, uint32 *Offset
     }
 
     *Offset += Size;
-    return CmdType;
+    return CmdBase;
 }
 
 inline void PushRenderCamera(render_commands *Commands, Matrix4 View, real32 FovY)
