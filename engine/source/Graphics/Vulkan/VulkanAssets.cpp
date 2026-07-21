@@ -76,11 +76,11 @@ internal void ProcessLoadCommands(vulkan_context *context, render_commands *comm
     }
 
     uint32 offset = 0;
-    for (render_entry_header *header = NextRenderEntry(commands, &offset); header; header = NextRenderEntry(commands, &offset))
+    for (command_type *header = NextRenderCommand(commands, &offset); header; header = NextRenderCommand(commands, &offset))
     {
-        if (header->Type == RenderEntry_LoadMesh)
+        if (*header == Load_Mesh)
         {
-            render_entry_load_mesh *entry = (render_entry_load_mesh *)header;
+            command_load_mesh *entry = (command_load_mesh *)header;
             if (entry->MeshID >= MAX_MESHES || context->Meshes[entry->MeshID].VertexBuffer != VK_NULL_HANDLE)
             {
                 DebugLog("Mesh %u skipped (slot bad or busy)\n", entry->MeshID);
@@ -93,9 +93,9 @@ internal void ProcessLoadCommands(vulkan_context *context, render_commands *comm
                 context->MeshCount = entry->MeshID + 1;
             }
         }
-        else if (header->Type == RenderEntry_LoadTexture)
+        else if (*header == LoadTexture)
         {
-            render_entry_load_texture *entry = (render_entry_load_texture *)header;
+            command_load_texture *entry = (command_load_texture *)header;
             if (entry->TextureID >= MAX_TEXTURES || context->Textures[entry->TextureID].Image != VK_NULL_HANDLE)
             {
                 DebugLog("Texture %u skipped (slot bad or busy)\n", entry->TextureID);

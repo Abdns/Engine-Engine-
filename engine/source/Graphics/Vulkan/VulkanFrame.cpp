@@ -58,20 +58,20 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
     uint32 drawIndex     = 0;
     uint32 skippedDraws  = 0;
     uint32 offset        = 0;
-    for (render_entry_header *header = NextRenderEntry(commands, &offset); header; header = NextRenderEntry(commands, &offset))
+    for (command_type *header = NextRenderCommand(commands, &offset); header; header = NextRenderCommand(commands, &offset))
     {
-        switch (header->Type)
+        switch (*header)
         {
-            case RenderEntry_Camera:
+            case Render_Camera:
             {
-                render_entry_camera *entry = (render_entry_camera *)header;
+                command_render_camera *entry = (command_render_camera *)header;
                 Matrix4 proj = Mat4Perspective(entry->FovY, aspect, 0.1f, 100.0f);
                 camera->ViewProj = Mat4Multiply(proj, entry->View);
             } break;
 
-            case RenderEntry_Mesh:
+            case Render_Mesh:
             {
-                render_entry_mesh *entry = (render_entry_mesh *)header;
+                command_render_mesh *entry = (command_render_mesh *)header;
 
                 if (drawIndex >= MAX_OBJECTS)
                 {
@@ -105,8 +105,8 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
                 drawIndex++;
             } break;
 
-            case RenderEntry_LoadMesh:
-            case RenderEntry_LoadTexture:
+            case Load_Mesh:
+            case LoadTexture:
             {
             } break;
         }
