@@ -31,28 +31,31 @@
   <ItemDefinitionGroup>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <!-- Реальные единицы трансляции. Остальные .cpp попадают в сборку через #include
+         (unity build) и перечислены ниже как ClInclude, иначе IntelliSense разбирает
+         их изолированно и подсвечивает несуществующие ошибки. -->
     <ClCompile Include="..\engine\source\Game\src\Game.cpp" />
-    <ClCompile Include="..\engine\source\Game\src\Entity.cpp" />
-    <ClCompile Include="..\engine\source\Physics\Source.cpp" />
-    <ClCompile Include="..\engine\source\Graphics\Vulkan\VulkanCore.cpp" />
-    <ClCompile Include="..\engine\source\Graphics\Vulkan\VulkanDevice.cpp" />
-    <ClCompile Include="..\engine\source\Graphics\Vulkan\VulkanSwapchain.cpp" />
-    <ClCompile Include="..\engine\source\Graphics\Vulkan\VulkanPipeline.cpp" />
-    <ClCompile Include="..\engine\source\Graphics\Vulkan\VulkanAssets.cpp" />
-    <ClCompile Include="..\engine\source\Graphics\Vulkan\VulkanFrame.cpp" />
-    <ClCompile Include="..\engine\source\Graphics\Vulkan\VulkanRenderer.cpp" />
     <ClCompile Include="..\engine\source\Platform\win32\Program.cpp" />
-    <ClCompile Include="..\engine\source\Platform\win32\src\Win32FileIO.cpp" />
-    <ClCompile Include="..\engine\source\Platform\win32\src\Win32GameCode.cpp" />
-    <ClCompile Include="..\engine\source\Platform\win32\src\Win32GDI.cpp" />
-    <ClCompile Include="..\engine\source\Platform\win32\src\Win32Input.cpp" />
-    <ClCompile Include="..\engine\source\Platform\win32\src\Win32Memory.cpp" />
-    <ClCompile Include="..\engine\source\Platform\win32\src\Win32Replay.cpp" />
-    <ClCompile Include="..\engine\source\Platform\win32\src\Win32Sound.cpp" />
-    <ClCompile Include="..\engine\source\Platform\win32\src\Win32Timer.cpp" />
-    <ClCompile Include="..\engine\source\Platform\win32\src\Win32Window.cpp" />
+    <ClCompile Include="..\engine\source\Physics\Source.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\engine\source\Game\src\Entity.cpp" />
+    <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanRenderer.cpp" />
+    <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanCore.cpp" />
+    <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanDevice.cpp" />
+    <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanSwapchain.cpp" />
+    <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanPipeline.cpp" />
+    <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanAssets.cpp" />
+    <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanFrame.cpp" />
+    <ClInclude Include="..\engine\source\Platform\win32\src\Win32FileIO.cpp" />
+    <ClInclude Include="..\engine\source\Platform\win32\src\Win32GameCode.cpp" />
+    <ClInclude Include="..\engine\source\Platform\win32\src\Win32GDI.cpp" />
+    <ClInclude Include="..\engine\source\Platform\win32\src\Win32Input.cpp" />
+    <ClInclude Include="..\engine\source\Platform\win32\src\Win32Memory.cpp" />
+    <ClInclude Include="..\engine\source\Platform\win32\src\Win32Replay.cpp" />
+    <ClInclude Include="..\engine\source\Platform\win32\src\Win32Sound.cpp" />
+    <ClInclude Include="..\engine\source\Platform\win32\src\Win32Timer.cpp" />
+    <ClInclude Include="..\engine\source\Platform\win32\src\Win32Window.cpp" />
     <ClInclude Include="..\engine\source\Game\include\Game.h" />
     <ClInclude Include="..\engine\source\Game\include\GameState.h" />
     <ClInclude Include="..\engine\source\Game\include\Entity.h" />

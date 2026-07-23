@@ -64,14 +64,14 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
         {
             case Render_Camera:
             {
-                command_render_camera *cmd = (command_render_camera *)cmdBase;
-                Matrix4 proj = Mat4Perspective(cmd->FovY, aspect, 0.1f, 100.0f);
-                camera->ViewProj = Mat4Multiply(proj, cmd->View);
+                command_render_camera *cameraCmd = (command_render_camera *)cmdBase;
+                Matrix4 proj = Mat4Perspective(cameraCmd->FovY, aspect, 0.1f, 100.0f);
+                camera->ViewProj = Mat4Multiply(proj, cameraCmd->View);
             } break;
 
             case Render_Mesh:
             {
-                command_render_mesh *cmd = (command_render_mesh *)cmdBase;
+                command_render_mesh *meshCmd = (command_render_mesh *)cmdBase;
 
                 if (drawIndex >= MAX_OBJECTS)
                 {
@@ -79,22 +79,22 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
                     break;
                 }
 
-                if (cmd->MeshID >= MAX_MESHES || context->Meshes[cmd->MeshID].VertexBuffer == VK_NULL_HANDLE)
+                if (meshCmd->MeshID >= MAX_MESHES || context->Meshes[meshCmd->MeshID].VertexBuffer == VK_NULL_HANDLE)
                 {
                     break;
                 }
 
-                uint32 texId = (cmd->TextureID < MAX_TEXTURES && context->Textures[cmd->TextureID].View) ? cmd->TextureID : 0;
+                uint32 texId = (meshCmd->TextureID < MAX_TEXTURES && context->Textures[meshCmd->TextureID].View) ? meshCmd->TextureID : 0;
 
                 object_uniforms *object = (object_uniforms *)BindNextObjectUniforms(cmd, pipeline, drawIndex);
-                object->Tint         = cmd->Tint;
+                object->Tint         = meshCmd->Tint;
                 object->TextureIndex = texId;
 
                 primitive_push_constants pc;
-                pc.Model = cmd->Transform;
+                pc.Model = meshCmd->Transform;
                 vkCmdPushConstants(cmd, pipeline->Layout, VK_SHADER_STAGE_VERTEX_BIT, 0, (uint32)sizeof(pc), &pc);
 
-                gpu_mesh *mesh = &context->Meshes[cmd->MeshID];
+                gpu_mesh *mesh = &context->Meshes[meshCmd->MeshID];
 
                 VkBuffer vertexBuffers[] = { mesh->VertexBuffer };
                 VkDeviceSize offsets[] = { 0 };
