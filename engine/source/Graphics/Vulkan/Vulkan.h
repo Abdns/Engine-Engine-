@@ -19,6 +19,7 @@
 #define MAX_OBJECTS           256
 #define MAX_PIPELINES         8
 #define MAX_PIPELINE_RESOURCES 8
+#define MAX_PIPELINE_ATTRIBUTES 8
 #define MAX_PIPELINE_NAME     64
 
 struct vulkan_shader
@@ -41,6 +42,12 @@ struct gpu_texture
     VkImageView    View;
 };
 
+enum pipeline_id
+{
+    Pipeline_Primitive = 0,
+    Pipeline_Count,
+};
+
 enum descriptor_set_index
 {
     Set_Global      = SET_GLOBAL,
@@ -60,26 +67,27 @@ struct resource_binding_description
     uint32               Count;
 };
 
-// At most one uniform buffer per set: one block per update frequency
 struct pipeline_buffer
 {
     VkBuffer       Buffer;
     VkDeviceMemory Memory;
-    void          *Mapped;
     uint32         Stride;
+    void          *Mapped;
 };
 
 struct render_pipeline_config
 {
+    pipeline_id PipelineId;
     const char *ShaderName;
 
     uint32 VertexStride;
-    // Attributes and Resources borrow caller-owned arrays; they must stay alive until CreateRenderPipeline returns
-    const VkVertexInputAttributeDescription *Attributes;
-    uint32                                   AttributeCount;
+    // Owned by value: the config is returned by value from the *PipelineConfig builders,
+    // so pointers into their locals would dangle
+    VkVertexInputAttributeDescription Attributes[MAX_PIPELINE_ATTRIBUTES];
+    uint32                            AttributeCount;
 
-    const resource_binding_description *ResourcesDescription;
-    uint32                              ResourceDescriptionCount;
+    resource_binding_description ResourcesDescription[MAX_PIPELINE_RESOURCES];
+    uint32                       ResourceDescriptionCount;
 
     uint32             PushConstantSize;
     VkShaderStageFlags PushConstantStages;
@@ -97,13 +105,13 @@ struct render_pipeline_config
 
 struct render_pipeline
 {
+    VkPipeline            Handle;
     char Name[MAX_PIPELINE_NAME];
 
     VkDescriptorSetLayout SetLayouts[Set_Count];
     VkDescriptorSet       Sets[Set_Count];
-    VkPipelineLayout      Layout;
-    VkPipeline            Handle;
     VkDescriptorPool      DescriptorPool;
+    VkPipelineLayout      Layout;
     VkSampler             Sampler;
 
     pipeline_buffer Buffers[Set_Count];
@@ -138,7 +146,6 @@ struct vulkan_context
 
     render_pipeline Pipelines[MAX_PIPELINES];
     uint32 PipelineCount;
-    render_pipeline *PrimitivePipeline;
 
     VkFramebuffer swapchainFramebuffers[MAX_SWAPCHAIN_IMAGES];
 

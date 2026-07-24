@@ -57,8 +57,8 @@ internal bool32 CreateTexture(vulkan_context *context, gpu_texture *texture, uin
 
     texture->View = CreateColorImageView(context->device, texture->Image, format);
 
-    render_pipeline *pipeline = context->PrimitivePipeline;
-    if (!pipeline)
+    render_pipeline *pipeline = &context->Pipelines[Pipeline_Primitive];
+    if (pipeline->Handle == VK_NULL_HANDLE)
     {
         DebugLog("Texture upload skipped: pipeline 'primitive' not ready\n");
         return false;

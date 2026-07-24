@@ -7,6 +7,7 @@
 enum command_type
 {
     Render_Mesh = 0,
+    Set_Pipline,
     Load_Mesh,
     LoadTexture,
     Render_Camera,
@@ -46,6 +47,12 @@ struct command_render_camera
     real32  FovY;
 };
 
+struct command_set_pipeline
+{
+    command_type Type;
+    int32        PipelineId;
+};
+
 inline uint32 CommandSize(command_type Type)
 {
     switch (Type)
@@ -54,6 +61,7 @@ inline uint32 CommandSize(command_type Type)
         case Load_Mesh:          return (uint32)sizeof(command_load_mesh);
         case LoadTexture:        return (uint32)sizeof(command_load_texture);
         case Render_Camera:      return (uint32)sizeof(command_render_camera);
+        case Set_Pipline:        return (uint32)sizeof(command_set_pipeline);
     }
     return 0;
 }
@@ -108,6 +116,15 @@ inline command_type *NextRenderCommand(render_commands *Commands, uint32 *Offset
 
     *Offset += Size;
     return CmdBase;
+}
+
+inline void PushRenderPipline(render_commands* Commands, int32 index)
+{
+    command_set_pipeline* cmd = (command_set_pipeline*)PushRenderCommand(Commands, Set_Pipline);
+    if (cmd)
+    {
+        cmd->PipelineId = index;
+    }
 }
 
 inline void PushRenderCamera(render_commands *Commands, Matrix4 View, real32 FovY)

@@ -21,8 +21,7 @@ internal vulkan_shader LoadShader(const char *name)
 
     if (shader.vert.Data && shader.frag.Data)
     {
-        DebugLog("Shader '%s' loaded (vert %u, frag %u bytes)\n",
-               name, shader.vert.Size, shader.frag.Size);
+        DebugLog("Shader '%s' loaded (vert %u, frag %u bytes)\n",name, shader.vert.Size, shader.frag.Size);
     }
     else
     {
@@ -50,21 +49,10 @@ internal VkShaderModule CreateShaderModule(VkDevice device, void *code, uint32 c
     if (vkCreateShaderModule(device, &createInfo, nullptr, &module) != VK_SUCCESS)
     {
         DebugLog("Fail to create shader module\n");
+
         return VK_NULL_HANDLE;
     }
     return module;
-}
-
-internal render_pipeline *GetPipeline(vulkan_context *context, const char *name)
-{
-    for (uint32 i = 0; i < context->PipelineCount; ++i)
-    {
-        if (StringsAreEqual(context->Pipelines[i].Name, name))
-        {
-            return &context->Pipelines[i];
-        }
-    }
-    return 0;
 }
 
 internal bool32 CreateDescriptorSetLayout(vulkan_context *context, VkDescriptorSetLayoutBinding *bindings, uint32 count, VkDescriptorSetLayout *outLayout)
@@ -80,7 +68,6 @@ internal bool32 CreateDescriptorSetLayout(vulkan_context *context, VkDescriptorS
         return false;
     }
 
-    DebugLog("Descriptor set layout created (%u bindings)\n", count);
     return true;
 }
 
@@ -126,7 +113,6 @@ internal bool32 CreateDescriptorPool(vulkan_context *context, render_pipeline *p
         return false;
     }
 
-    DebugLog("Descriptor pool created\n");
     return true;
 }
 
@@ -156,7 +142,6 @@ internal bool32 CreateTextureSampler(vulkan_context *context, render_pipeline *p
         return false;
     }
 
-    DebugLog("Texture sampler created\n");
     return true;
 }
 
@@ -279,7 +264,6 @@ internal bool32 CreatePipelineLayout(vulkan_context *context, render_pipeline *p
         return false;
     }
 
-    DebugLog("Pipeline layout created\n");
     return true;
 }
 
@@ -290,6 +274,7 @@ internal bool32 CreateGraphicsPipeline(vulkan_context *context, render_pipeline 
     {
         DebugLog("Fail to load '%s' shader\n", config->ShaderName);
         FreeShader(&shader);
+
         return false;
     }
 
@@ -298,6 +283,7 @@ internal bool32 CreateGraphicsPipeline(vulkan_context *context, render_pipeline 
     if (vertModule == VK_NULL_HANDLE || fragModule == VK_NULL_HANDLE)
     {
         FreeShader(&shader);
+
         return false;
     }
 
@@ -414,7 +400,6 @@ internal bool32 CreateGraphicsPipeline(vulkan_context *context, render_pipeline 
         return false;
     }
 
-    DebugLog("Graphics pipeline created\n");
     return true;
 }
 
@@ -423,7 +408,6 @@ internal void DestroyRenderPipeline(vulkan_context *context, render_pipeline *pi
 internal render_pipeline *FailRenderPipeline(vulkan_context *context, render_pipeline *pipeline)
 {
     DestroyRenderPipeline(context, pipeline);
-    context->PipelineCount--;
     return 0;
 }
 
@@ -470,29 +454,13 @@ internal bool32 WritePipelineResources(vulkan_context *context, render_pipeline 
     return true;
 }
 
-internal render_pipeline *CreateRenderPipeline(vulkan_context *context, render_pipeline_config *config)
+internal render_pipeline *CreateRenderPipeline(vulkan_context *context, render_pipeline_config *config, render_pipeline* pipeline)
 {
-    if (config->ResourceDescriptionCount > MAX_PIPELINE_RESOURCES)
+    if (config->ResourceDescriptionCount > MAX_PIPELINE_RESOURCES || config->AttributeCount > MAX_PIPELINE_ATTRIBUTES)
     {
-        DebugLog("Pipeline '%s' has too many resources (%u, max %d)\n", config->ShaderName, config->ResourceDescriptionCount, MAX_PIPELINE_RESOURCES);
+        DebugLog("Pipeline '%s' has too many resources or many vertex attributes (%u, max %d)\n", config->ShaderName, config->ResourceDescriptionCount, MAX_PIPELINE_RESOURCES);
         return 0;
     }
-
-    if (GetPipeline(context, config->ShaderName))
-    {
-        DebugLog("Pipeline '%s' already exists\n", config->ShaderName);
-        return 0;
-    }
-
-    if (context->PipelineCount >= MAX_PIPELINES)
-    {
-        DebugLog("Pipeline overflow (max %d)\n", MAX_PIPELINES);
-        return 0;
-    }
-
-    render_pipeline *pipeline = &context->Pipelines[context->PipelineCount++];
-    *pipeline = {};
-    AppendString(pipeline->Name, MAX_PIPELINE_NAME, 0, config->ShaderName);
 
     descriptor_set_bindings sets[Set_Count] = {};
     for (uint32 i = 0; i < config->ResourceDescriptionCount; ++i)
@@ -533,9 +501,6 @@ internal render_pipeline *CreateRenderPipeline(vulkan_context *context, render_p
         }
     }
 
-    if (!WritePipelineResources(context, pipeline, config)) return FailRenderPipeline(context, pipeline);
-
-    DebugLog("Render pipeline '%s' ready (%u resources)\n", config->ShaderName, config->ResourceDescriptionCount);
     return pipeline;
 }
 
@@ -557,33 +522,28 @@ internal void DestroyRenderPipeline(vulkan_context *context, render_pipeline *pi
     vkDestroyDescriptorPool(context->device, pipeline->DescriptorPool, nullptr);
     vkDestroyPipeline(context->device, pipeline->Handle, nullptr);
     vkDestroyPipelineLayout(context->device, pipeline->Layout, nullptr);
+
+    *pipeline = {};
 }
 
-internal bool32 CreatePrimitivePipeline(vulkan_context *context)
+internal render_pipeline_config UnlitPipelineConfig()
 {
     render_pipeline_config config = {};
-    config.ShaderName = "primitive";
+    config.PipelineId = Pipeline_Primitive;
+    config.ShaderName = "unlit";
 
     config.VertexStride = KBN_VERTEX_FLOATS * (uint32)sizeof(real32);
 
-    VkVertexInputAttributeDescription attributes[] =
-    {
-        { 0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0 },
-        { 1, 0, VK_FORMAT_R32G32B32_SFLOAT, 3 * (uint32)sizeof(real32) },
-        { 2, 0, VK_FORMAT_R32G32_SFLOAT,    6 * (uint32)sizeof(real32) },
-    };
-    config.Attributes     = attributes;
-    config.AttributeCount = (uint32)ArrayCount(attributes);
+    config.Attributes[0] = { 0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0 };
+    config.Attributes[1] = { 1, 0, VK_FORMAT_R32G32B32_SFLOAT, 3 * (uint32)sizeof(real32) };
+    config.Attributes[2] = { 2, 0, VK_FORMAT_R32G32_SFLOAT,    6 * (uint32)sizeof(real32) };
+    config.AttributeCount = 3;
 
-    resource_binding_description resources[] =
-    {
-        { Set_PerFrame,     0,    VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_VERTEX_BIT,   sizeof(camera_uniforms),  1 },
-        { Set_PerMaterial,  0,    VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,          VK_SHADER_STAGE_FRAGMENT_BIT, 0,                        MAX_TEXTURES },
-        { Set_PerMaterial,  1,    VK_DESCRIPTOR_TYPE_SAMPLER,                VK_SHADER_STAGE_FRAGMENT_BIT, 0,                        1 },
-        { Set_PerObject,    0,    VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(object_uniforms),  MAX_OBJECTS },
-    };
-    config.ResourcesDescription     = resources;
-    config.ResourceDescriptionCount = (uint32)ArrayCount(resources);
+    config.ResourcesDescription[0] = { Set_PerFrame,     0,  VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,         VK_SHADER_STAGE_VERTEX_BIT,   sizeof(camera_uniforms),  1 };
+    config.ResourcesDescription[1] = { Set_PerMaterial,  0,  VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,          VK_SHADER_STAGE_FRAGMENT_BIT, 0,                        MAX_TEXTURES };
+    config.ResourcesDescription[2] = { Set_PerMaterial,  1,  VK_DESCRIPTOR_TYPE_SAMPLER,                VK_SHADER_STAGE_FRAGMENT_BIT, 0,                        1 };
+    config.ResourcesDescription[3] = { Set_PerObject,    0,  VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(object_uniforms),  MAX_OBJECTS };
+    config.ResourceDescriptionCount = 4;
 
     config.PushConstantSize   = (uint32)sizeof(primitive_push_constants);
     config.PushConstantStages = VK_SHADER_STAGE_VERTEX_BIT;
@@ -597,7 +557,58 @@ internal bool32 CreatePrimitivePipeline(vulkan_context *context)
 
     config.SamplerFilter      = VK_FILTER_LINEAR;
     config.SamplerAddressMode = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-
-    context->PrimitivePipeline = CreateRenderPipeline(context, &config);
-    return context->PrimitivePipeline != 0;
+        
+    return config;
 }
+
+internal bool32 CreatePipeline(vulkan_context* context, pipeline_id pipelineId)
+{
+    if ((uint32)pipelineId >= MAX_PIPELINES)
+    {
+        DebugLog("Invalid pipeline id %d (max %d)\n", pipelineId, MAX_PIPELINES);
+
+        return false;
+    }
+
+    render_pipeline_config config = {};
+    switch (pipelineId)
+    {
+        case Pipeline_Primitive: 
+        {
+            config = UnlitPipelineConfig(); 
+        }break;
+
+        default:
+        {
+            return false;
+        }
+    }
+
+    render_pipeline* pipeline = &context->Pipelines[pipelineId];
+    if (pipeline->Handle != VK_NULL_HANDLE)
+    {
+        DebugLog("Pipeline slot %d already taken by '%s'\n", pipelineId, pipeline->Name);
+
+        return false;
+    }
+
+    *pipeline = {};
+    AppendString(pipeline->Name, MAX_PIPELINE_NAME, 0, config.ShaderName);
+
+    if (!CreateRenderPipeline(context, &config, pipeline))
+    {
+        return false;
+    }
+
+    if (!WritePipelineResources(context, pipeline, &config))
+    {
+        FailRenderPipeline(context, pipeline);
+
+        return false;
+    }
+
+    context->PipelineCount++;
+
+    return true;
+}
+ 

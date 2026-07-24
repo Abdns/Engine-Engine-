@@ -163,10 +163,10 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\engine\source\Graphics\Vulkan\shaders\primitive.vert.hlsl">
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\unlit.vert.hlsl">
       <Filter>engine\source\Graphics\Vulkan\shaders</Filter>
     </None>
-    <None Include="..\engine\source\Graphics\Vulkan\shaders\primitive.frag.hlsl">
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\unlit.frag.hlsl">
       <Filter>engine\source\Graphics\Vulkan\shaders</Filter>
     </None>
     <None Include="..\engine\assets\models\README.md">

@@ -49,13 +49,17 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
 
     real32 aspect = (real32)context->swapchainExtent.width / (real32)context->swapchainExtent.height;
 
+    Matrix4 viewProj = Mat4Multiply(Mat4Perspective(0.785398f, aspect, 0.1f, 100.0f), Mat4Identity());
+
     camera_uniforms *camera = (camera_uniforms *)FrameUniforms(pipeline);
-    camera->ViewProj = Mat4Multiply(Mat4Perspective(0.785398f, aspect, 0.1f, 100.0f), Mat4Identity());
+    camera->ViewProj = viewProj;
 
     BindPipelineSet(cmd, pipeline, Set_PerFrame);
     BindPipelineSet(cmd, pipeline, Set_PerMaterial);
 
-    uint32 drawIndex     = 0;
+    // Object uniforms live in a per-pipeline buffer, so each pipeline needs its own draw cursor
+    uint32 drawIndices[MAX_PIPELINES] = {};
+    uint32 activeId      = Pipeline_Primitive;
     uint32 skippedDraws  = 0;
     uint32 offset        = 0;
     for (command_type *cmdBase = NextRenderCommand(commands, &offset); cmdBase; cmdBase = NextRenderCommand(commands, &offset))
@@ -66,12 +70,43 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
             {
                 command_render_camera *cameraCmd = (command_render_camera *)cmdBase;
                 Matrix4 proj = Mat4Perspective(cameraCmd->FovY, aspect, 0.1f, 100.0f);
-                camera->ViewProj = Mat4Multiply(proj, cameraCmd->View);
+                viewProj = Mat4Multiply(proj, cameraCmd->View);
+                camera->ViewProj = viewProj;
+            } break;
+
+            case Set_Pipline:
+            {
+                command_set_pipeline *pipelineCmd = (command_set_pipeline *)cmdBase;
+
+                if ((uint32)pipelineCmd->PipelineId >= MAX_PIPELINES ||
+                    context->Pipelines[pipelineCmd->PipelineId].Handle == VK_NULL_HANDLE)
+                {
+                    DebugLog("Set pipeline %d ignored: not ready\n", pipelineCmd->PipelineId);
+                    break;
+                }
+
+                if ((uint32)pipelineCmd->PipelineId == activeId)
+                {
+                    break;
+                }
+
+                activeId = (uint32)pipelineCmd->PipelineId;
+                pipeline = &context->Pipelines[activeId];
+
+                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->Handle);
+
+                // Sets and uniform buffers belong to the pipeline, so the new one gets its own camera copy
+                camera = (camera_uniforms *)FrameUniforms(pipeline);
+                camera->ViewProj = viewProj;
+
+                BindPipelineSet(cmd, pipeline, Set_PerFrame);
+                BindPipelineSet(cmd, pipeline, Set_PerMaterial);
             } break;
 
             case Render_Mesh:
             {
                 command_render_mesh *meshCmd = (command_render_mesh *)cmdBase;
+                uint32 drawIndex = drawIndices[activeId];
 
                 if (drawIndex >= MAX_OBJECTS)
                 {
@@ -102,7 +137,7 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
                 vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
                 vkCmdDraw(cmd, mesh->VertexCount, 1, 0, 0);
 
-                drawIndex++;
+                drawIndices[activeId]++;
             } break;
 
             case Load_Mesh:
@@ -123,8 +158,8 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
 
 internal bool32 DrawFrame(vulkan_context *context, render_commands *commands)
 {
-    render_pipeline *pipeline = context->PrimitivePipeline;
-    if (!pipeline || pipeline->Handle == VK_NULL_HANDLE)
+    render_pipeline *pipeline = &context->Pipelines[Pipeline_Primitive];
+    if (pipeline->Handle == VK_NULL_HANDLE)
     {
         return false;
     }
@@ -135,8 +170,7 @@ internal bool32 DrawFrame(vulkan_context *context, render_commands *commands)
     ProcessLoadCommands(context, commands);
 
     uint32 imageIndex = 0;
-    VkResult acquire = vkAcquireNextImageKHR(context->device, context->swapchain, UINT64_MAX,
-                                             context->imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+    VkResult acquire = vkAcquireNextImageKHR(context->device, context->swapchain, UINT64_MAX, context->imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
     if (acquire == VK_ERROR_OUT_OF_DATE_KHR)
     {
         return true;

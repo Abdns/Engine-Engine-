@@ -72,8 +72,8 @@
     <ClInclude Include="..\engine\source\Helpers\Types.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\engine\source\Graphics\Vulkan\shaders\primitive.vert.hlsl" />
-    <None Include="..\engine\source\Graphics\Vulkan\shaders\primitive.frag.hlsl" />
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\unlit.vert.hlsl" />
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\unlit.frag.hlsl" />
     <None Include="..\engine\assets\models\README.md" />
     <None Include="..\engine\assets\images\TestImage.tga" />
     <None Include="..\build.bat" />
