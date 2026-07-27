@@ -112,6 +112,7 @@ inline Vector4 V4(real32 X, real32 Y, real32 Z, real32 W)
     Result.Y = Y;
     Result.Z = Z;
     Result.W = W;
+
     return Result;
 }
 
@@ -127,6 +128,7 @@ inline Matrix4 Mat4Identity(void)
     R.E[1][1] = 1.0f;
     R.E[2][2] = 1.0f;
     R.E[3][3] = 1.0f;
+
     return R;
 }
 
@@ -145,6 +147,7 @@ inline Matrix4 Mat4Multiply(Matrix4 A, Matrix4 B)
             R.E[c][r] = Sum;
         }
     }
+
     return R;
 }
 

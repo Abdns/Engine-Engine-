@@ -21,8 +21,7 @@ internal vulkan_shader LoadShader(const char *name)
 
     if (shader.vert.Data && shader.frag.Data)
     {
-        DebugLog("Shader '%s' loaded (vert %u, frag %u bytes)\n",
-               name, shader.vert.Size, shader.frag.Size);
+        DebugLog("Shader '%s' loaded (vert %u, frag %u bytes)\n",name, shader.vert.Size, shader.frag.Size);
     }
     else
     {
@@ -50,41 +49,10 @@ internal VkShaderModule CreateShaderModule(VkDevice device, void *code, uint32 c
     if (vkCreateShaderModule(device, &createInfo, nullptr, &module) != VK_SUCCESS)
     {
         DebugLog("Fail to create shader module\n");
+
         return VK_NULL_HANDLE;
     }
     return module;
-}
-
-internal render_pipeline *GetPipeline(vulkan_context *context, const char *name)
-{
-    for (uint32 i = 0; i < context->PipelineCount; ++i)
-    {
-        if (StringsAreEqual(context->Pipelines[i].Name, name))
-        {
-            return &context->Pipelines[i];
-        }
-    }
-    return 0;
-}
-
-internal VkDescriptorType DescriptorTypeFor(resource_kind kind)
-{
-    switch (kind)
-    {
-        case Resource_Uniform:        return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        case Resource_UniformDynamic: return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-        case Resource_Texture:        return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    }
-    return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-}
-
-internal uint32 FrequencySetCount(descriptor_frequency freq)
-{
-    if (freq == Frequency_PerMaterial)
-    {
-        return MAX_TEXTURES;
-    }
-    return 1;
 }
 
 internal bool32 CreateDescriptorSetLayout(vulkan_context *context, VkDescriptorSetLayoutBinding *bindings, uint32 count, VkDescriptorSetLayout *outLayout)
@@ -100,76 +68,35 @@ internal bool32 CreateDescriptorSetLayout(vulkan_context *context, VkDescriptorS
         return false;
     }
 
-    DebugLog("Descriptor set layout created (%u bindings)\n", count);
     return true;
 }
 
-internal bool32 CreateSetLayouts(vulkan_context *context, render_pipeline *pipeline)
+struct descriptor_set_bindings
 {
-    for (uint32 freq = 0; freq < (uint32)Frequency_Count; ++freq)
+    VkDescriptorSetLayoutBinding Bindings[MAX_PIPELINE_RESOURCES];
+    uint32                       BindingCount;
+};
+
+// A pipeline owns exactly one set, so the pool it needs is exactly one set wide
+internal bool32 CreateDescriptorPool(vulkan_context *context, render_pipeline *pipeline, descriptor_set_bindings *materialSet)
+{
+    if (!materialSet->BindingCount)
     {
-        VkDescriptorSetLayoutBinding bindings[MAX_PIPELINE_RESOURCES] = {};
-        uint32 count = 0;
-
-        for (uint32 i = 0; i < pipeline->ResourceCount; ++i)
-        {
-            resource_slot *slot = &pipeline->Resources[i].Slot;
-            if ((uint32)slot->Frequency != freq)
-            {
-                continue;
-            }
-
-            bindings[count].binding         = slot->Binding;
-            bindings[count].descriptorType  = DescriptorTypeFor(slot->Kind);
-            bindings[count].descriptorCount = 1;
-            bindings[count].stageFlags      = slot->Stages;
-            count++;
-        }
-
-        if (!CreateDescriptorSetLayout(context, bindings, count, &pipeline->SetLayouts[freq]))
-        {
-            return false;
-        }
+        return true;
     }
-    return true;
-}
 
-internal bool32 CreateDescriptorPool(vulkan_context *context, render_pipeline *pipeline)
-{
     VkDescriptorPoolSize poolSizes[MAX_PIPELINE_RESOURCES] = {};
-    uint32 sizeCount = 0;
-    uint32 maxSets = 0;
-
-    for (uint32 freq = 0; freq < (uint32)Frequency_Count; ++freq)
+    for (uint32 b = 0; b < materialSet->BindingCount; ++b)
     {
-        uint32 setsForFreq = FrequencySetCount((descriptor_frequency)freq);
-        bool32 hasSlots = false;
-
-        for (uint32 i = 0; i < pipeline->ResourceCount; ++i)
-        {
-            resource_slot *slot = &pipeline->Resources[i].Slot;
-            if ((uint32)slot->Frequency != freq)
-            {
-                continue;
-            }
-
-            hasSlots = true;
-            poolSizes[sizeCount].type = DescriptorTypeFor(slot->Kind);
-            poolSizes[sizeCount].descriptorCount = setsForFreq;
-            sizeCount++;
-        }
-
-        if (hasSlots)
-        {
-            maxSets += setsForFreq;
-        }
+        poolSizes[b].type            = materialSet->Bindings[b].descriptorType;
+        poolSizes[b].descriptorCount = materialSet->Bindings[b].descriptorCount;
     }
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.poolSizeCount = sizeCount;
+    poolInfo.poolSizeCount = materialSet->BindingCount;
     poolInfo.pPoolSizes = poolSizes;
-    poolInfo.maxSets = maxSets;
+    poolInfo.maxSets = 1;
 
     if (vkCreateDescriptorPool(context->device, &poolInfo, nullptr, &pipeline->DescriptorPool) != VK_SUCCESS)
     {
@@ -177,11 +104,10 @@ internal bool32 CreateDescriptorPool(vulkan_context *context, render_pipeline *p
         return false;
     }
 
-    DebugLog("Descriptor pool created\n");
     return true;
 }
 
-internal bool32 CreateTextureSampler(vulkan_context *context, render_pipeline *pipeline, VkFilter filter, VkSamplerAddressMode addressMode)
+internal bool32 CreateTextureSampler(vulkan_context *context, VkFilter filter, VkSamplerAddressMode addressMode)
 {
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -201,21 +127,36 @@ internal bool32 CreateTextureSampler(vulkan_context *context, render_pipeline *p
     samplerInfo.minLod = 0.0f;
     samplerInfo.maxLod = 0.0f;
 
-    if (vkCreateSampler(context->device, &samplerInfo, nullptr, &pipeline->Sampler) != VK_SUCCESS)
+    if (vkCreateSampler(context->device, &samplerInfo, nullptr, &context->Sampler) != VK_SUCCESS)
     {
         DebugLog("Fail to create texture sampler\n");
         return false;
     }
 
-    DebugLog("Texture sampler created\n");
     return true;
 }
 
-internal void WriteImageSlot(vulkan_context *context, VkDescriptorSet set, uint32 binding, VkImageView view, VkSampler sampler)
+internal void WriteImageDescriptor(vulkan_context *context, VkDescriptorSet set, uint32 binding, uint32 arrayElement, VkImageView view)
 {
     VkDescriptorImageInfo imageInfo{};
     imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     imageInfo.imageView = view;
+
+    VkWriteDescriptorSet write{};
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.dstSet = set;
+    write.dstBinding = binding;
+    write.dstArrayElement = arrayElement;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    write.descriptorCount = 1;
+    write.pImageInfo = &imageInfo;
+
+    vkUpdateDescriptorSets(context->device, 1, &write, 0, nullptr);
+}
+
+internal void WriteSamplerDescriptor(vulkan_context *context, VkDescriptorSet set, uint32 binding, VkSampler sampler)
+{
+    VkDescriptorImageInfo imageInfo{};
     imageInfo.sampler = sampler;
 
     VkWriteDescriptorSet write{};
@@ -223,14 +164,14 @@ internal void WriteImageSlot(vulkan_context *context, VkDescriptorSet set, uint3
     write.dstSet = set;
     write.dstBinding = binding;
     write.dstArrayElement = 0;
-    write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
     write.descriptorCount = 1;
     write.pImageInfo = &imageInfo;
 
     vkUpdateDescriptorSets(context->device, 1, &write, 0, nullptr);
 }
 
-internal void WriteBufferSlot(vulkan_context *context, VkDescriptorSet set, uint32 binding, VkDescriptorType type, VkBuffer buffer, VkDeviceSize range)
+internal void WriteBufferDescriptor(vulkan_context *context, VkDescriptorSet set, uint32 binding, VkDescriptorType type, VkBuffer buffer, VkDeviceSize range)
 {
     VkDescriptorBufferInfo bufferInfo{};
     bufferInfo.buffer = buffer;
@@ -266,121 +207,130 @@ internal bool32 AllocateDescriptorSet(vulkan_context *context, VkDescriptorPool 
     return true;
 }
 
-internal bool32 CreatePipelineResources(vulkan_context *context, render_pipeline *pipeline)
+// Sets 0 and 1 for the whole engine. Created once, before any pipeline, and outliving all of them
+internal bool32 CreateSharedResources(vulkan_context *context)
 {
-    VkPhysicalDeviceProperties props;
-    vkGetPhysicalDeviceProperties(context->physicalDevice, &props);
-    uint32 uboAlign = (uint32)props.limits.minUniformBufferOffsetAlignment;
+    // Stage masks are the union of everything that may ever read these. The layouts are shared by
+    // every pipeline, so widening one later would mean rebuilding all of them
+    VkDescriptorSetLayoutBinding globalBindings[2] = {};
+    globalBindings[0].binding         = 0;
+    globalBindings[0].descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    globalBindings[0].descriptorCount = MAX_TEXTURES;
+    globalBindings[0].stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-    for (uint32 freq = 0; freq < (uint32)Frequency_Count; ++freq)
+    globalBindings[1].binding         = 1;
+    globalBindings[1].descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLER;
+    globalBindings[1].descriptorCount = 1;
+    globalBindings[1].stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkDescriptorSetLayoutBinding cameraBinding{};
+    cameraBinding.binding         = 0;
+    cameraBinding.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    cameraBinding.descriptorCount = 1;
+    cameraBinding.stageFlags      = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    if (!CreateDescriptorSetLayout(context, globalBindings, (uint32)ArrayCount(globalBindings), &context->GlobalSet.Layout)) return false;
+    if (!CreateDescriptorSetLayout(context, &cameraBinding, 1, &context->FrameSet.Layout))                                   return false;
+
+    VkDescriptorPoolSize poolSizes[3] = {};
+    poolSizes[0].type            = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    poolSizes[0].descriptorCount = MAX_TEXTURES;
+    poolSizes[1].type            = VK_DESCRIPTOR_TYPE_SAMPLER;
+    poolSizes[1].descriptorCount = 1;
+    poolSizes[2].type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    poolSizes[2].descriptorCount = 1;
+
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    poolInfo.poolSizeCount = (uint32)ArrayCount(poolSizes);
+    poolInfo.pPoolSizes = poolSizes;
+    poolInfo.maxSets = 2;
+
+    if (vkCreateDescriptorPool(context->device, &poolInfo, nullptr, &context->SharedDescriptorPool) != VK_SUCCESS)
     {
-        bool32 needsSet = false;
-        for (uint32 i = 0; i < pipeline->ResourceCount; ++i)
-        {
-            resource_slot *slot = &pipeline->Resources[i].Slot;
-            if ((uint32)slot->Frequency == freq && slot->Kind != Resource_Texture)
-            {
-                needsSet = true;
-            }
-        }
-
-        if (!needsSet)
-        {
-            continue;
-        }
-
-        if (!AllocateDescriptorSet(context, pipeline->DescriptorPool, pipeline->SetLayouts[freq], &pipeline->Sets[freq]))
-        {
-            return false;
-        }
+        DebugLog("Fail to create shared descriptor pool\n");
+        return false;
     }
 
-    for (uint32 i = 0; i < pipeline->ResourceCount; ++i)
+    if (!AllocateDescriptorSet(context, context->SharedDescriptorPool, context->GlobalSet.Layout, &context->GlobalSet.Handle)) return false;
+    if (!AllocateDescriptorSet(context, context->SharedDescriptorPool, context->FrameSet.Layout, &context->FrameSet.Handle))   return false;
+
+    if (!CreateTextureSampler(context, VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT))
     {
-        pipeline_resource *res = &pipeline->Resources[i];
-        resource_slot *slot = &res->Slot;
-
-        if (slot->Kind == Resource_Texture)
-        {
-            continue;
-        }
-
-        res->Stride = slot->Size;
-        if (slot->Kind == Resource_UniformDynamic)
-        {
-            res->Stride = (slot->Size + uboAlign - 1) & ~(uboAlign - 1);
-        }
-
-        if (!CreateMappedBuffer(context, (VkDeviceSize)res->Stride * slot->Count, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &res->Buffer, &res->Memory, &res->Mapped))
-        {
-            return false;
-        }
-
-        WriteBufferSlot(context, pipeline->Sets[slot->Frequency], slot->Binding, DescriptorTypeFor(slot->Kind), res->Buffer, slot->Size);
+        return false;
     }
+    WriteSamplerDescriptor(context, context->GlobalSet.Handle, 1, context->Sampler);
 
-    return true;
-}
+    // Texture views are written into binding 0 later, as assets load
+    pipeline_buffer *buffer = &context->FrameBuffer;
+    buffer->Stride = (uint32)sizeof(camera_uniforms);
 
-internal pipeline_resource *FindPipelineResource(render_pipeline *pipeline, descriptor_frequency freq, uint32 binding)
-{
-    for (uint32 i = 0; i < pipeline->ResourceCount; ++i)
-    {
-        pipeline_resource *res = &pipeline->Resources[i];
-        if (res->Slot.Frequency == freq && res->Slot.Binding == binding)
-        {
-            return res;
-        }
-    }
-
-    Assert(!"Pipeline resource not found");
-    return 0;
-}
-
-internal void *PipelineResourceData(render_pipeline *pipeline, descriptor_frequency freq, uint32 binding, uint32 element)
-{
-    pipeline_resource *res = FindPipelineResource(pipeline, freq, binding);
-    return (uint8 *)res->Mapped + element * res->Stride;
-}
-
-internal uint32 PipelineDynamicOffset(render_pipeline *pipeline, descriptor_frequency freq, uint32 binding, uint32 element)
-{
-    return element * FindPipelineResource(pipeline, freq, binding)->Stride;
-}
-
-internal void WriteTextureDescriptor(vulkan_context *context, render_pipeline *pipeline, gpu_texture *texture)
-{
-    WriteImageSlot(context, texture->DescriptorSet, 0, texture->View, pipeline->Sampler);
-}
-
-internal bool32 CreateTextureDescriptorSet(vulkan_context *context, render_pipeline *pipeline, gpu_texture *texture)
-{
-    if (!AllocateDescriptorSet(context, pipeline->DescriptorPool, pipeline->SetLayouts[Frequency_PerMaterial], &texture->DescriptorSet))
+    if (!CreateMappedBuffer(context, buffer->Stride, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, &buffer->Buffer, &buffer->Memory, &buffer->Mapped))
     {
         return false;
     }
 
-    WriteTextureDescriptor(context, pipeline, texture);
+    WriteBufferDescriptor(context, context->FrameSet.Handle, 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, buffer->Buffer, buffer->Stride);
+
     return true;
 }
 
-internal void BindDescriptorSet(VkCommandBuffer cmd, render_pipeline *pipeline, descriptor_frequency freq, VkDescriptorSet set)
+internal void DestroySharedResources(vulkan_context *context)
 {
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->Layout, freq, 1, &set, 0, nullptr);
+    pipeline_buffer *buffer = &context->FrameBuffer;
+    if (buffer->Mapped)
+    {
+        vkUnmapMemory(context->device, buffer->Memory);
+    }
+    vkDestroyBuffer(context->device, buffer->Buffer, nullptr);
+    vkFreeMemory(context->device, buffer->Memory, nullptr);
+
+    vkDestroySampler(context->device, context->Sampler, nullptr);
+    vkDestroyDescriptorPool(context->device, context->SharedDescriptorPool, nullptr);
+    vkDestroyDescriptorSetLayout(context->device, context->FrameSet.Layout, nullptr);
+    vkDestroyDescriptorSetLayout(context->device, context->GlobalSet.Layout, nullptr);
+
+    *buffer = {};
+    context->Sampler              = VK_NULL_HANDLE;
+    context->SharedDescriptorPool = VK_NULL_HANDLE;
+    context->FrameSet             = {};
+    context->GlobalSet            = {};
 }
 
-internal void BindPipelineSet(VkCommandBuffer cmd, render_pipeline *pipeline, descriptor_frequency freq)
+internal void BindGlobalSet(VkCommandBuffer cmd, vulkan_context *context, render_pipeline *pipeline)
 {
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->Layout, freq, 1, &pipeline->Sets[freq], 0, nullptr);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->Layout, Set_Global, 1, &context->GlobalSet.Handle, 0, nullptr);
 }
 
-internal void BindPipelineSetDynamic(VkCommandBuffer cmd, render_pipeline *pipeline, descriptor_frequency freq, uint32 offset)
+internal void BindFrameSet(VkCommandBuffer cmd, vulkan_context *context, render_pipeline *pipeline)
 {
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->Layout, freq, 1, &pipeline->Sets[freq], 1, &offset);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->Layout, Set_PerFrame, 1, &context->FrameSet.Handle, 0, nullptr);
+}
+
+// Does nothing while no pipeline declares per-material resources
+internal void BindMaterialSet(VkCommandBuffer cmd, render_pipeline *pipeline)
+{
+    if (pipeline->MaterialSet.Handle == VK_NULL_HANDLE)
+    {
+        return;
+    }
+
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->Layout, Set_PerMaterial, 1, &pipeline->MaterialSet.Handle, 0, nullptr);
+}
+
+internal void *FrameUniforms(vulkan_context *context)
+{
+    return context->FrameBuffer.Mapped;
 }
 
 internal bool32 CreatePipelineLayout(vulkan_context *context, render_pipeline *pipeline, render_pipeline_config *config)
 {
+    // Sets 0 and 1 are the context's own handles, so every pipeline layout comes out identical for
+    // them: their bindings then survive a pipeline switch untouched
+    VkDescriptorSetLayout setLayouts[Set_Count];
+    setLayouts[Set_Global]      = context->GlobalSet.Layout;
+    setLayouts[Set_PerFrame]    = context->FrameSet.Layout;
+    setLayouts[Set_PerMaterial] = pipeline->MaterialSet.Layout;
 
     VkPushConstantRange pushRange{};
     pushRange.stageFlags = config->PushConstantStages;
@@ -389,8 +339,8 @@ internal bool32 CreatePipelineLayout(vulkan_context *context, render_pipeline *p
 
     VkPipelineLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    layoutInfo.setLayoutCount = Frequency_Count;
-    layoutInfo.pSetLayouts = pipeline->SetLayouts;
+    layoutInfo.setLayoutCount = Set_Count;
+    layoutInfo.pSetLayouts = setLayouts;
     if (config->PushConstantSize > 0)
     {
         layoutInfo.pushConstantRangeCount = 1;
@@ -403,7 +353,6 @@ internal bool32 CreatePipelineLayout(vulkan_context *context, render_pipeline *p
         return false;
     }
 
-    DebugLog("Pipeline layout created\n");
     return true;
 }
 
@@ -414,6 +363,7 @@ internal bool32 CreateGraphicsPipeline(vulkan_context *context, render_pipeline 
     {
         DebugLog("Fail to load '%s' shader\n", config->ShaderName);
         FreeShader(&shader);
+
         return false;
     }
 
@@ -422,6 +372,7 @@ internal bool32 CreateGraphicsPipeline(vulkan_context *context, render_pipeline 
     if (vertModule == VK_NULL_HANDLE || fragModule == VK_NULL_HANDLE)
     {
         FreeShader(&shader);
+
         return false;
     }
 
@@ -538,102 +489,91 @@ internal bool32 CreateGraphicsPipeline(vulkan_context *context, render_pipeline 
         return false;
     }
 
-    DebugLog("Graphics pipeline created\n");
     return true;
 }
 
-internal render_pipeline *CreateRenderPipeline(vulkan_context *context, render_pipeline_config *config)
+internal void DestroyRenderPipeline(vulkan_context *context, render_pipeline *pipeline);
+
+internal render_pipeline *FailRenderPipeline(vulkan_context *context, render_pipeline *pipeline)
 {
-    Assert(config->ResourceCount <= MAX_PIPELINE_RESOURCES);
+    DestroyRenderPipeline(context, pipeline);
+    return 0;
+}
 
-    if (GetPipeline(context, config->ShaderName))
+internal render_pipeline *CreateRenderPipeline(vulkan_context *context, render_pipeline_config *config, render_pipeline* pipeline)
+{
+    if (config->ResourceDescriptionCount > MAX_PIPELINE_RESOURCES || config->AttributeCount > MAX_PIPELINE_ATTRIBUTES)
     {
-        DebugLog("Pipeline '%s' already exists\n", config->ShaderName);
+        DebugLog("Pipeline '%s' has too many resources or many vertex attributes (%u, max %d)\n", config->ShaderName, config->ResourceDescriptionCount, MAX_PIPELINE_RESOURCES);
         return 0;
     }
 
-    if (context->PipelineCount >= MAX_PIPELINES)
+    descriptor_set_bindings materialSet = {};
+    for (uint32 i = 0; i < config->ResourceDescriptionCount; ++i)
     {
-        DebugLog("Pipeline overflow (max %d)\n", MAX_PIPELINES);
-        return 0;
+        const resource_binding_description *resourceDesc = &config->ResourcesDescription[i];
+
+        if (resourceDesc->Set != Set_PerMaterial)
+        {
+            DebugLog("Pipeline '%s': set %u belongs to the context, only set %u is pipeline-owned\n", config->ShaderName, (uint32)resourceDesc->Set, (uint32)Set_PerMaterial);
+            return FailRenderPipeline(context, pipeline);
+        }
+
+        VkDescriptorSetLayoutBinding *binding = &materialSet.Bindings[materialSet.BindingCount++];
+        binding->binding         = resourceDesc->Binding;
+        binding->descriptorType  = resourceDesc->Type;
+        binding->descriptorCount = resourceDesc->Count;
+        binding->stageFlags      = resourceDesc->Stages;
     }
 
-    render_pipeline *pipeline = &context->Pipelines[context->PipelineCount++];
-    *pipeline = {};
-    AppendString(pipeline->Name, MAX_PIPELINE_NAME, 0, config->ShaderName);
-
-    pipeline->ResourceCount = config->ResourceCount;
-    for (uint32 i = 0; i < config->ResourceCount; ++i)
+    if (!CreateDescriptorSetLayout(context, materialSet.Bindings, materialSet.BindingCount, &pipeline->MaterialSet.Layout))
     {
-        pipeline->Resources[i].Slot = config->Resources[i];
+        return FailRenderPipeline(context, pipeline);
     }
 
-    if (!CreateSetLayouts(context, pipeline))                return 0;
-    if (!CreatePipelineLayout(context, pipeline, config))    return 0;
-    if (!CreateGraphicsPipeline(context, pipeline, config))  return 0;
-    if (!CreateDescriptorPool(context, pipeline))            return 0;
-    if (!CreateTextureSampler(context, pipeline, config->SamplerFilter, config->SamplerAddressMode)) return 0;
-    if (!CreatePipelineResources(context, pipeline))         return 0;
+    if (!CreatePipelineLayout(context, pipeline, config))       return FailRenderPipeline(context, pipeline);
+    if (!CreateGraphicsPipeline(context, pipeline, config))     return FailRenderPipeline(context, pipeline);
+    if (!CreateDescriptorPool(context, pipeline, &materialSet)) return FailRenderPipeline(context, pipeline);
 
-    DebugLog("Render pipeline '%s' ready (%u resources)\n", config->ShaderName, config->ResourceCount);
+    if (materialSet.BindingCount &&
+        !AllocateDescriptorSet(context, pipeline->DescriptorPool, pipeline->MaterialSet.Layout, &pipeline->MaterialSet.Handle))
+    {
+        return FailRenderPipeline(context, pipeline);
+    }
+
     return pipeline;
 }
 
 internal void DestroyRenderPipeline(vulkan_context *context, render_pipeline *pipeline)
 {
-    for (uint32 i = 0; i < pipeline->ResourceCount; ++i)
-    {
-        pipeline_resource *res = &pipeline->Resources[i];
-        if (res->Buffer == VK_NULL_HANDLE)
-        {
-            continue;
-        }
-        vkUnmapMemory(context->device, res->Memory);
-        vkDestroyBuffer(context->device, res->Buffer, nullptr);
-        vkFreeMemory(context->device, res->Memory, nullptr);
-    }
-
-    vkDestroySampler(context->device, pipeline->Sampler, nullptr);
+    // The global and per-frame layouts belong to the context and outlive every pipeline
+    vkDestroyDescriptorSetLayout(context->device, pipeline->MaterialSet.Layout, nullptr);
     vkDestroyDescriptorPool(context->device, pipeline->DescriptorPool, nullptr);
-    for (uint32 freq = 0; freq < (uint32)Frequency_Count; ++freq)
-    {
-        vkDestroyDescriptorSetLayout(context->device, pipeline->SetLayouts[freq], nullptr);
-    }
     vkDestroyPipeline(context->device, pipeline->Handle, nullptr);
     vkDestroyPipelineLayout(context->device, pipeline->Layout, nullptr);
+
+    *pipeline = {};
 }
 
-internal bool32 CreatePrimitivePipeline(vulkan_context *context)
+internal render_pipeline_config UnlitPipelineConfig()
 {
     render_pipeline_config config = {};
-    config.ShaderName = "primitive";
+    config.PipelineId = Pipeline_Unlit;
+    config.ShaderName = "unlit";
 
-    config.VertexStride   = KBN_VERTEX_FLOATS * (uint32)sizeof(real32);
+    config.VertexStride = KBN_VERTEX_FLOATS * (uint32)sizeof(real32);
+
+    config.Attributes[0] = { 0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0 };
+    config.Attributes[1] = { 1, 0, VK_FORMAT_R32G32B32_SFLOAT, 3 * (uint32)sizeof(real32) };
+    config.Attributes[2] = { 2, 0, VK_FORMAT_R32G32_SFLOAT,    6 * (uint32)sizeof(real32) };
     config.AttributeCount = 3;
-    config.Attributes[0].location = 0;
-    config.Attributes[0].binding  = 0;
-    config.Attributes[0].format   = VK_FORMAT_R32G32B32_SFLOAT;
-    config.Attributes[0].offset   = 0;
-    config.Attributes[1].location = 1;
-    config.Attributes[1].binding  = 0;
-    config.Attributes[1].format   = VK_FORMAT_R32G32B32_SFLOAT;
-    config.Attributes[1].offset   = 3 * (uint32)sizeof(real32);
-    config.Attributes[2].location = 2;
-    config.Attributes[2].binding  = 0;
-    config.Attributes[2].format   = VK_FORMAT_R32G32_SFLOAT;
-    config.Attributes[2].offset   = 6 * (uint32)sizeof(real32);
 
-    resource_slot resources[] =
-    {
-        { Frequency_PerFrame,     0,    Resource_Uniform,        VK_SHADER_STAGE_VERTEX_BIT,   sizeof(camera_uniforms),  1 },
-        { Frequency_PerMaterial,  0,    Resource_Texture,        VK_SHADER_STAGE_FRAGMENT_BIT, 0,                        1 },
-        { Frequency_PerObject,    0,    Resource_UniformDynamic, VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(object_uniforms),  MAX_OBJECTS },
-    };
-    config.Resources     = resources;
-    config.ResourceCount = (uint32)ArrayCount(resources);
+    // Textures and camera live in the context's sets, per-draw data rides in push constants:
+    // this pipeline owns no resources of its own
+    config.ResourceDescriptionCount = 0;
 
     config.PushConstantSize   = (uint32)sizeof(primitive_push_constants);
-    config.PushConstantStages = VK_SHADER_STAGE_VERTEX_BIT;
+    config.PushConstantStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
     config.Topology   = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     config.CullMode   = VK_CULL_MODE_NONE;
@@ -642,8 +582,50 @@ internal bool32 CreatePrimitivePipeline(vulkan_context *context)
     config.DepthWrite = true;
     config.AlphaBlend = false;
 
-    config.SamplerFilter      = VK_FILTER_LINEAR;
-    config.SamplerAddressMode = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-
-    return CreateRenderPipeline(context, &config) != 0;
+    return config;
 }
+
+internal bool32 CreatePipeline(vulkan_context* context, pipeline_type pipelineType)
+{
+    if ((uint32)pipelineType >= MAX_PIPELINES)
+    {
+        DebugLog("Invalid pipeline id %d (max %d)\n", pipelineType, MAX_PIPELINES);
+
+        return false;
+    }
+
+    render_pipeline_config config = {};
+    switch (pipelineType)
+    {
+        case Pipeline_Unlit: 
+        {
+            config = UnlitPipelineConfig(); 
+        }break;
+
+        default:
+        {
+            return false;
+        }
+    }
+
+    render_pipeline* pipeline = &context->Pipelines[pipelineType];
+    if (pipeline->Handle != VK_NULL_HANDLE)
+    {
+        DebugLog("Pipeline slot %d already taken by '%s'\n", pipelineType, pipeline->Name);
+
+        return false;
+    }
+
+    *pipeline = {};
+    AppendString(pipeline->Name, MAX_PIPELINE_NAME, 0, config.ShaderName);
+
+    if (!CreateRenderPipeline(context, &config, pipeline))
+    {
+        return false;
+    }
+
+    context->PipelineCount++;
+
+    return true;
+}
+ 

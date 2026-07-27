@@ -10,25 +10,21 @@
 
 #include <vulkan/vulkan.h>
 
-#define MAX_EXTENSIONS        256
-#define MAX_DEVICES           4
-#define MAX_FAMILY_COUNT      8
-#define MAX_DEVICE_EXTENSIONS 256
+#include "shaders/ShaderInterop.h"
+
 #define MAX_SURFACE_FORMATS   64
 #define MAX_PRESENT_MODES     8
 #define MAX_SWAPCHAIN_IMAGES  8
 #define MAX_MESHES            16
-#define MAX_TEXTURES          16
-#define MAX_VERTEX_ATTRIBUTES 8
-#define MAX_OBJECTS           256
 #define MAX_PIPELINES         8
 #define MAX_PIPELINE_RESOURCES 8
+#define MAX_PIPELINE_ATTRIBUTES 8
 #define MAX_PIPELINE_NAME     64
 
 struct vulkan_shader
 {
-    platform_file vert;
-    platform_file frag;
+    platform_file_raw vert;
+    platform_file_raw frag;
 };
 
 struct gpu_mesh
@@ -40,57 +36,58 @@ struct gpu_mesh
 
 struct gpu_texture
 {
-    VkImage         Image;
-    VkDeviceMemory  Memory;
-    VkImageView     View;
-    VkDescriptorSet DescriptorSet;
+    VkImage        Image;
+    VkDeviceMemory Memory;
+    VkImageView    View;
 };
 
-enum descriptor_frequency
+// Ordered by how often the contents change: the compatibility rule counts sets from zero up,
+// so the stable ones have to sit on the left
+enum descriptor_set_index
 {
-    Frequency_Global = 0,
-    Frequency_PerFrame,
-    Frequency_PerMaterial,
-    Frequency_PerObject,
-    Frequency_Count,
+    Set_Global      = SET_GLOBAL,        // all textures + the sampler, written when assets load
+    Set_PerFrame    = SET_PER_FRAME,     // camera, written once per frame
+    Set_PerMaterial = SET_PER_MATERIAL,  // owned by the pipeline, unused so far
+    Set_Count,
 };
 
-enum resource_kind
+// A set and the layout it was allocated from always travel together
+struct descriptor_set
 {
-    Resource_Uniform = 0,
-    Resource_UniformDynamic,
-    Resource_Texture,
+    VkDescriptorSetLayout Layout;
+    VkDescriptorSet       Handle;
 };
 
-struct resource_slot
+struct resource_binding_description
 {
-    descriptor_frequency Frequency;
+    descriptor_set_index Set;
     uint32               Binding;
-    resource_kind        Kind;
+    VkDescriptorType     Type;
     VkShaderStageFlags   Stages;
-    uint32               Size;
     uint32               Count;
 };
 
-struct pipeline_resource
+struct pipeline_buffer
 {
-    resource_slot  Slot;
     VkBuffer       Buffer;
     VkDeviceMemory Memory;
-    void          *Mapped;
     uint32         Stride;
+    void          *Mapped;
 };
 
 struct render_pipeline_config
 {
+    pipeline_type PipelineId;
     const char *ShaderName;
 
     uint32 VertexStride;
-    uint32 AttributeCount;
-    VkVertexInputAttributeDescription Attributes[MAX_VERTEX_ATTRIBUTES];
+    // Owned by value: the config is returned by value from the *PipelineConfig builders,
+    // so pointers into their locals would dangle
+    VkVertexInputAttributeDescription Attributes[MAX_PIPELINE_ATTRIBUTES];
+    uint32                            AttributeCount;
 
-    const resource_slot *Resources;
-    uint32               ResourceCount;
+    resource_binding_description ResourcesDescription[MAX_PIPELINE_RESOURCES];
+    uint32                       ResourceDescriptionCount;
 
     uint32             PushConstantSize;
     VkShaderStageFlags PushConstantStages;
@@ -101,24 +98,18 @@ struct render_pipeline_config
     bool32              DepthTest;
     bool32              DepthWrite;
     bool32              AlphaBlend;
-
-    VkFilter             SamplerFilter;
-    VkSamplerAddressMode SamplerAddressMode;
 };
 
 struct render_pipeline
 {
-    char Name[MAX_PIPELINE_NAME];
+    VkPipeline       Handle;
+    char             Name[MAX_PIPELINE_NAME];
+    VkPipelineLayout Layout;
 
-    VkDescriptorSetLayout SetLayouts[Frequency_Count];
-    VkDescriptorSet       Sets[Frequency_Count];
-    VkPipelineLayout      Layout;
-    VkPipeline            Handle;
-    VkDescriptorPool      DescriptorPool;
-    VkSampler             Sampler;
-
-    pipeline_resource Resources[MAX_PIPELINE_RESOURCES];
-    uint32            ResourceCount;
+    // The only set a pipeline owns. Sets 0 and 1 come from the context, and per-draw data
+    // rides in push constants, so there is nothing else left to own
+    descriptor_set   MaterialSet;
+    VkDescriptorPool DescriptorPool;
 };
 
 struct vulkan_context
@@ -146,6 +137,15 @@ struct vulkan_context
     VkDeviceMemory depthImageMemory;
     VkImageView depthImageView;
     VkFormat depthFormat;
+
+    // Sets 0 and 1 belong to the context, not to any pipeline: every pipeline layout is built from
+    // these same handles, so the layouts stay compatible for those sets and both survive a pipeline
+    // switch. A shader that has no use for them simply never declares the bindings
+    descriptor_set   GlobalSet;             // binding 0: every texture, binding 1: the sampler
+    descriptor_set   FrameSet;              // binding 0: the camera
+    VkDescriptorPool SharedDescriptorPool;
+    VkSampler        Sampler;
+    pipeline_buffer  FrameBuffer;
 
     render_pipeline Pipelines[MAX_PIPELINES];
     uint32 PipelineCount;
@@ -181,21 +181,6 @@ struct swapchain_support_details
     uint32 formatCount;
     VkPresentModeKHR presentModes[MAX_PRESENT_MODES];
     uint32 presentModeCount;
-};
-
-struct primitive_push_constants
-{
-    Matrix4 Model;
-};
-
-struct camera_uniforms
-{
-    Matrix4 ViewProj;
-};
-
-struct object_uniforms
-{
-    Vector4 Tint;
 };
 
 internal void InitVulkan(HINSTANCE hinstance, HWND hwnd);

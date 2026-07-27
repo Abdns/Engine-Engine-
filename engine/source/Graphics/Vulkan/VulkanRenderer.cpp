@@ -1,5 +1,12 @@
 #include "Vulkan.h"
 
+#include "VulkanCore.cpp"
+#include "VulkanDevice.cpp"
+#include "VulkanSwapchain.cpp"
+#include "VulkanPipeline.cpp"
+#include "VulkanAssets.cpp"
+#include "VulkanFrame.cpp"
+
 internal void InitVulkan(HINSTANCE hinstance, HWND hwnd)
 {
     vulkan_context *context = &GlobalVulkan;
@@ -28,18 +35,19 @@ internal void InitVulkan(HINSTANCE hinstance, HWND hwnd)
     if (!CreateImageViews(context))                    return;
     if (!CreateDepthResources(context))                return;
     if (!CreateRenderPass(context))                    return;
-    if (!CreatePrimitivePipeline(context))             return;
     if (!CreateFramebuffers(context))                  return;
     if (!CreateCommandPool(context))                   return;
     if (!CreateCommandBuffer(context))                 return;
     if (!CreateSyncObjects(context))                   return;
+
+    if (!CreateSharedResources(context))               return;
+    if (!CreatePipeline(context, Pipeline_Unlit))  return;
 
     DebugLog("Vulkan ready: %u pipeline(s) up\n", context->PipelineCount);
 }
 
 internal void RenderVulkanFrame(render_commands *Commands)
 {
-
     if (DrawFrame(&GlobalVulkan, Commands))
     {
         RecreateSwapchain(&GlobalVulkan);
@@ -74,10 +82,18 @@ internal void ShutdownVulkan()
             vkFreeMemory(context->device, context->Meshes[i].VertexBufferMemory, nullptr);
         }
 
-        for (uint32 i = 0; i < context->PipelineCount; ++i)
+        for (uint32 i = 0; i < MAX_PIPELINES; ++i)
         {
-            DestroyRenderPipeline(context, &context->Pipelines[i]);
+            if (context->Pipelines[i].Handle != VK_NULL_HANDLE)
+            {
+                DestroyRenderPipeline(context, &context->Pipelines[i]);
+            }
         }
+        context->PipelineCount = 0;
+
+        // After the pipelines: their layouts borrow the shared set layouts
+        DestroySharedResources(context);
+
         for (uint32 i = 0; i < context->TextureCount; ++i)
         {
             vkDestroyImageView(context->device, context->Textures[i].View, nullptr);

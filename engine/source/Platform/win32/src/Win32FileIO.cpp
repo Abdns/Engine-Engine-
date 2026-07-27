@@ -6,9 +6,9 @@ internal void Win32FreeFileMemory(void* Memory)
     }
 }
 
-internal platform_file Win32ReadEntireFile(const char* Filename)
+internal platform_file_raw Win32ReadEntireFile(const char* Filename)
 {
-    platform_file Result = {};
+    platform_file_raw Result = {};
 
     HANDLE FileHandle = CreateFileA(Filename, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
     if (FileHandle != INVALID_HANDLE_VALUE)

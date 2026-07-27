@@ -59,13 +59,8 @@ inline real32 Win32GetSecondsElapsed(LARGE_INTEGER Start, LARGE_INTEGER End)
 #include "Win32Timer.cpp"
 #include "Win32GameCode.cpp"
 #include "Win32Memory.cpp"
-#include "VulkanCore.cpp"
-#include "VulkanDevice.cpp"
-#include "VulkanSwapchain.cpp"
-#include "VulkanPipeline.cpp"
-#include "VulkanAssets.cpp"
-#include "VulkanFrame.cpp"
-#include "Vulkan.cpp"
+
+#include "VulkanRenderer.cpp"
 
 int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowCode)
 {

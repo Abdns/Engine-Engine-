@@ -11,9 +11,9 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
     vkBeginCommandBuffer(cmd, &beginInfo);
 
     VkClearValue clearValues[2] = {};
-    clearValues[0].color.float32[0] = commands->ClearR;
-    clearValues[0].color.float32[1] = commands->ClearG;
-    clearValues[0].color.float32[2] = commands->ClearB;
+    clearValues[0].color.float32[0] = 0.05f;
+    clearValues[0].color.float32[1] = 0.05f;
+    clearValues[0].color.float32[2] = 0.08f;
     clearValues[0].color.float32[3] = 1.0f;
     clearValues[1].depthStencil.depth = 1.0f;
     clearValues[1].depthStencil.stencil = 0;
@@ -47,47 +47,81 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
     scissor.extent = context->swapchainExtent;
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-    real32  aspect = (real32)context->swapchainExtent.width / (real32)context->swapchainExtent.height;
-    Matrix4 proj   = Mat4Perspective(commands->FovY, aspect, 0.1f, 100.0f);
+    real32 aspect = (real32)context->swapchainExtent.width / (real32)context->swapchainExtent.height;
+    camera_uniforms *camera = (camera_uniforms *)FrameUniforms(context);
+    camera->ViewProj = Mat4Multiply(Mat4Perspective(0.785398f, aspect, 0.1f, 100.0f), Mat4Identity());
 
-    camera_uniforms *camera = (camera_uniforms *)PipelineResourceData(pipeline, Frequency_PerFrame, 0, 0);
-    camera->ViewProj = Mat4Multiply(proj, commands->View);
+    BindGlobalSet(cmd, context, pipeline);
+    BindFrameSet(cmd, context, pipeline);
+    BindMaterialSet(cmd, pipeline);
 
-    BindPipelineSet(cmd, pipeline, Frequency_PerFrame);
-
-    uint32 drawIndex = 0;
-    uint32 offset    = 0;
-    for (render_entry_header *header = NextRenderEntry(commands, &offset); header; header = NextRenderEntry(commands, &offset))
+    uint32 activeId = Pipeline_Unlit;
+    uint32 offset   = 0;
+    for (command_type *cmdBase = NextRenderCommand(commands, &offset); cmdBase; cmdBase = NextRenderCommand(commands, &offset))
     {
-        if (header->Type == RenderEntry_Mesh)
+        switch (*cmdBase)
         {
-            render_entry_mesh *entry = (render_entry_mesh *)header;
-
-            if (entry->MeshID >= MAX_MESHES || context->Meshes[entry->MeshID].VertexBuffer == VK_NULL_HANDLE)
+            case Render_Camera:
             {
-                continue;
-            }
+                command_render_camera *cameraCmd = (command_render_camera *)cmdBase;
+                Matrix4 proj = Mat4Perspective(cameraCmd->FovY, aspect, 0.1f, 100.0f);
+                camera->ViewProj = Mat4Multiply(proj, cameraCmd->View);
+            } break;
 
-            gpu_mesh *mesh = &context->Meshes[entry->MeshID];
+            case Set_Pipline:
+            {
+                command_set_pipeline *pipelineCmd = (command_set_pipeline *)cmdBase;
 
-            uint32 texId = (entry->TextureID < MAX_TEXTURES && context->Textures[entry->TextureID].DescriptorSet) ? entry->TextureID : 0;
-            BindDescriptorSet(cmd, pipeline, Frequency_PerMaterial, context->Textures[texId].DescriptorSet);
+                if ((uint32)pipelineCmd->PipelineType >= MAX_PIPELINES || context->Pipelines[pipelineCmd->PipelineType].Handle == VK_NULL_HANDLE)
+                {
+                    DebugLog("Set pipeline %d ignored: not ready\n", pipelineCmd->PipelineType);
+                    break;
+                }
 
-            uint32 objIndex = drawIndex < MAX_OBJECTS ? drawIndex : 0;
-            object_uniforms *object = (object_uniforms *)PipelineResourceData(pipeline, Frequency_PerObject, 0, objIndex);
-            object->Tint = entry->Tint;
-            BindPipelineSetDynamic(cmd, pipeline, Frequency_PerObject, PipelineDynamicOffset(pipeline, Frequency_PerObject, 0, objIndex));
+                if ((uint32)pipelineCmd->PipelineType == activeId)
+                {
+                    break;
+                }
 
-            primitive_push_constants pc;
-            pc.Model = entry->Transform;
-            vkCmdPushConstants(cmd, pipeline->Layout, VK_SHADER_STAGE_VERTEX_BIT, 0, (uint32)sizeof(pc), &pc);
+                activeId = (uint32)pipelineCmd->PipelineType;
+                pipeline = &context->Pipelines[activeId];
 
-            VkBuffer vertexBuffers[] = { mesh->VertexBuffer };
-            VkDeviceSize offsets[] = { 0 };
-            vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
-            vkCmdDraw(cmd, mesh->VertexCount, 1, 0, 0);
+                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->Handle);
 
-            drawIndex++;
+                // Every pipeline layout is compatible for sets 0 and 1, so those two stay bound
+                BindMaterialSet(cmd, pipeline);
+            } break;
+
+            case Render_Mesh:
+            {
+                command_render_mesh *meshCmd = (command_render_mesh *)cmdBase;
+
+                if (meshCmd->MeshID >= MAX_MESHES || context->Meshes[meshCmd->MeshID].VertexBuffer == VK_NULL_HANDLE)
+                {
+                    break;
+                }
+
+                uint32 texId = (meshCmd->TextureID < MAX_TEXTURES && context->Textures[meshCmd->TextureID].View) ? meshCmd->TextureID : 0;
+
+                primitive_push_constants pc;
+                pc.Model        = meshCmd->Transform;
+                pc.Tint         = meshCmd->Tint;
+                pc.TextureIndex = texId;
+                vkCmdPushConstants(cmd, pipeline->Layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, (uint32)sizeof(pc), &pc);
+
+                gpu_mesh *mesh = &context->Meshes[meshCmd->MeshID];
+
+                VkBuffer vertexBuffers[] = { mesh->VertexBuffer };
+                VkDeviceSize offsets[] = { 0 };
+
+                vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
+                vkCmdDraw(cmd, mesh->VertexCount, 1, 0, 0);
+            } break;
+
+            case Load_Mesh:
+            case LoadTexture:
+            {
+            } break;
         }
     }
 
@@ -97,19 +131,19 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
 
 internal bool32 DrawFrame(vulkan_context *context, render_commands *commands)
 {
-    render_pipeline *pipeline = GetPipeline(context, "primitive");
-    if (!pipeline || pipeline->Handle == VK_NULL_HANDLE)
+    render_pipeline *pipeline = &context->Pipelines[Pipeline_Unlit];
+    if (pipeline->Handle == VK_NULL_HANDLE)
     {
         return false;
     }
 
-    ProcessLoadCommands(context, commands);
-
     vkWaitForFences(context->device, 1, &context->inFlightFence, VK_TRUE, UINT64_MAX);
 
+    // Descriptor writes into the material set are only safe once the previous frame finished
+    ProcessLoadCommands(context, commands);
+
     uint32 imageIndex = 0;
-    VkResult acquire = vkAcquireNextImageKHR(context->device, context->swapchain, UINT64_MAX,
-                                             context->imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+    VkResult acquire = vkAcquireNextImageKHR(context->device, context->swapchain, UINT64_MAX, context->imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
     if (acquire == VK_ERROR_OUT_OF_DATE_KHR)
     {
         return true;

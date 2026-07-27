@@ -21,7 +21,7 @@ internal bool32 CreateMesh(vulkan_context *context, gpu_mesh *mesh, real32 *vert
     return true;
 }
 
-internal bool32 CreateTexture(vulkan_context *context, gpu_texture *texture, void *pixels, uint32 width, uint32 height, VkFormat format)
+internal bool32 CreateTexture(vulkan_context *context, gpu_texture *texture, uint32 textureID, void *pixels, uint32 width, uint32 height, VkFormat format)
 {
     VkDeviceSize imageSize = (VkDeviceSize)width * (VkDeviceSize)height * 4;
 
@@ -57,7 +57,8 @@ internal bool32 CreateTexture(vulkan_context *context, gpu_texture *texture, voi
 
     texture->View = CreateColorImageView(context->device, texture->Image, format);
 
-    CreateTextureDescriptorSet(context, GetPipeline(context, "primitive"), texture);
+    // One global array shared by every pipeline, so a texture is written exactly once
+    WriteImageDescriptor(context, context->GlobalSet.Handle, 0, textureID, texture->View);
 
     return true;
 }
@@ -70,11 +71,11 @@ internal void ProcessLoadCommands(vulkan_context *context, render_commands *comm
     }
 
     uint32 offset = 0;
-    for (render_entry_header *header = NextRenderEntry(commands, &offset); header; header = NextRenderEntry(commands, &offset))
+    for (command_type *header = NextRenderCommand(commands, &offset); header; header = NextRenderCommand(commands, &offset))
     {
-        if (header->Type == RenderEntry_LoadMesh)
+        if (*header == Load_Mesh)
         {
-            render_entry_load_mesh *entry = (render_entry_load_mesh *)header;
+            command_load_mesh *entry = (command_load_mesh *)header;
             if (entry->MeshID >= MAX_MESHES || context->Meshes[entry->MeshID].VertexBuffer != VK_NULL_HANDLE)
             {
                 DebugLog("Mesh %u skipped (slot bad or busy)\n", entry->MeshID);
@@ -87,9 +88,9 @@ internal void ProcessLoadCommands(vulkan_context *context, render_commands *comm
                 context->MeshCount = entry->MeshID + 1;
             }
         }
-        else if (header->Type == RenderEntry_LoadTexture)
+        else if (*header == LoadTexture)
         {
-            render_entry_load_texture *entry = (render_entry_load_texture *)header;
+            command_load_texture *entry = (command_load_texture *)header;
             if (entry->TextureID >= MAX_TEXTURES || context->Textures[entry->TextureID].Image != VK_NULL_HANDLE)
             {
                 DebugLog("Texture %u skipped (slot bad or busy)\n", entry->TextureID);
@@ -97,7 +98,7 @@ internal void ProcessLoadCommands(vulkan_context *context, render_commands *comm
             }
 
             VkFormat format = entry->SRGB ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM;
-            if (CreateTexture(context, &context->Textures[entry->TextureID], entry->Pixels, entry->Width, entry->Height, format) &&
+            if (CreateTexture(context, &context->Textures[entry->TextureID], entry->TextureID, entry->Pixels, entry->Width, entry->Height, format) &&
                 entry->TextureID >= context->TextureCount)
             {
                 context->TextureCount = entry->TextureID + 1;

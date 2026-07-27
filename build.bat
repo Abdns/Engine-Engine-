@@ -7,10 +7,10 @@ pushd build
 
 del *.pdb > NUL 2> NUL
 
-REM ---- Shaders: каждый <имя>.vert/.frag -> CompiledShaders\<имя>.vert.spv/.frag.spv ----
+REM ---- Shaders (HLSL): каждый <имя>.vert.hlsl/.frag.hlsl -> CompiledShaders\<имя>.vert.spv/.frag.spv ----
 if not exist CompiledShaders mkdir CompiledShaders
-for %%f in (..\engine\source\Graphics\Vulkan\shaders\*.vert) do "%VULKAN_SDK%\Bin\glslc.exe" "%%f" -o "CompiledShaders\%%~nf.vert.spv"
-for %%f in (..\engine\source\Graphics\Vulkan\shaders\*.frag) do "%VULKAN_SDK%\Bin\glslc.exe" "%%f" -o "CompiledShaders\%%~nf.frag.spv"
+for %%f in (..\engine\source\Graphics\Vulkan\shaders\*.vert.hlsl) do "%VULKAN_SDK%\Bin\dxc.exe" -spirv -T vs_6_0 -E main "%%f" -Fo "CompiledShaders\%%~nf.spv"
+for %%f in (..\engine\source\Graphics\Vulkan\shaders\*.frag.hlsl) do "%VULKAN_SDK%\Bin\dxc.exe" -spirv -T ps_6_0 -E main "%%f" -Fo "CompiledShaders\%%~nf.spv"
 
 set CommonCompilerFlags=-MTd^
  -nologo^

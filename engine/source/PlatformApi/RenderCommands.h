@@ -4,64 +4,77 @@
 #include "Types.h"
 #include "EngineMath.h"
 
-enum render_entry_type
+enum command_type
 {
-    RenderEntry_Mesh = 0,
-    RenderEntry_LoadMesh,
-    RenderEntry_LoadTexture,
+    Render_Mesh = 0,
+    Set_Pipline,
+    Load_Mesh,
+    LoadTexture,
+    Render_Camera,
 };
 
-struct render_entry_header
+enum pipeline_type
 {
-    uint32 Type;
+    Pipeline_Unlit = 0,
+    Pipeline_Lit = 0,
+    Pipeline_Count,
 };
 
-struct render_entry_mesh
+struct command_render_mesh
 {
-    render_entry_header Header;
+    command_type Type;
     Matrix4 Transform;
     Vector4 Tint;
     uint32  MeshID;
     uint32  TextureID;
 };
 
-struct render_entry_load_mesh
+struct command_load_mesh
 {
-    render_entry_header Header;
+    command_type Type;
     uint32  MeshID;
     uint32  VertexCount;
     real32 *Vertices;
 };
 
-struct render_entry_load_texture
+struct command_load_texture
 {
-    render_entry_header Header;
+    command_type Type;
     uint32 TextureID;
-    uint32 Width;
+    uint32 Width; 
     uint32 Height;
     uint32 SRGB;
     void  *Pixels;
 };
 
-inline uint32 RenderEntrySize(uint32 Type)
+struct command_render_camera
+{
+    command_type Type;
+    Matrix4 View;
+    real32  FovY;
+};
+
+struct command_set_pipeline
+{
+    command_type Type;
+    pipeline_type PipelineType;
+};
+
+inline uint32 CommandSize(command_type Type)
 {
     switch (Type)
     {
-        case RenderEntry_Mesh:        return (uint32)sizeof(render_entry_mesh);
-        case RenderEntry_LoadMesh:    return (uint32)sizeof(render_entry_load_mesh);
-        case RenderEntry_LoadTexture: return (uint32)sizeof(render_entry_load_texture);
+        case Render_Mesh:        return (uint32)sizeof(command_render_mesh);
+        case Load_Mesh:          return (uint32)sizeof(command_load_mesh);
+        case LoadTexture:        return (uint32)sizeof(command_load_texture);
+        case Render_Camera:      return (uint32)sizeof(command_render_camera);
+        case Set_Pipline:        return (uint32)sizeof(command_set_pipeline);
     }
     return 0;
 }
 
 struct render_commands
 {
-    real32  ClearR;
-    real32  ClearG;
-    real32  ClearB;
-    Matrix4 View;
-    real32  FovY;
-
     uint32 LoadCount;
 
     uint8 *PushBufferBase;
@@ -72,96 +85,101 @@ struct render_commands
 inline render_commands InitRenderCommands(void *Memory, uint32 Size)
 {
     render_commands Result = {};
-    Result.View = Mat4Identity();
-    Result.FovY = 0.785398f;
-
     Result.PushBufferBase    = (uint8 *)Memory;
     Result.MaxPushBufferSize = Size;
 
     return Result;
 }
 
-inline void *PushRenderElement_(render_commands *Commands, uint32 Size, render_entry_type Type)
+inline void *PushRenderCommand(render_commands *Commands, command_type Type)
 {
-    void *Result = 0;
+    uint32 Size = CommandSize(Type);
+
+    void *Base = 0;
     if (Commands->PushBufferSize + Size <= Commands->MaxPushBufferSize)
     {
-        render_entry_header *Header = (render_entry_header *)(Commands->PushBufferBase + Commands->PushBufferSize);
-        Header->Type = (uint32)Type;
-        Result = Header;
+        command_type *CmdBase = (command_type *)(Commands->PushBufferBase + Commands->PushBufferSize);
+        *CmdBase = Type;
+        Base = CmdBase;
         Commands->PushBufferSize += Size;
     }
-    return Result;
+    return Base;
 }
 
-#define PushRenderElement(Commands, type, EntryType) (type *)PushRenderElement_(Commands, (uint32)sizeof(type), EntryType)
-
-inline render_entry_header *NextRenderEntry(render_commands *Commands, uint32 *Offset)
+inline command_type *NextRenderCommand(render_commands *Commands, uint32 *Offset)
 {
     if (*Offset >= Commands->PushBufferSize)
     {
         return 0;
     }
 
-    render_entry_header *Header = (render_entry_header *)(Commands->PushBufferBase + *Offset);
-    uint32 Size = RenderEntrySize(Header->Type);
+    command_type *CmdBase = (command_type *)(Commands->PushBufferBase + *Offset);
+    uint32 Size = CommandSize(*CmdBase);
     if (!Size)
     {
-        Assert(!"Unknown render entry type");
+        Assert(!"Unknown render cmd");
         return 0;
     }
 
     *Offset += Size;
-    return Header;
+    return CmdBase;
 }
 
-inline void SetRenderClear(render_commands *Commands, real32 R, real32 G, real32 B)
+inline void PushRenderPipline(render_commands* Commands, pipeline_type type)
 {
-    Commands->ClearR = R;
-    Commands->ClearG = G;
-    Commands->ClearB = B;
+    command_set_pipeline* cmd = (command_set_pipeline*)PushRenderCommand(Commands, Set_Pipline);
+    if (cmd)
+    {
+        cmd->PipelineType = type;
+    }
 }
 
-inline void SetRenderCamera(render_commands *Commands, Matrix4 View, real32 FovY)
+inline void PushRenderCamera(render_commands *Commands, Matrix4 View, real32 FovY)
 {
-    Commands->View = View;
-    Commands->FovY = FovY;
+    command_render_camera *cmd = (command_render_camera *)PushRenderCommand(Commands, Render_Camera);
+    if (cmd)
+    {
+        cmd->View = View;
+        cmd->FovY = FovY;
+    }
 }
 
 inline void PushRenderMesh(render_commands *Commands, Matrix4 Transform, Vector4 Tint, uint32 MeshID, uint32 TextureID)
 {
-    render_entry_mesh *Entry = PushRenderElement(Commands, render_entry_mesh, RenderEntry_Mesh);
-    if (Entry)
+    command_render_mesh* cmd = (command_render_mesh *)PushRenderCommand(Commands, Render_Mesh);
+    if (cmd)
     {
-        Entry->Transform = Transform;
-        Entry->Tint      = Tint;
-        Entry->MeshID    = MeshID;
-        Entry->TextureID = TextureID;
+        cmd->Transform = Transform;
+        cmd->Tint      = Tint;
+        cmd->MeshID    = MeshID;
+        cmd->TextureID = TextureID;
     }
 }
 
 inline void PushRenderLoadMesh(render_commands *Commands, uint32 MeshID, uint32 VertexCount, real32 *Vertices)
 {
-    render_entry_load_mesh *Entry = PushRenderElement(Commands, render_entry_load_mesh, RenderEntry_LoadMesh);
-    if (Entry)
+    command_load_mesh* cmd = (command_load_mesh *)PushRenderCommand(Commands, Load_Mesh);
+    if (cmd)
     {
-        Entry->MeshID      = MeshID;
-        Entry->VertexCount = VertexCount;
-        Entry->Vertices    = Vertices;
+        cmd->MeshID      = MeshID;
+        cmd->VertexCount = VertexCount;
+        cmd->Vertices    = Vertices;
+
         Commands->LoadCount++;
     }
 }
 
 inline void PushRenderLoadTexture(render_commands *Commands, uint32 TextureID, uint32 Width, uint32 Height, uint32 SRGB, void *Pixels)
 {
-    render_entry_load_texture *Entry = PushRenderElement(Commands, render_entry_load_texture, RenderEntry_LoadTexture);
-    if (Entry)
+    command_load_texture* cmd = (command_load_texture *)PushRenderCommand(Commands, LoadTexture);
+    if (cmd)
     {
-        Entry->TextureID = TextureID;
-        Entry->Width     = Width;
-        Entry->Height    = Height;
-        Entry->SRGB      = SRGB;
-        Entry->Pixels    = Pixels;
+        cmd->TextureID = TextureID;
+        cmd->Width     = Width;
+        cmd->Height    = Height;
+        cmd->SRGB      = SRGB;
+        cmd->Pixels    = Pixels;
+
         Commands->LoadCount++;
     }
 }
