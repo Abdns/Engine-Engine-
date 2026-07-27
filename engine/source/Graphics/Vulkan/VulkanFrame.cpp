@@ -48,20 +48,15 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
     real32 aspect = (real32)context->swapchainExtent.width / (real32)context->swapchainExtent.height;
+    camera_uniforms *camera = (camera_uniforms *)FrameUniforms(context);
+    camera->ViewProj = Mat4Multiply(Mat4Perspective(0.785398f, aspect, 0.1f, 100.0f), Mat4Identity());
 
-    Matrix4 viewProj = Mat4Multiply(Mat4Perspective(0.785398f, aspect, 0.1f, 100.0f), Mat4Identity());
+    BindGlobalSet(cmd, context, pipeline);
+    BindFrameSet(cmd, context, pipeline);
+    BindMaterialSet(cmd, pipeline);
 
-    camera_uniforms *camera = (camera_uniforms *)FrameUniforms(pipeline);
-    camera->ViewProj = viewProj;
-
-    BindPipelineSet(cmd, pipeline, Set_PerFrame);
-    BindPipelineSet(cmd, pipeline, Set_PerMaterial);
-
-    // Object uniforms live in a per-pipeline buffer, so each pipeline needs its own draw cursor
-    uint32 drawIndices[MAX_PIPELINES] = {};
-    uint32 activeId      = Pipeline_Primitive;
-    uint32 skippedDraws  = 0;
-    uint32 offset        = 0;
+    uint32 activeId = Pipeline_Unlit;
+    uint32 offset   = 0;
     for (command_type *cmdBase = NextRenderCommand(commands, &offset); cmdBase; cmdBase = NextRenderCommand(commands, &offset))
     {
         switch (*cmdBase)
@@ -70,49 +65,36 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
             {
                 command_render_camera *cameraCmd = (command_render_camera *)cmdBase;
                 Matrix4 proj = Mat4Perspective(cameraCmd->FovY, aspect, 0.1f, 100.0f);
-                viewProj = Mat4Multiply(proj, cameraCmd->View);
-                camera->ViewProj = viewProj;
+                camera->ViewProj = Mat4Multiply(proj, cameraCmd->View);
             } break;
 
             case Set_Pipline:
             {
                 command_set_pipeline *pipelineCmd = (command_set_pipeline *)cmdBase;
 
-                if ((uint32)pipelineCmd->PipelineId >= MAX_PIPELINES ||
-                    context->Pipelines[pipelineCmd->PipelineId].Handle == VK_NULL_HANDLE)
+                if ((uint32)pipelineCmd->PipelineType >= MAX_PIPELINES || context->Pipelines[pipelineCmd->PipelineType].Handle == VK_NULL_HANDLE)
                 {
-                    DebugLog("Set pipeline %d ignored: not ready\n", pipelineCmd->PipelineId);
+                    DebugLog("Set pipeline %d ignored: not ready\n", pipelineCmd->PipelineType);
                     break;
                 }
 
-                if ((uint32)pipelineCmd->PipelineId == activeId)
+                if ((uint32)pipelineCmd->PipelineType == activeId)
                 {
                     break;
                 }
 
-                activeId = (uint32)pipelineCmd->PipelineId;
+                activeId = (uint32)pipelineCmd->PipelineType;
                 pipeline = &context->Pipelines[activeId];
 
                 vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->Handle);
 
-                // Sets and uniform buffers belong to the pipeline, so the new one gets its own camera copy
-                camera = (camera_uniforms *)FrameUniforms(pipeline);
-                camera->ViewProj = viewProj;
-
-                BindPipelineSet(cmd, pipeline, Set_PerFrame);
-                BindPipelineSet(cmd, pipeline, Set_PerMaterial);
+                // Every pipeline layout is compatible for sets 0 and 1, so those two stay bound
+                BindMaterialSet(cmd, pipeline);
             } break;
 
             case Render_Mesh:
             {
                 command_render_mesh *meshCmd = (command_render_mesh *)cmdBase;
-                uint32 drawIndex = drawIndices[activeId];
-
-                if (drawIndex >= MAX_OBJECTS)
-                {
-                    skippedDraws++;
-                    break;
-                }
 
                 if (meshCmd->MeshID >= MAX_MESHES || context->Meshes[meshCmd->MeshID].VertexBuffer == VK_NULL_HANDLE)
                 {
@@ -121,13 +103,11 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
 
                 uint32 texId = (meshCmd->TextureID < MAX_TEXTURES && context->Textures[meshCmd->TextureID].View) ? meshCmd->TextureID : 0;
 
-                object_uniforms *object = (object_uniforms *)BindNextObjectUniforms(cmd, pipeline, drawIndex);
-                object->Tint         = meshCmd->Tint;
-                object->TextureIndex = texId;
-
                 primitive_push_constants pc;
-                pc.Model = meshCmd->Transform;
-                vkCmdPushConstants(cmd, pipeline->Layout, VK_SHADER_STAGE_VERTEX_BIT, 0, (uint32)sizeof(pc), &pc);
+                pc.Model        = meshCmd->Transform;
+                pc.Tint         = meshCmd->Tint;
+                pc.TextureIndex = texId;
+                vkCmdPushConstants(cmd, pipeline->Layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, (uint32)sizeof(pc), &pc);
 
                 gpu_mesh *mesh = &context->Meshes[meshCmd->MeshID];
 
@@ -136,8 +116,6 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
 
                 vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
                 vkCmdDraw(cmd, mesh->VertexCount, 1, 0, 0);
-
-                drawIndices[activeId]++;
             } break;
 
             case Load_Mesh:
@@ -147,18 +125,13 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
         }
     }
 
-    if (skippedDraws)
-    {
-        DebugLog("Draw overflow: %u meshes skipped (max %d objects)\n", skippedDraws, MAX_OBJECTS);
-    }
-
     vkCmdEndRenderPass(cmd);
     vkEndCommandBuffer(cmd);
 }
 
 internal bool32 DrawFrame(vulkan_context *context, render_commands *commands)
 {
-    render_pipeline *pipeline = &context->Pipelines[Pipeline_Primitive];
+    render_pipeline *pipeline = &context->Pipelines[Pipeline_Unlit];
     if (pipeline->Handle == VK_NULL_HANDLE)
     {
         return false;

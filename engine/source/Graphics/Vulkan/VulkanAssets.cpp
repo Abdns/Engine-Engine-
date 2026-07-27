@@ -57,13 +57,8 @@ internal bool32 CreateTexture(vulkan_context *context, gpu_texture *texture, uin
 
     texture->View = CreateColorImageView(context->device, texture->Image, format);
 
-    render_pipeline *pipeline = &context->Pipelines[Pipeline_Primitive];
-    if (pipeline->Handle == VK_NULL_HANDLE)
-    {
-        DebugLog("Texture upload skipped: pipeline 'primitive' not ready\n");
-        return false;
-    }
-    WriteImageDescriptor(context, pipeline->Sets[Set_PerMaterial], 0, textureID, texture->View);
+    // One global array shared by every pipeline, so a texture is written exactly once
+    WriteImageDescriptor(context, context->GlobalSet.Handle, 0, textureID, texture->View);
 
     return true;
 }

@@ -10,7 +10,6 @@
 #define SET_GLOBAL       0
 #define SET_PER_FRAME    1
 #define SET_PER_MATERIAL 2
-#define SET_PER_OBJECT   3
 
 #define MAX_TEXTURES 16
 
@@ -19,15 +18,13 @@ struct camera_uniforms
     float4x4 ViewProj;
 };
 
-struct object_uniforms
-{
-    float4 Tint;
-    uint   TextureIndex;
-};
-
+// Per-draw data rides in push constants: 84 bytes, comfortably under the 128 every
+// implementation guarantees. No buffer, no descriptor set, no per-draw binding
 struct primitive_push_constants
 {
     float4x4 Model;
+    float4   Tint;
+    uint     TextureIndex;
 };
 
 #ifdef __cplusplus

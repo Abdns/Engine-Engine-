@@ -16,7 +16,6 @@
 #define MAX_PRESENT_MODES     8
 #define MAX_SWAPCHAIN_IMAGES  8
 #define MAX_MESHES            16
-#define MAX_OBJECTS           256
 #define MAX_PIPELINES         8
 #define MAX_PIPELINE_RESOURCES 8
 #define MAX_PIPELINE_ATTRIBUTES 8
@@ -42,19 +41,21 @@ struct gpu_texture
     VkImageView    View;
 };
 
-enum pipeline_id
-{
-    Pipeline_Primitive = 0,
-    Pipeline_Count,
-};
-
+// Ordered by how often the contents change: the compatibility rule counts sets from zero up,
+// so the stable ones have to sit on the left
 enum descriptor_set_index
 {
-    Set_Global      = SET_GLOBAL,
-    Set_PerFrame    = SET_PER_FRAME,
-    Set_PerMaterial = SET_PER_MATERIAL,
-    Set_PerObject   = SET_PER_OBJECT,
+    Set_Global      = SET_GLOBAL,        // all textures + the sampler, written when assets load
+    Set_PerFrame    = SET_PER_FRAME,     // camera, written once per frame
+    Set_PerMaterial = SET_PER_MATERIAL,  // owned by the pipeline, unused so far
     Set_Count,
+};
+
+// A set and the layout it was allocated from always travel together
+struct descriptor_set
+{
+    VkDescriptorSetLayout Layout;
+    VkDescriptorSet       Handle;
 };
 
 struct resource_binding_description
@@ -63,7 +64,6 @@ struct resource_binding_description
     uint32               Binding;
     VkDescriptorType     Type;
     VkShaderStageFlags   Stages;
-    uint32               Size;
     uint32               Count;
 };
 
@@ -77,7 +77,7 @@ struct pipeline_buffer
 
 struct render_pipeline_config
 {
-    pipeline_id PipelineId;
+    pipeline_type PipelineId;
     const char *ShaderName;
 
     uint32 VertexStride;
@@ -98,23 +98,18 @@ struct render_pipeline_config
     bool32              DepthTest;
     bool32              DepthWrite;
     bool32              AlphaBlend;
-
-    VkFilter             SamplerFilter;
-    VkSamplerAddressMode SamplerAddressMode;
 };
 
 struct render_pipeline
 {
-    VkPipeline            Handle;
-    char Name[MAX_PIPELINE_NAME];
+    VkPipeline       Handle;
+    char             Name[MAX_PIPELINE_NAME];
+    VkPipelineLayout Layout;
 
-    VkDescriptorSetLayout SetLayouts[Set_Count];
-    VkDescriptorSet       Sets[Set_Count];
-    VkDescriptorPool      DescriptorPool;
-    VkPipelineLayout      Layout;
-    VkSampler             Sampler;
-
-    pipeline_buffer Buffers[Set_Count];
+    // The only set a pipeline owns. Sets 0 and 1 come from the context, and per-draw data
+    // rides in push constants, so there is nothing else left to own
+    descriptor_set   MaterialSet;
+    VkDescriptorPool DescriptorPool;
 };
 
 struct vulkan_context
@@ -128,7 +123,6 @@ struct vulkan_context
     VkQueue presentQueue;
     uint32 graphicsFamilyIndex;
     uint32 presentFamilyIndex;
-    uint32 uniformBufferAlignment;
 
     VkSwapchainKHR swapchain;
     VkImage swapchainImages[MAX_SWAPCHAIN_IMAGES];
@@ -143,6 +137,15 @@ struct vulkan_context
     VkDeviceMemory depthImageMemory;
     VkImageView depthImageView;
     VkFormat depthFormat;
+
+    // Sets 0 and 1 belong to the context, not to any pipeline: every pipeline layout is built from
+    // these same handles, so the layouts stay compatible for those sets and both survive a pipeline
+    // switch. A shader that has no use for them simply never declares the bindings
+    descriptor_set   GlobalSet;             // binding 0: every texture, binding 1: the sampler
+    descriptor_set   FrameSet;              // binding 0: the camera
+    VkDescriptorPool SharedDescriptorPool;
+    VkSampler        Sampler;
+    pipeline_buffer  FrameBuffer;
 
     render_pipeline Pipelines[MAX_PIPELINES];
     uint32 PipelineCount;

@@ -34,14 +34,14 @@ internal void InitVulkan(HINSTANCE hinstance, HWND hwnd)
     if (!CreateSwapchain(context, hwnd))               return;
     if (!CreateImageViews(context))                    return;
     if (!CreateDepthResources(context))                return;
-    // Render pass takes depthFormat from CreateDepthResources and feeds CreateFramebuffers
     if (!CreateRenderPass(context))                    return;
     if (!CreateFramebuffers(context))                  return;
     if (!CreateCommandPool(context))                   return;
     if (!CreateCommandBuffer(context))                 return;
     if (!CreateSyncObjects(context))                   return;
 
-    if (!CreatePipeline(context, Pipeline_Primitive))  return;
+    if (!CreateSharedResources(context))               return;
+    if (!CreatePipeline(context, Pipeline_Unlit))  return;
 
     DebugLog("Vulkan ready: %u pipeline(s) up\n", context->PipelineCount);
 }
@@ -90,6 +90,10 @@ internal void ShutdownVulkan()
             }
         }
         context->PipelineCount = 0;
+
+        // After the pipelines: their layouts borrow the shared set layouts
+        DestroySharedResources(context);
+
         for (uint32 i = 0; i < context->TextureCount; ++i)
         {
             vkDestroyImageView(context->device, context->Textures[i].View, nullptr);

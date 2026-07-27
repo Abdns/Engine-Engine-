@@ -285,7 +285,6 @@ internal bool32 SelectDevice(vulkan_context *context)
             context->physicalDevice = devices[i];
             context->graphicsFamilyIndex = indices.graphicsIndex;
             context->presentFamilyIndex = indices.presentIndex;
-            context->uniformBufferAlignment = (uint32)deviceProperties.limits.minUniformBufferOffsetAlignment;
             return true;
         }
     }

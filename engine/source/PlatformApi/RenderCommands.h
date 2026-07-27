@@ -13,6 +13,13 @@ enum command_type
     Render_Camera,
 };
 
+enum pipeline_type
+{
+    Pipeline_Unlit = 0,
+    Pipeline_Lit = 0,
+    Pipeline_Count,
+};
+
 struct command_render_mesh
 {
     command_type Type;
@@ -50,7 +57,7 @@ struct command_render_camera
 struct command_set_pipeline
 {
     command_type Type;
-    int32        PipelineId;
+    pipeline_type PipelineType;
 };
 
 inline uint32 CommandSize(command_type Type)
@@ -118,12 +125,12 @@ inline command_type *NextRenderCommand(render_commands *Commands, uint32 *Offset
     return CmdBase;
 }
 
-inline void PushRenderPipline(render_commands* Commands, int32 index)
+inline void PushRenderPipline(render_commands* Commands, pipeline_type type)
 {
     command_set_pipeline* cmd = (command_set_pipeline*)PushRenderCommand(Commands, Set_Pipline);
     if (cmd)
     {
-        cmd->PipelineId = index;
+        cmd->PipelineType = type;
     }
 }
 
