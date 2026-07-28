@@ -66,6 +66,10 @@ void Win32SetupPlatformAPI(game_memory* GameMemory)
 {
     GameMemory->PlatformReadEntireFile = Win32ReadEntireFile;
     GameMemory->PlatformFreeFileMemory = Win32FreeFileMemory;
+    GameMemory->PlatformGetGpuLimits   = VulkanGetGpuLimits;
+    GameMemory->PlatformWriteVertices  = VulkanWriteVertices;
+    GameMemory->PlatformWriteIndices   = VulkanWriteIndices;
+    GameMemory->PlatformWriteTexture   = VulkanWriteTexture;
 #if ENGINE_INTERNAL
     GameMemory->DEBUGPlatformWriteEntireFile = DEBUGPlatformWriteEntireFile;
 #endif

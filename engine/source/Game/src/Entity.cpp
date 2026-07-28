@@ -13,8 +13,8 @@ internal void InitEntities(entities* Entities, memory_arena* WorldArena)
     Entities->Rotation = PushArray(WorldArena, Entities->MaxCount, Vector3);
     Entities->AngularVelocity = PushArray(WorldArena, Entities->MaxCount, Vector3);
     Entities->Tint = PushArray(WorldArena, Entities->MaxCount, Vector4);
-    Entities->MeshID = PushArray(WorldArena, Entities->MaxCount, uint32);
-    Entities->TextureID = PushArray(WorldArena, Entities->MaxCount, uint32);
+    Entities->Mesh = PushArray(WorldArena, Entities->MaxCount, mesh_handle);
+    Entities->Texture = PushArray(WorldArena, Entities->MaxCount, texture_handle);
 }
 
 internal Matrix4 EntityTransform(entities* Entities, uint32 Index)
@@ -41,7 +41,7 @@ internal uint32 FindEntityIndex(entities* Entities, uint32 EntityID)
     return 0;
 }
 
-internal uint32 AddEntity(entities* Entities, Vector3 Position, uint32 MeshID, uint32 TextureID)
+internal uint32 AddEntity(entities* Entities, Vector3 Position, mesh_handle Mesh, texture_handle Texture)
 {
     Assert(Entities->Count < Entities->MaxCount);
     uint32 Index = Entities->Count++;
@@ -53,8 +53,8 @@ internal uint32 AddEntity(entities* Entities, Vector3 Position, uint32 MeshID, u
     Entities->Velocity[Index]        = V3(0.0f, 0.0f, 0.0f);
     Entities->AngularVelocity[Index] = V3(0.0f, 0.0f, 0.0f);
     Entities->Tint[Index]            = V4(1.0f, 1.0f, 1.0f, 1.0f);
-    Entities->MeshID[Index]          = MeshID;
-    Entities->TextureID[Index]       = TextureID;
+    Entities->Mesh[Index]            = Mesh;
+    Entities->Texture[Index]         = Texture;
 
     return EntityID;
 }
@@ -82,7 +82,7 @@ internal void PushEntitiesToRender(entities* Entities, render_commands* Commands
 {
     for (uint32 EntityIndex = 0; EntityIndex < Entities->Count; ++EntityIndex)
     {
-        PushRenderMesh(Commands, EntityTransform(Entities, EntityIndex), Entities->Tint[EntityIndex], Entities->MeshID[EntityIndex], Entities->TextureID[EntityIndex]);
+        PushRenderMesh(Commands, EntityTransform(Entities, EntityIndex), Entities->Tint[EntityIndex], Entities->Mesh[EntityIndex], Entities->Texture[EntityIndex]);
     }
 }
 

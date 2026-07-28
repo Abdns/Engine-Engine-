@@ -69,18 +69,11 @@ internal Matrix4 UpdateCamera(game_state* GameState, game_input* Input)
 
 internal void LoadAsset(char* name, game_memory *Memory, game_state* GameState)
 {
-    memory_arena* WorldArena = &GameState->WorldArena;
+    LakeInit(&GameState->Lake, &GameState->WorldArena, Memory);
 
     platform_file_raw PackFile = Memory->PlatformReadEntireFile(name);
-    LoadGameAssets(&GameState->Assets, WorldArena, PackFile.Data, PackFile.Size);
+    LakeLoadPack(&GameState->Lake, PackFile.Data, PackFile.Size);
     Memory->PlatformFreeFileMemory(PackFile.Data);
-
-    game_assets* Assets = &GameState->Assets;
-}
-
-internal void PushAssetDataInRender()
-{
-
 }
 
 extern "C" __declspec(dllexport)
@@ -100,20 +93,11 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         InitEntities(Entities, WorldArena);
 
         LoadAsset("assets.kbn", Memory, GameState);
-        game_assets* Assets = &GameState->Assets;
+        data_lake* Lake = &GameState->Lake;
 
-        for (uint32 Index = 0; Index < Assets->MeshCount; ++Index)
-        {
-            PushRenderLoadMesh(RenderCommands, Index, Assets->MeshVertexCount[Index], MeshVertices(Assets, Index));
-        }
-        for (uint32 Index = 0; Index < Assets->TextureCount; ++Index)
-        {
-            PushRenderLoadTexture(RenderCommands, Index, Assets->TextureWidth[Index], Assets->TextureHeight[Index], Assets->TextureSRGB[Index], TexturePixels(Assets, Index));
-        }
-
-        uint32 MeshCube   = GetMeshID(Assets, "cube");
-        uint32 MeshSphere = GetMeshID(Assets, "sphere");
-        uint32 TexTest    = GetTextureID(Assets, "test");
+        mesh_handle    MeshCube   = LakeMesh(Lake, "cube");
+        mesh_handle    MeshSphere = LakeMesh(Lake, "sphere");
+        texture_handle TexTest    = LakeTexture(Lake, "test");
 
         Vector3 TumbleSpin = V3(0.7f, 1.0f, 0.0f);
 

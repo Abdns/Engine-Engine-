@@ -153,7 +153,7 @@ internal bool32 CreateDepthResources(vulkan_context *context)
 {
     context->depthFormat = VK_FORMAT_D32_SFLOAT;
 
-    if (!CreateImage(context, context->swapchainExtent.width, context->swapchainExtent.height,
+    if (!CreateStandaloneImage(context, context->swapchainExtent.width, context->swapchainExtent.height,
                      context->depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
                      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &context->depthImage, &context->depthImageMemory))
     {

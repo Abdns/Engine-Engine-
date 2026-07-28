@@ -503,9 +503,19 @@ internal uint8 *GLTFAccessorData(gltf_file *File, json_value *AccessorIndex, uin
     return ViewData + Offset;
 }
 
-internal real32 *GLTFMeshVertices(memory_arena *Arena, gltf_file *File, json_value *Mesh, uint32 *OutVertexCount)
+struct gltf_geometry
 {
-    *OutVertexCount = 0;
+    void   *Blob;
+    uint64  BlobSize;
+    real32 *Vertices;
+    uint32 *Indices;
+    uint32  VertexCount;
+    uint32  IndexCount;
+};
+
+internal gltf_geometry GLTFMeshGeometry(memory_arena *Arena, gltf_file *File, json_value *Mesh)
+{
+    gltf_geometry Result = {};
 
     json_value *Prim       = JsonAt(JsonGet(Mesh, "primitives"), 0);
     json_value *Attributes = JsonGet(Prim, "attributes");
@@ -516,7 +526,7 @@ internal real32 *GLTFMeshVertices(memory_arena *Arena, gltf_file *File, json_val
     if (!Pos || PosType != GLTF_FLOAT || !PosCount)
     {
         DebugLog("GLTF: mesh has no float POSITION\n");
-        return 0;
+        return Result;
     }
 
     uint32  UVCount = 0;
@@ -528,43 +538,62 @@ internal real32 *GLTFMeshVertices(memory_arena *Arena, gltf_file *File, json_val
         UV = 0;
     }
 
-    uint32 IndexCount = 0;
-    uint32 IndexType  = 0;
-    uint8 *Indices = GLTFAccessorData(File, JsonGet(Prim, "indices"), &IndexCount, &IndexType);
-    if (Indices && IndexType != GLTF_USHORT && IndexType != GLTF_UINT)
+    uint32 SourceIndexCount = 0;
+    uint32 IndexType        = 0;
+    uint8 *SourceIndices = GLTFAccessorData(File, JsonGet(Prim, "indices"), &SourceIndexCount, &IndexType);
+    if (SourceIndices && IndexType != GLTF_USHORT && IndexType != GLTF_UINT)
     {
         DebugLog("GLTF: unsupported index type %u\n", IndexType);
-        return 0;
+        return Result;
     }
 
-    uint32  VertexCount = Indices ? IndexCount : PosCount;
-    real32 *Out = PushArray(Arena, (memory_index)VertexCount * KBN_VERTEX_FLOATS, real32);
+    uint32 VertexCount = PosCount;
+    uint32 IndexCount  = SourceIndices ? SourceIndexCount : PosCount;
+
+    uint64 VertexBytes = (uint64)VertexCount * KBN_VERTEX_FLOATS * sizeof(real32);
+    uint64 IndexBytes  = (uint64)IndexCount * sizeof(uint32);
+
+    uint8 *Blob = (uint8 *)PushSize(Arena, VertexBytes + IndexBytes);
+
+    real32 *Out     = (real32 *)Blob;
+    uint32 *OutIndx = (uint32 *)(Blob + VertexBytes);
 
     for (uint32 v = 0; v < VertexCount; ++v)
     {
-        uint32 Src = v;
-        if (Indices)
+        real32 *Dst = Out + (memory_index)v * KBN_VERTEX_FLOATS;
+        Dst[0] = Pos[v*3 + 0];
+        Dst[1] = Pos[v*3 + 1];
+        Dst[2] = Pos[v*3 + 2];
+        Dst[3] = 1.0f;
+        Dst[4] = 1.0f;
+        Dst[5] = 1.0f;
+        Dst[6] = (UV && v < UVCount) ? UV[v*2 + 0] : 0.0f;
+        Dst[7] = (UV && v < UVCount) ? UV[v*2 + 1] : 0.0f;
+    }
+
+    for (uint32 i = 0; i < IndexCount; ++i)
+    {
+        uint32 Src = i;
+        if (SourceIndices)
         {
-            Src = (IndexType == GLTF_USHORT) ? ((uint16 *)Indices)[v] : ((uint32 *)Indices)[v];
+            Src = (IndexType == GLTF_USHORT) ? ((uint16 *)SourceIndices)[i] : ((uint32 *)SourceIndices)[i];
         }
-        if (Src >= PosCount)
+        if (Src >= VertexCount)
         {
             Src = 0;
         }
 
-        real32 *Dst = Out + (memory_index)v * KBN_VERTEX_FLOATS;
-        Dst[0] = Pos[Src*3 + 0];
-        Dst[1] = Pos[Src*3 + 1];
-        Dst[2] = Pos[Src*3 + 2];
-        Dst[3] = 1.0f;
-        Dst[4] = 1.0f;
-        Dst[5] = 1.0f;
-        Dst[6] = (UV && Src < UVCount) ? UV[Src*2 + 0] : 0.0f;
-        Dst[7] = (UV && Src < UVCount) ? UV[Src*2 + 1] : 0.0f;
+        OutIndx[i] = Src;
     }
 
-    *OutVertexCount = VertexCount;
-    return Out;
+    Result.Blob        = Blob;
+    Result.BlobSize    = VertexBytes + IndexBytes;
+    Result.Vertices    = Out;
+    Result.Indices     = OutIndx;
+    Result.VertexCount = VertexCount;
+    Result.IndexCount  = IndexCount;
+
+    return Result;
 }
 
 #endif

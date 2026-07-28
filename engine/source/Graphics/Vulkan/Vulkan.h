@@ -12,14 +12,15 @@
 
 #include "shaders/ShaderInterop.h"
 
+static_assert(sizeof(vertex) == KBN_VERTEX_FLOATS * sizeof(real32), "vertex must match the packed asset layout");
+
 #define MAX_SURFACE_FORMATS   64
 #define MAX_PRESENT_MODES     8
 #define MAX_SWAPCHAIN_IMAGES  8
-#define MAX_MESHES            16
 #define MAX_PIPELINES         8
-#define MAX_PIPELINE_RESOURCES 8
-#define MAX_PIPELINE_ATTRIBUTES 8
-#define MAX_PIPELINE_NAME     64
+#define VERTEX_POOL_VERTICES  (1u << 20)
+#define INDEX_POOL_INDICES    (1u << 21)
+#define IMAGE_POOL_SIZE       Megabytes(64)
 
 struct vulkan_shader
 {
@@ -27,89 +28,56 @@ struct vulkan_shader
     platform_file_raw frag;
 };
 
-struct gpu_mesh
+struct gpu_pool
 {
-    VkBuffer VertexBuffer;
-    VkDeviceMemory VertexBufferMemory;
-    uint32 VertexCount;
+    VkBuffer       Buffer;
+    VkDeviceMemory Memory;
+    void          *Mapped;
+    uint32         Stride;
+    uint32         Capacity;
 };
 
 struct gpu_texture
 {
-    VkImage        Image;
-    VkDeviceMemory Memory;
-    VkImageView    View;
+    VkImage     Image;
+    VkImageView View;
 };
 
-// Ordered by how often the contents change: the compatibility rule counts sets from zero up,
-// so the stable ones have to sit on the left
-enum descriptor_set_index
+struct image_memory_pool
 {
-    Set_Global      = SET_GLOBAL,        // all textures + the sampler, written when assets load
-    Set_PerFrame    = SET_PER_FRAME,     // camera, written once per frame
-    Set_PerMaterial = SET_PER_MATERIAL,  // owned by the pipeline, unused so far
-    Set_Count,
+    VkDeviceMemory Memory;
+    VkDeviceSize   Capacity;
+    VkDeviceSize   Used;
 };
 
-// A set and the layout it was allocated from always travel together
 struct descriptor_set
 {
     VkDescriptorSetLayout Layout;
     VkDescriptorSet       Handle;
 };
 
-struct resource_binding_description
+struct render_state
 {
-    descriptor_set_index Set;
-    uint32               Binding;
-    VkDescriptorType     Type;
-    VkShaderStageFlags   Stages;
-    uint32               Count;
+    VkCullModeFlags CullMode;
+    VkBool32        DepthTest;
+    VkBool32        DepthWrite;
+    VkBool32        AlphaBlend;
+    bool32          Valid;
 };
 
-struct pipeline_buffer
+struct render_pipeline
 {
-    VkBuffer       Buffer;
-    VkDeviceMemory Memory;
-    uint32         Stride;
-    void          *Mapped;
-};
-
-struct render_pipeline_config
-{
-    pipeline_type PipelineId;
     const char *ShaderName;
-
-    uint32 VertexStride;
-    // Owned by value: the config is returned by value from the *PipelineConfig builders,
-    // so pointers into their locals would dangle
-    VkVertexInputAttributeDescription Attributes[MAX_PIPELINE_ATTRIBUTES];
-    uint32                            AttributeCount;
-
-    resource_binding_description ResourcesDescription[MAX_PIPELINE_RESOURCES];
-    uint32                       ResourceDescriptionCount;
 
     uint32             PushConstantSize;
     VkShaderStageFlags PushConstantStages;
 
     VkPrimitiveTopology Topology;
-    VkCullModeFlags     CullMode;
     VkFrontFace         FrontFace;
-    bool32              DepthTest;
-    bool32              DepthWrite;
-    bool32              AlphaBlend;
-};
+    render_state        DefaultState;
 
-struct render_pipeline
-{
     VkPipeline       Handle;
-    char             Name[MAX_PIPELINE_NAME];
     VkPipelineLayout Layout;
-
-    // The only set a pipeline owns. Sets 0 and 1 come from the context, and per-draw data
-    // rides in push constants, so there is nothing else left to own
-    descriptor_set   MaterialSet;
-    VkDescriptorPool DescriptorPool;
 };
 
 struct vulkan_context
@@ -138,14 +106,11 @@ struct vulkan_context
     VkImageView depthImageView;
     VkFormat depthFormat;
 
-    // Sets 0 and 1 belong to the context, not to any pipeline: every pipeline layout is built from
-    // these same handles, so the layouts stay compatible for those sets and both survive a pipeline
-    // switch. A shader that has no use for them simply never declares the bindings
-    descriptor_set   GlobalSet;             // binding 0: every texture, binding 1: the sampler
-    descriptor_set   FrameSet;              // binding 0: the camera
+    descriptor_set   GlobalSet;
+
     VkDescriptorPool SharedDescriptorPool;
     VkSampler        Sampler;
-    pipeline_buffer  FrameBuffer;
+    gpu_pool         FrameBuffer;
 
     render_pipeline Pipelines[MAX_PIPELINES];
     uint32 PipelineCount;
@@ -159,11 +124,14 @@ struct vulkan_context
     VkSemaphore renderFinishedSemaphores[MAX_SWAPCHAIN_IMAGES];
     VkFence inFlightFence;
 
-    gpu_mesh Meshes[MAX_MESHES];
-    uint32 MeshCount;
+    gpu_pool VertexPool;
+    gpu_pool IndexPool;
 
-    gpu_texture Textures[MAX_TEXTURES];
-    uint32 TextureCount;
+    gpu_texture       Textures[MAX_TEXTURES];
+    image_memory_pool ImagePool;
+
+    bool32                          DynamicBlend;
+    PFN_vkCmdSetColorBlendEnableEXT CmdSetColorBlendEnableEXT;
 };
 
 struct queue_family_indices
@@ -186,5 +154,10 @@ struct swapchain_support_details
 internal void InitVulkan(HINSTANCE hinstance, HWND hwnd);
 internal void RenderVulkanFrame(render_commands *Commands);
 internal void ShutdownVulkan();
+
+internal PLATFORM_GET_GPU_LIMITS(VulkanGetGpuLimits);
+internal PLATFORM_WRITE_VERTICES(VulkanWriteVertices);
+internal PLATFORM_WRITE_INDICES(VulkanWriteIndices);
+internal PLATFORM_WRITE_TEXTURE(VulkanWriteTexture);
 
 #endif

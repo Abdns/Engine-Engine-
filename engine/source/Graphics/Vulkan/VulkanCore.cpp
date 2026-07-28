@@ -1,5 +1,7 @@
 #include "Vulkan.h"
 
+#define INVALID_MEMORY_TYPE 0xFFFFFFFF
+
 internal uint32 FindMemoryType(VkPhysicalDevice physicalDevice, uint32 typeFilter, VkMemoryPropertyFlags properties)
 {
     VkPhysicalDeviceMemoryProperties memProps;
@@ -13,11 +15,112 @@ internal uint32 FindMemoryType(VkPhysicalDevice physicalDevice, uint32 typeFilte
         }
     }
 
-    DebugLog("Fail to find suitable memory type\n");
-    return 0;
+    return INVALID_MEMORY_TYPE;
 }
 
-internal bool32 CreateImage(vulkan_context *context, uint32 width, uint32 height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags memoryProperties, VkImage *outImage, VkDeviceMemory *outMemory)
+internal VkImageCreateInfo TextureImageInfo(uint32 width, uint32 height, VkFormat format)
+{
+    VkImageCreateInfo imageInfo{};
+    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.imageType = VK_IMAGE_TYPE_2D;
+    imageInfo.extent.width  = width;
+    imageInfo.extent.height = height;
+    imageInfo.extent.depth  = 1;
+    imageInfo.mipLevels = 1;
+    imageInfo.arrayLayers = 1;
+    imageInfo.format = format;
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    return imageInfo;
+}
+
+internal bool32 CreateImagePool(vulkan_context *context)
+{
+    VkImageCreateInfo probeInfo = TextureImageInfo(1, 1, VK_FORMAT_R8G8B8A8_UNORM);
+
+    VkImage probe = VK_NULL_HANDLE;
+    if (vkCreateImage(context->device, &probeInfo, nullptr, &probe) != VK_SUCCESS)
+    {
+        DebugLog("Fail to probe image memory requirements\n");
+        return false;
+    }
+
+    VkMemoryRequirements memReq;
+    vkGetImageMemoryRequirements(context->device, probe, &memReq);
+    vkDestroyImage(context->device, probe, nullptr);
+
+    uint32 memoryType = FindMemoryType(context->physicalDevice, memReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    if (memoryType == INVALID_MEMORY_TYPE)
+    {
+        DebugLog("Fail to find device-local memory for the image pool\n");
+        return false;
+    }
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = IMAGE_POOL_SIZE;
+    allocInfo.memoryTypeIndex = memoryType;
+
+    if (vkAllocateMemory(context->device, &allocInfo, nullptr, &context->ImagePool.Memory) != VK_SUCCESS)
+    {
+        DebugLog("Fail to allocate image pool\n");
+        return false;
+    }
+
+    context->ImagePool.Capacity = IMAGE_POOL_SIZE;
+    context->ImagePool.Used     = 0;
+
+    DebugLog("Image pool created (%llu bytes)\n", (uint64)IMAGE_POOL_SIZE);
+    return true;
+}
+
+internal void DestroyImagePool(vulkan_context *context)
+{
+    vkFreeMemory(context->device, context->ImagePool.Memory, nullptr);
+    context->ImagePool = {};
+}
+
+internal bool32 CreatePooledImage(vulkan_context *context, uint32 width, uint32 height, VkFormat format, VkImage *outImage)
+{
+    VkImageCreateInfo imageInfo = TextureImageInfo(width, height, format);
+
+    if (vkCreateImage(context->device, &imageInfo, nullptr, outImage) != VK_SUCCESS)
+    {
+        DebugLog("Fail to create image\n");
+        return false;
+    }
+
+    VkMemoryRequirements memReq;
+    vkGetImageMemoryRequirements(context->device, *outImage, &memReq);
+
+    image_memory_pool *pool = &context->ImagePool;
+    VkDeviceSize offset = AlignPow2(pool->Used, memReq.alignment);
+
+    if (offset + memReq.size > pool->Capacity)
+    {
+        DebugLog("Image pool out of space (used %llu, requested %llu, capacity %llu)\n", (uint64)pool->Used, (uint64)memReq.size, (uint64)pool->Capacity);
+        vkDestroyImage(context->device, *outImage, nullptr);
+        *outImage = VK_NULL_HANDLE;
+        return false;
+    }
+
+    if (vkBindImageMemory(context->device, *outImage, pool->Memory, offset) != VK_SUCCESS)
+    {
+        DebugLog("Fail to bind image into the pool\n");
+        vkDestroyImage(context->device, *outImage, nullptr);
+        *outImage = VK_NULL_HANDLE;
+        return false;
+    }
+
+    pool->Used = offset + memReq.size;
+    return true;
+}
+
+internal bool32 CreateStandaloneImage(vulkan_context *context, uint32 width, uint32 height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags memoryProperties, VkImage *outImage, VkDeviceMemory *outMemory)
 {
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -43,10 +146,17 @@ internal bool32 CreateImage(vulkan_context *context, uint32 width, uint32 height
     VkMemoryRequirements memReq;
     vkGetImageMemoryRequirements(context->device, *outImage, &memReq);
 
+    uint32 memoryType = FindMemoryType(context->physicalDevice, memReq.memoryTypeBits, memoryProperties);
+    if (memoryType == INVALID_MEMORY_TYPE)
+    {
+        DebugLog("Fail to find suitable memory type for image\n");
+        return false;
+    }
+
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = memReq.size;
-    allocInfo.memoryTypeIndex = FindMemoryType(context->physicalDevice, memReq.memoryTypeBits, memoryProperties);
+    allocInfo.memoryTypeIndex = memoryType;
 
     if (vkAllocateMemory(context->device, &allocInfo, nullptr, outMemory) != VK_SUCCESS)
     {
@@ -96,7 +206,7 @@ internal VkImageView CreateDepthImageView(VkDevice device, VkImage image, VkForm
     return CreateImageView(device, image, format, VK_IMAGE_ASPECT_DEPTH_BIT);
 }
 
-internal bool32 CreateBuffer(vulkan_context *context, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryProperties, VkBuffer *outBuffer, VkDeviceMemory *outMemory)
+internal bool32 CreateBufferEx(vulkan_context *context, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags preferredProperties, VkMemoryPropertyFlags requiredProperties, VkBuffer *outBuffer, VkDeviceMemory *outMemory)
 {
     VkBufferCreateInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -109,14 +219,27 @@ internal bool32 CreateBuffer(vulkan_context *context, VkDeviceSize size, VkBuffe
         DebugLog("Fail to create buffer\n");
         return false;
     }
-    
+
     VkMemoryRequirements memReq;
     vkGetBufferMemoryRequirements(context->device, *outBuffer, &memReq);
+
+    uint32 memoryType = FindMemoryType(context->physicalDevice, memReq.memoryTypeBits, preferredProperties);
+    if (memoryType == INVALID_MEMORY_TYPE && preferredProperties != requiredProperties)
+    {
+        DebugLog("No device-local host-visible memory, buffer falls back to system memory\n");
+        memoryType = FindMemoryType(context->physicalDevice, memReq.memoryTypeBits, requiredProperties);
+    }
+
+    if (memoryType == INVALID_MEMORY_TYPE)
+    {
+        DebugLog("Fail to find suitable memory type for buffer\n");
+        return false;
+    }
 
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = memReq.size;
-    allocInfo.memoryTypeIndex = FindMemoryType(context->physicalDevice, memReq.memoryTypeBits, memoryProperties);
+    allocInfo.memoryTypeIndex = memoryType;
 
     if (vkAllocateMemory(context->device, &allocInfo, nullptr, outMemory) != VK_SUCCESS)
     {
@@ -128,14 +251,66 @@ internal bool32 CreateBuffer(vulkan_context *context, VkDeviceSize size, VkBuffe
     return true;
 }
 
+internal bool32 CreateBuffer(vulkan_context *context, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryProperties, VkBuffer *outBuffer, VkDeviceMemory *outMemory)
+{
+    return CreateBufferEx(context, size, usage, memoryProperties, memoryProperties, outBuffer, outMemory);
+}
+
 internal bool32 CreateMappedBuffer(vulkan_context *context, VkDeviceSize size, VkBufferUsageFlags usage, VkBuffer *outBuffer, VkDeviceMemory *outMemory, void **outMapped)
 {
-    if (!CreateBuffer(context, size, usage, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, outBuffer, outMemory))
+    VkMemoryPropertyFlags preferred = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    VkMemoryPropertyFlags required  = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+    if (!CreateBufferEx(context, size, usage, preferred, required, outBuffer, outMemory))
     {
         return false;
     }
 
     vkMapMemory(context->device, *outMemory, 0, size, 0, outMapped);
+    return true;
+}
+
+internal bool32 CreatePool(vulkan_context *context, gpu_pool *pool, const char *name, VkBufferUsageFlags usage, uint32 stride, uint32 capacity)
+{
+    pool->Stride   = stride;
+    pool->Capacity = capacity;
+
+    VkDeviceSize size = (VkDeviceSize)capacity * stride;
+
+    if (!CreateMappedBuffer(context, size, usage, &pool->Buffer, &pool->Memory, &pool->Mapped))
+    {
+        DebugLog("Fail to create %s pool\n", name);
+        return false;
+    }
+
+    DebugLog("%s pool created (%u entries, %llu bytes)\n", name, capacity, (uint64)size);
+    return true;
+}
+
+internal void DestroyPool(vulkan_context *context, gpu_pool *pool)
+{
+    if (pool->Mapped)
+    {
+        vkUnmapMemory(context->device, pool->Memory);
+    }
+
+    vkDestroyBuffer(context->device, pool->Buffer, nullptr);
+    vkFreeMemory(context->device, pool->Memory, nullptr);
+
+    *pool = {};
+}
+
+internal bool32 PoolWrite(gpu_pool *pool, const char *name, uint32 first, const void *data, uint32 count)
+{
+    if (!count || first > pool->Capacity || count > pool->Capacity - first)
+    {
+        DebugLog("%s pool write out of range (first %u, count %u, capacity %u)\n", name, first, count, pool->Capacity);
+        return false;
+    }
+
+    uint8 *destination = (uint8 *)pool->Mapped + (VkDeviceSize)first * pool->Stride;
+    CopySize((memory_index)count * pool->Stride, (void *)data, destination);
+
     return true;
 }
 

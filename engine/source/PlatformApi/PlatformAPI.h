@@ -22,6 +22,25 @@ typedef PLATFORM_FREE_FILE_MEMORY(platform_free_file_memory);
 typedef DEBUG_PLATFORM_WRITE_ENTIRE_FILE(debug_platform_write_entire_file);
 #endif
 
+struct gpu_limits
+{
+    uint32 MaxVertices;
+    uint32 MaxIndices;
+    uint32 MaxTextures;
+};
+
+#define PLATFORM_GET_GPU_LIMITS(name) gpu_limits name(void)
+typedef PLATFORM_GET_GPU_LIMITS(platform_get_gpu_limits);
+
+#define PLATFORM_WRITE_VERTICES(name) bool32 name(uint32 FirstVertex, real32 *Data, uint32 VertexCount)
+typedef PLATFORM_WRITE_VERTICES(platform_write_vertices);
+
+#define PLATFORM_WRITE_INDICES(name)  bool32 name(uint32 FirstIndex, uint32 *Data, uint32 IndexCount)
+typedef PLATFORM_WRITE_INDICES(platform_write_indices);
+
+#define PLATFORM_WRITE_TEXTURE(name)  bool32 name(uint32 Slot, void *Pixels, uint32 Width, uint32 Height, uint32 SRGB)
+typedef PLATFORM_WRITE_TEXTURE(platform_write_texture);
+
 struct game_memory
 {
     bool32 IsInitialized;
@@ -31,6 +50,11 @@ struct game_memory
 
     platform_read_entire_file* PlatformReadEntireFile;
     platform_free_file_memory* PlatformFreeFileMemory;
+
+    platform_get_gpu_limits* PlatformGetGpuLimits;
+    platform_write_vertices* PlatformWriteVertices;
+    platform_write_indices*  PlatformWriteIndices;
+    platform_write_texture*  PlatformWriteTexture;
 
 #if ENGINE_INTERNAL
     debug_platform_write_entire_file* DEBUGPlatformWriteEntireFile;

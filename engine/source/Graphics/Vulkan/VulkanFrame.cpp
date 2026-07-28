@@ -1,5 +1,61 @@
 #include "Vulkan.h"
 
+internal VkCullModeFlags ToVulkanCullMode(cull_mode mode)
+{
+    switch (mode)
+    {
+        case Cull_Back:  return VK_CULL_MODE_BACK_BIT;
+        case Cull_Front: return VK_CULL_MODE_FRONT_BIT;
+        case Cull_None:  return VK_CULL_MODE_NONE;
+    }
+
+    return VK_CULL_MODE_NONE;
+}
+
+internal void ApplyRenderState(vulkan_context *context, VkCommandBuffer cmd, render_state *current, render_state *wanted)
+{
+    if (!current->Valid || current->CullMode != wanted->CullMode)
+    {
+        vkCmdSetCullMode(cmd, wanted->CullMode);
+        current->CullMode = wanted->CullMode;
+    }
+
+    if (!current->Valid || current->DepthTest != wanted->DepthTest)
+    {
+        vkCmdSetDepthTestEnable(cmd, wanted->DepthTest);
+        current->DepthTest = wanted->DepthTest;
+    }
+
+    if (!current->Valid || current->DepthWrite != wanted->DepthWrite)
+    {
+        vkCmdSetDepthWriteEnable(cmd, wanted->DepthWrite);
+        current->DepthWrite = wanted->DepthWrite;
+    }
+
+    if (context->DynamicBlend && (!current->Valid || current->AlphaBlend != wanted->AlphaBlend))
+    {
+        VkBool32 enable = wanted->AlphaBlend;
+        context->CmdSetColorBlendEnableEXT(cmd, 0, 1, &enable);
+        current->AlphaBlend = wanted->AlphaBlend;
+    }
+
+    current->Valid = true;
+}
+
+internal void BindPipelineState(vulkan_context *context, VkCommandBuffer cmd, render_pipeline *pipeline, render_state *current, render_state *wanted)
+{
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->Handle);
+
+    vkCmdSetPrimitiveTopology(cmd, pipeline->Topology);
+    vkCmdSetFrontFace(cmd, pipeline->FrontFace);
+    vkCmdSetDepthCompareOp(cmd, VK_COMPARE_OP_LESS);
+
+    *wanted = pipeline->DefaultState;
+    current->Valid = false;
+
+    ApplyRenderState(context, cmd, current, wanted);
+}
+
 internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipeline, VkCommandBuffer cmd, uint32 imageIndex, render_commands *commands)
 {
     vkResetCommandBuffer(cmd, 0);
@@ -30,8 +86,6 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
 
     vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->Handle);
-
     VkViewport viewport{};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
@@ -47,13 +101,16 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
     scissor.extent = context->swapchainExtent;
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
+    render_state current = {};
+    render_state wanted  = {};
+    BindPipelineState(context, cmd, pipeline, &current, &wanted);
+
     real32 aspect = (real32)context->swapchainExtent.width / (real32)context->swapchainExtent.height;
     camera_uniforms *camera = (camera_uniforms *)FrameUniforms(context);
-    camera->ViewProj = Mat4Multiply(Mat4Perspective(0.785398f, aspect, 0.1f, 100.0f), Mat4Identity());
 
     BindGlobalSet(cmd, context, pipeline);
-    BindFrameSet(cmd, context, pipeline);
-    BindMaterialSet(cmd, pipeline);
+
+    vkCmdBindIndexBuffer(cmd, context->IndexPool.Buffer, 0, VK_INDEX_TYPE_UINT32);
 
     uint32 activeId = Pipeline_Unlit;
     uint32 offset   = 0;
@@ -86,22 +143,33 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
                 activeId = (uint32)pipelineCmd->PipelineType;
                 pipeline = &context->Pipelines[activeId];
 
-                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->Handle);
+                BindPipelineState(context, cmd, pipeline, &current, &wanted);
 
-                // Every pipeline layout is compatible for sets 0 and 1, so those two stay bound
-                BindMaterialSet(cmd, pipeline);
+            } break;
+
+            case Set_RenderState:
+            {
+                command_set_render_state *stateCmd = (command_set_render_state *)cmdBase;
+
+                wanted.CullMode   = ToVulkanCullMode(stateCmd->CullMode);
+                wanted.DepthTest  = stateCmd->DepthTest  ? VK_TRUE : VK_FALSE;
+                wanted.DepthWrite = stateCmd->DepthWrite ? VK_TRUE : VK_FALSE;
+                wanted.AlphaBlend = (stateCmd->BlendMode == Blend_Alpha) ? VK_TRUE : VK_FALSE;
             } break;
 
             case Render_Mesh:
             {
                 command_render_mesh *meshCmd = (command_render_mesh *)cmdBase;
 
-                if (meshCmd->MeshID >= MAX_MESHES || context->Meshes[meshCmd->MeshID].VertexBuffer == VK_NULL_HANDLE)
+                mesh_handle *mesh = &meshCmd->Mesh;
+                if (!mesh->IndexCount)
                 {
                     break;
                 }
 
-                uint32 texId = (meshCmd->TextureID < MAX_TEXTURES && context->Textures[meshCmd->TextureID].View) ? meshCmd->TextureID : 0;
+                ApplyRenderState(context, cmd, &current, &wanted);
+
+                uint32 texId = (meshCmd->Texture.Index < MAX_TEXTURES && context->Textures[meshCmd->Texture.Index].View) ? meshCmd->Texture.Index : 0;
 
                 primitive_push_constants pc;
                 pc.Model        = meshCmd->Transform;
@@ -109,18 +177,7 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
                 pc.TextureIndex = texId;
                 vkCmdPushConstants(cmd, pipeline->Layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, (uint32)sizeof(pc), &pc);
 
-                gpu_mesh *mesh = &context->Meshes[meshCmd->MeshID];
-
-                VkBuffer vertexBuffers[] = { mesh->VertexBuffer };
-                VkDeviceSize offsets[] = { 0 };
-
-                vkCmdBindVertexBuffers(cmd, 0, 1, vertexBuffers, offsets);
-                vkCmdDraw(cmd, mesh->VertexCount, 1, 0, 0);
-            } break;
-
-            case Load_Mesh:
-            case LoadTexture:
-            {
+                vkCmdDrawIndexed(cmd, mesh->IndexCount, 1, mesh->FirstIndex, (int32)mesh->FirstVertex, 0);
             } break;
         }
     }
@@ -138,9 +195,6 @@ internal bool32 DrawFrame(vulkan_context *context, render_commands *commands)
     }
 
     vkWaitForFences(context->device, 1, &context->inFlightFence, VK_TRUE, UINT64_MAX);
-
-    // Descriptor writes into the material set are only safe once the previous frame finished
-    ProcessLoadCommands(context, commands);
 
     uint32 imageIndex = 0;
     VkResult acquire = vkAcquireNextImageKHR(context->device, context->swapchain, UINT64_MAX, context->imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);

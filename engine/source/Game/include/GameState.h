@@ -4,7 +4,7 @@
 #include "Types.h"
 #include "Memory.h"
 #include "Entity.h"
-#include "AssetPack.h"
+#include "DataLake.h"
 
 struct game_state
 {
@@ -12,7 +12,7 @@ struct game_state
 
     memory_arena WorldArena;
 
-    game_assets Assets;
+    data_lake Lake;
 
     entities Entities;
 

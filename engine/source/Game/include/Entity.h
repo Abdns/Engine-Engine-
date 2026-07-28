@@ -3,6 +3,7 @@
 
 #include "Types.h"
 #include "EngineMath.h"
+#include "RenderCommands.h"
 
 struct entities
 {
@@ -16,8 +17,9 @@ struct entities
     Vector3 *Rotation;
     Vector3 *AngularVelocity;
     Vector4 *Tint;
-    uint32  *MeshID;
-    uint32  *TextureID;
+
+    mesh_handle    *Mesh;
+    texture_handle *Texture;
 };
 
 #endif

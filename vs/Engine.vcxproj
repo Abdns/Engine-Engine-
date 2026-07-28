@@ -31,9 +31,6 @@
   <ItemDefinitionGroup>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <!-- Реальные единицы трансляции. Остальные .cpp попадают в сборку через #include
-         (unity build) и перечислены ниже как ClInclude, иначе IntelliSense разбирает
-         их изолированно и подсвечивает несуществующие ошибки. -->
     <ClCompile Include="..\engine\source\Game\src\Game.cpp" />
     <ClCompile Include="..\engine\source\Platform\win32\Program.cpp" />
     <ClCompile Include="..\engine\source\Physics\Source.cpp" />
@@ -44,6 +41,7 @@
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanCore.cpp" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanDevice.cpp" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanSwapchain.cpp" />
+    <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanDescriptors.cpp" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanPipeline.cpp" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanAssets.cpp" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanFrame.cpp" />
@@ -63,6 +61,7 @@
     <ClInclude Include="..\engine\source\PlatformApi\RenderCommands.h" />
     <ClInclude Include="..\engine\source\Assets\KBNFormat.h" />
     <ClInclude Include="..\engine\source\Assets\AssetPack.h" />
+    <ClInclude Include="..\engine\source\Assets\DataLake.h" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\Vulkan.h" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\shaders\ShaderInterop.h" />
     <ClInclude Include="..\engine\source\Helpers\EngineMath.h" />

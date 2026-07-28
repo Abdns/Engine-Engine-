@@ -1,7 +1,7 @@
 #include "ShaderInterop.h"
 
-[[vk::binding(0, SET_GLOBAL)]] Texture2D    Tex[MAX_TEXTURES];
-[[vk::binding(1, SET_GLOBAL)]] SamplerState Samp;
+[[vk::binding(BINDING_TEXTURES, SET_GLOBAL)]] Texture2D    Tex[MAX_TEXTURES];
+[[vk::binding(BINDING_SAMPLER,  SET_GLOBAL)]] SamplerState Samp;
 
 [[vk::push_constant]] primitive_push_constants pc;
 

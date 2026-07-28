@@ -4,22 +4,32 @@
 #ifdef __cplusplus
     #define float4x4 Matrix4
     #define float4   Vector4
+    #define float3   Vector3
+    #define float2   Vector2
     #define uint     uint32
 #endif
 
 #define SET_GLOBAL       0
-#define SET_PER_FRAME    1
-#define SET_PER_MATERIAL 2
+
+#define BINDING_TEXTURES 0
+#define BINDING_SAMPLER  1
+#define BINDING_VERTICES 2
+#define BINDING_CAMERA   3
 
 #define MAX_TEXTURES 16
+
+struct vertex
+{
+    float3 Pos;
+    float3 Color;
+    float2 UV;
+};
 
 struct camera_uniforms
 {
     float4x4 ViewProj;
 };
 
-// Per-draw data rides in push constants: 84 bytes, comfortably under the 128 every
-// implementation guarantees. No buffer, no descriptor set, no per-draw binding
 struct primitive_push_constants
 {
     float4x4 Model;
@@ -30,6 +40,8 @@ struct primitive_push_constants
 #ifdef __cplusplus
     #undef float4x4
     #undef float4
+    #undef float3
+    #undef float2
     #undef uint
 #endif
 

@@ -12,6 +12,13 @@ global_variable const char *RequiredDeviceExtensions[] =
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 };
 
+global_variable const char *OptionalDeviceExtensions[] =
+{
+    VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME,
+};
+
+#define REQUIRED_API_VERSION VK_API_VERSION_1_3
+
 #define REQUIRED_DEVICE_TYPE VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU
 
 #define MAX_EXTENSIONS        256
@@ -63,6 +70,26 @@ internal bool32 CheckInstanceExtensionSupport(const char **required, uint32 requ
     return true;
 }
 
+internal bool32 CheckInstanceVersion()
+{
+    PFN_vkEnumerateInstanceVersion enumerateVersion =
+        (PFN_vkEnumerateInstanceVersion)vkGetInstanceProcAddr(VK_NULL_HANDLE, "vkEnumerateInstanceVersion");
+
+    uint32 version = VK_API_VERSION_1_0;
+    if (enumerateVersion && enumerateVersion(&version) != VK_SUCCESS)
+    {
+        version = VK_API_VERSION_1_0;
+    }
+
+    if (version < REQUIRED_API_VERSION)
+    {
+        DebugLog("Vulkan loader is %u.%u, need 1.3 for core dynamic state\n", VK_API_VERSION_MAJOR(version), VK_API_VERSION_MINOR(version));
+        return false;
+    }
+
+    return true;
+}
+
 internal VkApplicationInfo VkGetInfo()
 {
     VkApplicationInfo appInfo = {};
@@ -72,7 +99,7 @@ internal VkApplicationInfo VkGetInfo()
     appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
     appInfo.pEngineName = "No Engine";
     appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-    appInfo.apiVersion = VK_API_VERSION_1_0;
+    appInfo.apiVersion = REQUIRED_API_VERSION;
 
     return appInfo;
 }
@@ -225,6 +252,11 @@ internal bool32 CheckDeviceExtensionSupport(VkPhysicalDevice device, const char 
     return true;
 }
 
+internal bool32 DeviceSupportsExtension(VkPhysicalDevice device, const char *name)
+{
+    return CheckDeviceExtensionSupport(device, &name, 1);
+}
+
 internal swapchain_support_details GetQuerySwapchainSupportDetails(VkPhysicalDevice device, VkSurfaceKHR surface)
 {
     swapchain_support_details details = {};
@@ -279,6 +311,12 @@ internal bool32 SelectDevice(vulkan_context *context)
         swapchain_support_details swapchain = GetQuerySwapchainSupportDetails(devices[i], context->surface);
         bool32 swapchainOk = (swapchain.formatCount > 0) && (swapchain.presentModeCount > 0);
 
+        if (deviceProperties.apiVersion < REQUIRED_API_VERSION)
+        {
+            DebugLog("Device '%s' is Vulkan %u.%u, need 1.3\n", deviceProperties.deviceName, VK_API_VERSION_MAJOR(deviceProperties.apiVersion), VK_API_VERSION_MINOR(deviceProperties.apiVersion));
+            continue;
+        }
+
         if (deviceProperties.deviceType == REQUIRED_DEVICE_TYPE && indices.graphicsSupported && indices.presentSupported && swapchainOk &&
             features.shaderSampledImageArrayDynamicIndexing)
         {
@@ -325,16 +363,66 @@ internal bool32 CreateLogicalDevice(vulkan_context *context)
         queueInfos[i].pQueuePriorities = &queuePriority;
     }
 
-    VkPhysicalDeviceFeatures features{};
-    features.shaderSampledImageArrayDynamicIndexing = VK_TRUE;
+    const char *enabledExtensions[ArrayCount(RequiredDeviceExtensions) + ArrayCount(OptionalDeviceExtensions)];
+    uint32      enabledExtensionCount = 0;
+
+    for (uint32 i = 0; i < ArrayCount(RequiredDeviceExtensions); ++i)
+    {
+        enabledExtensions[enabledExtensionCount++] = RequiredDeviceExtensions[i];
+    }
+
+    VkPhysicalDeviceExtendedDynamicState3FeaturesEXT dynamicState3{};
+    dynamicState3.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT;
+
+    VkPhysicalDeviceVulkan12Features vulkan12{};
+    vulkan12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+
+    {
+        dynamicState3.pNext = &vulkan12;
+
+        VkPhysicalDeviceFeatures2 available{};
+        available.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+        available.pNext = &dynamicState3;
+        vkGetPhysicalDeviceFeatures2(context->physicalDevice, &available);
+
+        if (dynamicState3.extendedDynamicState3ColorBlendEnable &&
+            DeviceSupportsExtension(context->physicalDevice, VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME))
+        {
+            enabledExtensions[enabledExtensionCount++] = VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME;
+            context->DynamicBlend = true;
+        }
+
+        if (!vulkan12.descriptorBindingPartiallyBound || !vulkan12.descriptorBindingSampledImageUpdateAfterBind)
+        {
+            DebugLog("Device lacks descriptor indexing (partiallyBound %d, updateAfterBind %d)\n",
+                     (int)vulkan12.descriptorBindingPartiallyBound, (int)vulkan12.descriptorBindingSampledImageUpdateAfterBind);
+            return false;
+        }
+    }
+
+    dynamicState3 = {};
+    dynamicState3.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT;
+    dynamicState3.extendedDynamicState3ColorBlendEnable = VK_TRUE;
+
+    vulkan12 = {};
+    vulkan12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    vulkan12.descriptorBindingPartiallyBound              = VK_TRUE;
+    vulkan12.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+    vulkan12.pNext = context->DynamicBlend ? &dynamicState3 : nullptr;
+
+    VkPhysicalDeviceFeatures2 features{};
+    features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    features.features.shaderSampledImageArrayDynamicIndexing = VK_TRUE;
+    features.pNext = &vulkan12;
 
     VkDeviceCreateInfo deviceInfo{};
     deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    deviceInfo.pNext = &features;
     deviceInfo.queueCreateInfoCount = uniqueCount;
     deviceInfo.pQueueCreateInfos = queueInfos;
-    deviceInfo.pEnabledFeatures = &features;
-    deviceInfo.enabledExtensionCount = ArrayCount(RequiredDeviceExtensions);
-    deviceInfo.ppEnabledExtensionNames = RequiredDeviceExtensions;
+    deviceInfo.pEnabledFeatures = nullptr;
+    deviceInfo.enabledExtensionCount = enabledExtensionCount;
+    deviceInfo.ppEnabledExtensionNames = enabledExtensions;
 
     VkResult result = vkCreateDevice(context->physicalDevice, &deviceInfo, nullptr, &context->device);
     if (result != VK_SUCCESS)
@@ -343,10 +431,19 @@ internal bool32 CreateLogicalDevice(vulkan_context *context)
         return false;
     }
 
+    if (context->DynamicBlend)
+    {
+        context->CmdSetColorBlendEnableEXT = (PFN_vkCmdSetColorBlendEnableEXT)vkGetDeviceProcAddr(context->device, "vkCmdSetColorBlendEnableEXT");
+        if (!context->CmdSetColorBlendEnableEXT)
+        {
+            context->DynamicBlend = false;
+        }
+    }
+
     context->graphicsQueue = CreateQueue(context->device, context->graphicsFamilyIndex);
     context->presentQueue  = CreateQueue(context->device, context->presentFamilyIndex);
 
-    DebugLog("Logical device created\n");
+    DebugLog("Logical device created (dynamic blend %s)\n", context->DynamicBlend ? "on" : "off");
     return true;
 }
 

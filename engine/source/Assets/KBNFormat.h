@@ -4,7 +4,7 @@
 #include "Types.h"
 
 #define KBN_MAGIC   (((uint32)'K') | ((uint32)'B' << 8) | ((uint32)'N' << 16) | ((uint32)'1' << 24))
-#define KBN_VERSION 1
+#define KBN_VERSION 2
 
 #define KBN_MAX_ASSET_NAME 32
 #define KBN_VERTEX_FLOATS  8
@@ -29,6 +29,7 @@ struct asset_file_header
 struct asset_mesh_info
 {
     uint32 VertexCount;
+    uint32 IndexCount;
 };
 
 struct asset_image_info

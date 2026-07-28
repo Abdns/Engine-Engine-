@@ -7,10 +7,9 @@ pushd build
 
 del *.pdb > NUL 2> NUL
 
-REM ---- Shaders (HLSL): каждый <имя>.vert.hlsl/.frag.hlsl -> CompiledShaders\<имя>.vert.spv/.frag.spv ----
 if not exist CompiledShaders mkdir CompiledShaders
-for %%f in (..\engine\source\Graphics\Vulkan\shaders\*.vert.hlsl) do "%VULKAN_SDK%\Bin\dxc.exe" -spirv -T vs_6_0 -E main "%%f" -Fo "CompiledShaders\%%~nf.spv"
-for %%f in (..\engine\source\Graphics\Vulkan\shaders\*.frag.hlsl) do "%VULKAN_SDK%\Bin\dxc.exe" -spirv -T ps_6_0 -E main "%%f" -Fo "CompiledShaders\%%~nf.spv"
+for %%f in (..\engine\source\Graphics\Vulkan\shaders\*.vert.hlsl) do "%VULKAN_SDK%\Bin\dxc.exe" -spirv -fvk-use-dx-layout -T vs_6_0 -E main "%%f" -Fo "CompiledShaders\%%~nf.spv"
+for %%f in (..\engine\source\Graphics\Vulkan\shaders\*.frag.hlsl) do "%VULKAN_SDK%\Bin\dxc.exe" -spirv -fvk-use-dx-layout -T ps_6_0 -E main "%%f" -Fo "CompiledShaders\%%~nf.spv"
 
 set CommonCompilerFlags=-MTd^
  -nologo^
@@ -49,14 +48,12 @@ set CommonLinkerFlags=-incremental:no^
  -opt:ref^
  -LIBPATH:"%VULKAN_SDK%\Lib"
 
-REM ---- Asset builder: пакует ..\engine\assets в build\assets.kbn ----
 cl %CommonCompilerFlags%^
  ..\engine\tools\AssetBuilder\AssetBuilder.cpp^
  -FeAssetBuilder.exe^
  /link %CommonLinkerFlags%
 .\AssetBuilder.exe
 
-REM ---- Game DLL ----
 echo WAITING_FOR_PDB > lock.tmp
 cl %CommonCompilerFlags%^
  -LD ..\engine\source\Game\src\Game.cpp^
@@ -68,7 +65,6 @@ cl %CommonCompilerFlags%^
  -EXPORT:GameGetSoundSamples
 del lock.tmp
 
-REM ---- Platform EXE ----
 cl %CommonCompilerFlags%^
  ..\engine\source\Platform\win32\Program.cpp^
  -FmEngine.map^

@@ -68,10 +68,11 @@ internal asset_entry *AddAsset(pack_state *Pack, asset_type Type, const char *Na
     return Entry;
 }
 
-internal void AddMesh(pack_state *Pack, const char *Name, real32 *Vertices, uint32 VertexCount)
+internal void AddMesh(pack_state *Pack, const char *Name, void *Blob, uint64 BlobSize, uint32 VertexCount, uint32 IndexCount)
 {
-    asset_entry *Entry = AddAsset(Pack, Asset_Mesh, Name, Vertices, (uint64)VertexCount * KBN_VERTEX_FLOATS * sizeof(real32));
+    asset_entry *Entry = AddAsset(Pack, Asset_Mesh, Name, Blob, BlobSize);
     Entry->Mesh.VertexCount = VertexCount;
+    Entry->Mesh.IndexCount  = IndexCount;
 }
 
 internal void AddImagePixels(pack_state *Pack, const char *Name, void *Pixels, uint32 Width, uint32 Height, uint32 SRGB)
@@ -144,15 +145,14 @@ internal bool32 AddGLTF(pack_state *Pack, memory_arena *Arena, const char *Path)
         json_value *Mesh = Member->Value;
         char *Name = JsonCString(JsonGet(Mesh, "name"));
 
-        uint32  VertexCount = 0;
-        real32 *Vertices = GLTFMeshVertices(Arena, &Gltf, Mesh, &VertexCount);
-        if (!Name || !Vertices)
+        gltf_geometry Geometry = GLTFMeshGeometry(Arena, &Gltf, Mesh);
+        if (!Name || !Geometry.Blob)
         {
             DebugLog("AssetBuilder: mesh '%s' in '%s' skipped\n", Name ? Name : "?", Path);
             continue;
         }
 
-        AddMesh(Pack, Name, Vertices, VertexCount);
+        AddMesh(Pack, Name, Geometry.Blob, Geometry.BlobSize, Geometry.VertexCount, Geometry.IndexCount);
     }
 
     json_value *Images = JsonGet(Gltf.Root, "images");
