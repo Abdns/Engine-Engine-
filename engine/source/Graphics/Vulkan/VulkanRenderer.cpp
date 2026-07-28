@@ -48,7 +48,7 @@ internal void InitVulkan(HINSTANCE hinstance, HWND hwnd)
 
     if (!CreateGeometryPools(context))                 return;
     if (!CreateImagePool(context))                     return;
-    if (!CreateSharedResources(context))               return;
+    if (!CreateGlobalResources(context))               return;
     if (!CreatePipeline(context, Pipeline_Unlit))  return;
 
     DebugLog("Vulkan ready: %u pipeline(s) up\n", context->PipelineCount);
@@ -95,7 +95,7 @@ internal void ShutdownVulkan()
         }
         context->PipelineCount = 0;
 
-        DestroySharedResources(context);
+        DestroyGlobalResources(context);
 
         for (uint32 i = 0; i < MAX_TEXTURES; ++i)
         {

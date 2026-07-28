@@ -106,7 +106,7 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
     BindPipelineState(context, cmd, pipeline, &current, &wanted);
 
     real32 aspect = (real32)context->swapchainExtent.width / (real32)context->swapchainExtent.height;
-    camera_uniforms *camera = (camera_uniforms *)FrameUniforms(context);
+    camera_uniforms *camera = (camera_uniforms *)CameraUniforms(context);
 
     BindGlobalSet(cmd, context, pipeline);
 
@@ -125,7 +125,7 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
                 camera->ViewProj = Mat4Multiply(proj, cameraCmd->View);
             } break;
 
-            case Set_Pipline:
+            case Set_Pipeline:
             {
                 command_set_pipeline *pipelineCmd = (command_set_pipeline *)cmdBase;
 
@@ -171,7 +171,7 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
 
                 uint32 texId = (meshCmd->Texture.Index < MAX_TEXTURES && context->Textures[meshCmd->Texture.Index].View) ? meshCmd->Texture.Index : 0;
 
-                primitive_push_constants pc;
+                draw_push_constants pc;
                 pc.Model        = meshCmd->Transform;
                 pc.Tint         = meshCmd->Tint;
                 pc.TextureIndex = texId;
@@ -195,6 +195,8 @@ internal bool32 DrawFrame(vulkan_context *context, render_commands *commands)
     }
 
     vkWaitForFences(context->device, 1, &context->inFlightFence, VK_TRUE, UINT64_MAX);
+
+    ProcessLoadCommands(context, commands);
 
     uint32 imageIndex = 0;
     VkResult acquire = vkAcquireNextImageKHR(context->device, context->swapchain, UINT64_MAX, context->imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);

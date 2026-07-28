@@ -18,8 +18,7 @@ static_assert(sizeof(vertex) == KBN_VERTEX_FLOATS * sizeof(real32), "vertex must
 #define MAX_PRESENT_MODES     8
 #define MAX_SWAPCHAIN_IMAGES  8
 #define MAX_PIPELINES         8
-#define VERTEX_POOL_VERTICES  (1u << 20)
-#define INDEX_POOL_INDICES    (1u << 21)
+static_assert(MAX_TEXTURES == RENDER_MAX_TEXTURES, "shader texture array must match the render limit");
 #define IMAGE_POOL_SIZE       Megabytes(64)
 
 struct vulkan_shader
@@ -108,9 +107,9 @@ struct vulkan_context
 
     descriptor_set   GlobalSet;
 
-    VkDescriptorPool SharedDescriptorPool;
+    VkDescriptorPool GlobalDescriptorPool;
     VkSampler        Sampler;
-    gpu_pool         FrameBuffer;
+    gpu_pool         CameraBuffer;
 
     render_pipeline Pipelines[MAX_PIPELINES];
     uint32 PipelineCount;
@@ -155,9 +154,5 @@ internal void InitVulkan(HINSTANCE hinstance, HWND hwnd);
 internal void RenderVulkanFrame(render_commands *Commands);
 internal void ShutdownVulkan();
 
-internal PLATFORM_GET_GPU_LIMITS(VulkanGetGpuLimits);
-internal PLATFORM_WRITE_VERTICES(VulkanWriteVertices);
-internal PLATFORM_WRITE_INDICES(VulkanWriteIndices);
-internal PLATFORM_WRITE_TEXTURE(VulkanWriteTexture);
 
 #endif

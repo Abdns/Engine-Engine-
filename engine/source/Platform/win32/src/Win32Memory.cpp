@@ -6,7 +6,7 @@ void Win32AllocateGameMemory(game_memory* GameMemory, win32_state* State)
     LPVOID BaseAddress = 0;
 #endif
 
-    GameMemory->PermanentStorageSize = Megabytes(64);
+    GameMemory->PermanentStorageSize = Megabytes(128);
 
     State->TotalSize = GameMemory->PermanentStorageSize;
     State->GameMemoryBlock = VirtualAlloc(BaseAddress, (size_t)State->TotalSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);

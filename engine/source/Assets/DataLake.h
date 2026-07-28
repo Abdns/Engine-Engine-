@@ -9,61 +9,62 @@
 #include "PlatformAPI.h"
 
 #define LAKE_MAX_MESHES 256
+#define LAKE_MAX_PIXELS (1u << 22)
 
 struct data_lake
 {
-    game_memory *Platform;
-
     real32 *Vertices;
     uint32 *Indices;
+    uint32 *Pixels;
 
     uint32 VertexCount, VertexCapacity;
     uint32 IndexCount,  IndexCapacity;
+    uint32 PixelCount,  PixelCapacity;
 
     char        *MeshNames;
     mesh_handle *MeshHandle;
     uint32       MeshCount;
 
-    char           *TextureNames;
-    uint32         *TextureWidth;
-    uint32         *TextureHeight;
-    uint32          TextureCount, TextureCapacity;
+    char   *TextureNames;
+    uint32 *TextureWidth;
+    uint32 *TextureHeight;
+    uint32 *TextureFirstPixel;
+    uint32  TextureCount, TextureCapacity;
 };
 
-internal void LakeInit(data_lake *Lake, memory_arena *Arena, game_memory *Platform)
+internal void LakeInit(data_lake *Lake, memory_arena *Arena)
 {
     ZeroStruct(*Lake);
 
-    Lake->Platform = Platform;
-
-    gpu_limits Limits = Platform->PlatformGetGpuLimits();
-
-    Lake->VertexCapacity  = Limits.MaxVertices;
-    Lake->IndexCapacity   = Limits.MaxIndices;
-    Lake->TextureCapacity = Limits.MaxTextures;
+    Lake->VertexCapacity  = RENDER_MAX_VERTICES;
+    Lake->IndexCapacity   = RENDER_MAX_INDICES;
+    Lake->PixelCapacity   = LAKE_MAX_PIXELS;
+    Lake->TextureCapacity = RENDER_MAX_TEXTURES;
 
     Lake->Vertices = PushArray(Arena, (memory_index)Lake->VertexCapacity * KBN_VERTEX_FLOATS, real32);
     Lake->Indices  = PushArray(Arena, Lake->IndexCapacity, uint32);
+    Lake->Pixels   = PushArray(Arena, Lake->PixelCapacity, uint32);
 
     Lake->MeshNames  = PushArray(Arena, (memory_index)LAKE_MAX_MESHES * KBN_MAX_ASSET_NAME, char);
     Lake->MeshHandle = PushArray(Arena, LAKE_MAX_MESHES, mesh_handle);
 
-    Lake->TextureNames  = PushArray(Arena, (memory_index)Lake->TextureCapacity * KBN_MAX_ASSET_NAME, char);
-    Lake->TextureWidth  = PushArray(Arena, Lake->TextureCapacity, uint32);
-    Lake->TextureHeight = PushArray(Arena, Lake->TextureCapacity, uint32);
+    Lake->TextureNames      = PushArray(Arena, (memory_index)Lake->TextureCapacity * KBN_MAX_ASSET_NAME, char);
+    Lake->TextureWidth      = PushArray(Arena, Lake->TextureCapacity, uint32);
+    Lake->TextureHeight     = PushArray(Arena, Lake->TextureCapacity, uint32);
+    Lake->TextureFirstPixel = PushArray(Arena, Lake->TextureCapacity, uint32);
 }
 
-internal real32 *LakeVertices(data_lake *Lake, mesh_handle Mesh)
+internal real32 *LakeMeshVertices(data_lake *Lake, mesh_handle Mesh)
 {
     return Lake->Vertices + (memory_index)Mesh.FirstVertex * KBN_VERTEX_FLOATS;
 }
 
-internal uint32 *LakeIndices(data_lake *Lake, mesh_handle Mesh)
+internal uint32 *LakeMeshIndices(data_lake *Lake, mesh_handle Mesh)
 {
     return Lake->Indices + Mesh.FirstIndex;
 }
 
-internal mesh_handle LakeAddMesh(data_lake *Lake, const char *Name, real32 *Vertices, uint32 VertexCount, uint32 *Indices, uint32 IndexCount)
+internal mesh_handle LakeAddMesh(data_lake *Lake, render_commands *Commands, const char *Name, real32 *Vertices, uint32 VertexCount, uint32 *Indices, uint32 IndexCount)
 {
     mesh_handle Result = {};
 
@@ -82,20 +83,14 @@ internal mesh_handle LakeAddMesh(data_lake *Lake, const char *Name, real32 *Vert
     }
 
     Result.FirstVertex = Lake->VertexCount;
+    Result.VertexCount = VertexCount;
     Result.FirstIndex  = Lake->IndexCount;
     Result.IndexCount  = IndexCount;
 
-    if (!Lake->Platform->PlatformWriteVertices(Result.FirstVertex, Vertices, VertexCount) ||
-        !Lake->Platform->PlatformWriteIndices(Result.FirstIndex, Indices, IndexCount))
-    {
-        DebugLog("GPU refused mesh '%s'\n", Name);
+    CopySize((memory_index)VertexCount * KBN_VERTEX_FLOATS * sizeof(real32), Vertices, LakeMeshVertices(Lake, Result));
+    CopySize((memory_index)IndexCount * sizeof(uint32), Indices, LakeMeshIndices(Lake, Result));
 
-        mesh_handle Empty = {};
-        return Empty;
-    }
-
-    CopySize((memory_index)VertexCount * KBN_VERTEX_FLOATS * sizeof(real32), Vertices, LakeVertices(Lake, Result));
-    CopySize((memory_index)IndexCount * sizeof(uint32), Indices, LakeIndices(Lake, Result));
+    PushLoadMesh(Commands, Result, LakeMeshVertices(Lake, Result), LakeMeshIndices(Lake, Result));
 
     Lake->VertexCount += VertexCount;
     Lake->IndexCount  += IndexCount;
@@ -107,7 +102,7 @@ internal mesh_handle LakeAddMesh(data_lake *Lake, const char *Name, real32 *Vert
     return Result;
 }
 
-internal texture_handle LakeAddTexture(data_lake *Lake, const char *Name, void *Pixels, uint32 Width, uint32 Height, uint32 SRGB)
+internal texture_handle LakeAddTexture(data_lake *Lake, render_commands *Commands, const char *Name, void *Pixels, uint32 Width, uint32 Height, uint32 SRGB)
 {
     texture_handle Result = {};
 
@@ -117,24 +112,32 @@ internal texture_handle LakeAddTexture(data_lake *Lake, const char *Name, void *
         return Result;
     }
 
-    uint32 Slot = Lake->TextureCount;
-
-    if (!Lake->Platform->PlatformWriteTexture(Slot, Pixels, Width, Height, SRGB))
+    uint32 PixelCount = Width * Height;
+    if (Lake->PixelCount + PixelCount > Lake->PixelCapacity)
     {
-        DebugLog("GPU refused texture '%s'\n", Name);
+        DebugLog("Lake out of pixel space for '%s' (%u pixels)\n", Name, PixelCount);
         return Result;
     }
 
-    AppendString(Lake->TextureNames + (memory_index)Slot * KBN_MAX_ASSET_NAME, KBN_MAX_ASSET_NAME, 0, Name);
-    Lake->TextureWidth[Slot]  = Width;
-    Lake->TextureHeight[Slot] = Height;
-    Lake->TextureCount++;
-
+    uint32 Slot = Lake->TextureCount;
     Result.Index = Slot;
+
+    uint32 *Destination = Lake->Pixels + Lake->PixelCount;
+    CopySize((memory_index)PixelCount * sizeof(uint32), Pixels, Destination);
+
+    PushLoadTexture(Commands, Result, Destination, Width, Height, SRGB);
+
+    AppendString(Lake->TextureNames + (memory_index)Slot * KBN_MAX_ASSET_NAME, KBN_MAX_ASSET_NAME, 0, Name);
+    Lake->TextureWidth[Slot]      = Width;
+    Lake->TextureHeight[Slot]     = Height;
+    Lake->TextureFirstPixel[Slot] = Lake->PixelCount;
+    Lake->TextureCount++;
+    Lake->PixelCount += PixelCount;
+
     return Result;
 }
 
-internal void LakeLoadPack(data_lake *Lake, void *PackData, uint32 PackSize)
+internal void LakeLoadPack(data_lake *Lake, render_commands *Commands, void *PackData, uint32 PackSize)
 {
     asset_pack Pack = AssetPackFromMemory(PackData, PackSize);
 
@@ -151,13 +154,13 @@ internal void LakeLoadPack(data_lake *Lake, void *PackData, uint32 PackSize)
         {
             memory_index VertexBytes = (memory_index)Entry->Mesh.VertexCount * KBN_VERTEX_FLOATS * sizeof(real32);
 
-            LakeAddMesh(Lake, Entry->Name,
+            LakeAddMesh(Lake, Commands, Entry->Name,
                         (real32 *)Data, Entry->Mesh.VertexCount,
                         (uint32 *)((uint8 *)Data + VertexBytes), Entry->Mesh.IndexCount);
         }
         else if (Entry->Type == (uint32)Asset_Image)
         {
-            LakeAddTexture(Lake, Entry->Name, Data, Entry->Image.Width, Entry->Image.Height, Entry->Image.SRGB);
+            LakeAddTexture(Lake, Commands, Entry->Name, Data, Entry->Image.Width, Entry->Image.Height, Entry->Image.SRGB);
         }
     }
 

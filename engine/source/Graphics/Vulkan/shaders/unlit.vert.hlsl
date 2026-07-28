@@ -4,7 +4,7 @@
 
 [[vk::binding(BINDING_CAMERA, SET_GLOBAL)]] ConstantBuffer<camera_uniforms> cam;
 
-[[vk::push_constant]] primitive_push_constants pc;
+[[vk::push_constant]] draw_push_constants pc;
 
 struct vs_output
 {

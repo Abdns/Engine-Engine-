@@ -234,7 +234,7 @@ internal render_pipeline UnlitPipeline()
     render_pipeline pipeline = {};
     pipeline.ShaderName = "unlit";
 
-    pipeline.PushConstantSize   = (uint32)sizeof(primitive_push_constants);
+    pipeline.PushConstantSize   = (uint32)sizeof(draw_push_constants);
     pipeline.PushConstantStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
     pipeline.Topology  = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;

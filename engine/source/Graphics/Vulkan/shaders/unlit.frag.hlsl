@@ -3,7 +3,7 @@
 [[vk::binding(BINDING_TEXTURES, SET_GLOBAL)]] Texture2D    Tex[MAX_TEXTURES];
 [[vk::binding(BINDING_SAMPLER,  SET_GLOBAL)]] SamplerState Samp;
 
-[[vk::push_constant]] primitive_push_constants pc;
+[[vk::push_constant]] draw_push_constants pc;
 
 struct ps_input
 {

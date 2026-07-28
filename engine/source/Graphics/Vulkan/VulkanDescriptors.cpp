@@ -100,7 +100,7 @@ internal bool32 AllocateDescriptorSet(vulkan_context *context, VkDescriptorPool 
     return true;
 }
 
-internal bool32 CreateSharedResources(vulkan_context *context)
+internal bool32 CreateGlobalResources(vulkan_context *context)
 {
     VkDescriptorSetLayoutBinding bindings[4] = {};
     bindings[0].binding         = BINDING_TEXTURES;
@@ -161,13 +161,13 @@ internal bool32 CreateSharedResources(vulkan_context *context)
     poolInfo.pPoolSizes = poolSizes;
     poolInfo.maxSets = 1;
 
-    if (vkCreateDescriptorPool(context->device, &poolInfo, nullptr, &context->SharedDescriptorPool) != VK_SUCCESS)
+    if (vkCreateDescriptorPool(context->device, &poolInfo, nullptr, &context->GlobalDescriptorPool) != VK_SUCCESS)
     {
         DebugLog("Fail to create shared descriptor pool\n");
         return false;
     }
 
-    if (!AllocateDescriptorSet(context, context->SharedDescriptorPool, context->GlobalSet.Layout, &context->GlobalSet.Handle))
+    if (!AllocateDescriptorSet(context, context->GlobalDescriptorPool, context->GlobalSet.Layout, &context->GlobalSet.Handle))
     {
         return false;
     }
@@ -181,7 +181,7 @@ internal bool32 CreateSharedResources(vulkan_context *context)
     gpu_pool *vertexPool = &context->VertexPool;
     WriteBufferDescriptor(context, context->GlobalSet.Handle, BINDING_VERTICES, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, vertexPool->Buffer, (VkDeviceSize)vertexPool->Capacity * vertexPool->Stride);
 
-    gpu_pool *buffer = &context->FrameBuffer;
+    gpu_pool *buffer = &context->CameraBuffer;
     if (!CreatePool(context, buffer, "Camera", VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, (uint32)sizeof(camera_uniforms), 1))
     {
         return false;
@@ -192,16 +192,16 @@ internal bool32 CreateSharedResources(vulkan_context *context)
     return true;
 }
 
-internal void DestroySharedResources(vulkan_context *context)
+internal void DestroyGlobalResources(vulkan_context *context)
 {
-    DestroyPool(context, &context->FrameBuffer);
+    DestroyPool(context, &context->CameraBuffer);
 
     vkDestroySampler(context->device, context->Sampler, nullptr);
-    vkDestroyDescriptorPool(context->device, context->SharedDescriptorPool, nullptr);
+    vkDestroyDescriptorPool(context->device, context->GlobalDescriptorPool, nullptr);
     vkDestroyDescriptorSetLayout(context->device, context->GlobalSet.Layout, nullptr);
 
     context->Sampler              = VK_NULL_HANDLE;
-    context->SharedDescriptorPool = VK_NULL_HANDLE;
+    context->GlobalDescriptorPool = VK_NULL_HANDLE;
     context->GlobalSet            = {};
 }
 
@@ -210,8 +210,8 @@ internal void BindGlobalSet(VkCommandBuffer cmd, vulkan_context *context, render
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->Layout, 0, 1, &context->GlobalSet.Handle, 0, nullptr);
 }
 
-internal void *FrameUniforms(vulkan_context *context)
+internal void *CameraUniforms(vulkan_context *context)
 {
-    return context->FrameBuffer.Mapped;
+    return context->CameraBuffer.Mapped;
 }
 

@@ -67,12 +67,12 @@ internal Matrix4 UpdateCamera(game_state* GameState, game_input* Input)
     return View;
 }
 
-internal void LoadAsset(char* name, game_memory *Memory, game_state* GameState)
+internal void LoadAssetPack(char* name, game_memory *Memory, game_state* GameState, render_commands *RenderCommands)
 {
-    LakeInit(&GameState->Lake, &GameState->WorldArena, Memory);
+    LakeInit(&GameState->Lake, &GameState->WorldArena);
 
     platform_file_raw PackFile = Memory->PlatformReadEntireFile(name);
-    LakeLoadPack(&GameState->Lake, PackFile.Data, PackFile.Size);
+    LakeLoadPack(&GameState->Lake, RenderCommands, PackFile.Data, PackFile.Size);
     Memory->PlatformFreeFileMemory(PackFile.Data);
 }
 
@@ -92,7 +92,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         entities* Entities = &GameState->Entities;
         InitEntities(Entities, WorldArena);
 
-        LoadAsset("assets.kbn", Memory, GameState);
+        LoadAssetPack("assets.kbn", Memory, GameState, RenderCommands);
         data_lake* Lake = &GameState->Lake;
 
         mesh_handle    MeshCube   = LakeMesh(Lake, "cube");

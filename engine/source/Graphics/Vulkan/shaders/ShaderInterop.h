@@ -30,7 +30,7 @@ struct camera_uniforms
     float4x4 ViewProj;
 };
 
-struct primitive_push_constants
+struct draw_push_constants
 {
     float4x4 Model;
     float4   Tint;

@@ -4,17 +4,24 @@
 #include "Types.h"
 #include "EngineMath.h"
 
+#define RENDER_MAX_VERTICES (1u << 20)
+#define RENDER_MAX_INDICES  (1u << 21)
+#define RENDER_MAX_TEXTURES 16
+
 enum command_type
 {
     Render_Mesh = 0,
-    Set_Pipline,
+    Set_Pipeline,
     Set_RenderState,
     Render_Camera,
+    Load_Mesh,
+    Load_Texture,
 };
 
 struct mesh_handle
 {
     uint32 FirstVertex;
+    uint32 VertexCount;
     uint32 FirstIndex;
     uint32 IndexCount;
 };
@@ -52,6 +59,24 @@ struct command_render_mesh
     texture_handle Texture;
 };
 
+struct command_load_mesh
+{
+    command_type Type;
+    mesh_handle  Where;
+    real32      *Vertices;
+    uint32      *Indices;
+};
+
+struct command_load_texture
+{
+    command_type   Type;
+    texture_handle Where;
+    void          *Pixels;
+    uint32         Width;
+    uint32         Height;
+    uint32         SRGB;
+};
+
 struct command_render_camera
 {
     command_type Type;
@@ -80,7 +105,9 @@ inline uint32 CommandSize(command_type Type)
     {
         case Render_Mesh:        return (uint32)sizeof(command_render_mesh);
         case Render_Camera:      return (uint32)sizeof(command_render_camera);
-        case Set_Pipline:        return (uint32)sizeof(command_set_pipeline);
+        case Load_Mesh:          return (uint32)sizeof(command_load_mesh);
+        case Load_Texture:       return (uint32)sizeof(command_load_texture);
+        case Set_Pipeline:        return (uint32)sizeof(command_set_pipeline);
         case Set_RenderState:    return (uint32)sizeof(command_set_render_state);
     }
     return 0;
@@ -88,6 +115,8 @@ inline uint32 CommandSize(command_type Type)
 
 struct render_commands
 {
+    uint32 LoadCount;
+
     uint8 *PushBufferBase;
     uint32 PushBufferSize;
     uint32 MaxPushBufferSize;
@@ -136,9 +165,9 @@ inline command_type *NextRenderCommand(render_commands *Commands, uint32 *Offset
     return CmdBase;
 }
 
-inline void PushRenderPipline(render_commands* Commands, pipeline_type type)
+inline void PushRenderPipeline(render_commands* Commands, pipeline_type type)
 {
-    command_set_pipeline* cmd = (command_set_pipeline*)PushRenderCommand(Commands, Set_Pipline);
+    command_set_pipeline* cmd = (command_set_pipeline*)PushRenderCommand(Commands, Set_Pipeline);
     if (cmd)
     {
         cmd->PipelineType = type;
@@ -164,6 +193,34 @@ inline void PushRenderCamera(render_commands *Commands, Matrix4 View, real32 Fov
     {
         cmd->View = View;
         cmd->FovY = FovY;
+    }
+}
+
+inline void PushLoadMesh(render_commands *Commands, mesh_handle Where, real32 *Vertices, uint32 *Indices)
+{
+    command_load_mesh *cmd = (command_load_mesh *)PushRenderCommand(Commands, Load_Mesh);
+    if (cmd)
+    {
+        cmd->Where    = Where;
+        cmd->Vertices = Vertices;
+        cmd->Indices  = Indices;
+
+        Commands->LoadCount++;
+    }
+}
+
+inline void PushLoadTexture(render_commands *Commands, texture_handle Where, void *Pixels, uint32 Width, uint32 Height, uint32 SRGB)
+{
+    command_load_texture *cmd = (command_load_texture *)PushRenderCommand(Commands, Load_Texture);
+    if (cmd)
+    {
+        cmd->Where  = Where;
+        cmd->Pixels = Pixels;
+        cmd->Width  = Width;
+        cmd->Height = Height;
+        cmd->SRGB   = SRGB;
+
+        Commands->LoadCount++;
     }
 }
 
