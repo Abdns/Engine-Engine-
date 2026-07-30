@@ -22,6 +22,7 @@ typedef PLATFORM_FREE_FILE_MEMORY(platform_free_file_memory);
 typedef DEBUG_PLATFORM_WRITE_ENTIRE_FILE(debug_platform_write_entire_file);
 #endif
 
+
 struct game_memory
 {
     bool32 IsInitialized;
@@ -31,6 +32,7 @@ struct game_memory
 
     platform_read_entire_file* PlatformReadEntireFile;
     platform_free_file_memory* PlatformFreeFileMemory;
+
 
 #if ENGINE_INTERNAL
     debug_platform_write_entire_file* DEBUGPlatformWriteEntireFile;

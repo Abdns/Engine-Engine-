@@ -36,7 +36,9 @@
   <ItemGroup>
     <ClInclude Include="..\engine\tools\AssetBuilder\Loaders\TGA.h" />
     <ClInclude Include="..\engine\tools\AssetBuilder\Loaders\GLTF.h" />
-    <ClInclude Include="..\engine\source\Assets\KBNFormat.h" />
+    <ClInclude Include="..\engine\tools\AssetBuilder\Loaders\HDR.h" />
+    <ClInclude Include="..\engine\tools\AssetBuilder\Loaders\Cubemap.h" />
+    <ClInclude Include="..\engine\source\Assets\EngaFormat.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

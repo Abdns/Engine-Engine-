@@ -4,17 +4,17 @@
 #include "Types.h"
 #include "Memory.h"
 #include "Entity.h"
-#include "AssetPack.h"
+#include "DataLake.h"
 
 struct game_state
 {
     real32 tSine;
 
     memory_arena WorldArena;
-
-    game_assets Assets;
-
+    data_lake Lake;
     entities Entities;
+
+    uint32 SkyHandle;
 
     Vector3 CameraP;
     real32  CameraYaw;

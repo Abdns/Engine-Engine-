@@ -3,9 +3,11 @@
 #include "Types.h"
 #include "Memory.h"
 #include "Strings.h"
-#include "KBNFormat.h"
+#include "EngaFormat.h"
 #include "Loaders/GLTF.h"
 #include "Loaders/TGA.h"
+#include "Loaders/HDR.h"
+#include "Loaders/Cubemap.h"
 
 struct file_contents
 {
@@ -59,7 +61,7 @@ internal asset_entry *AddAsset(pack_state *Pack, asset_type Type, const char *Na
     asset_entry *Entry = &Pack->Entries[Pack->Count];
     *Entry = {};
     Entry->Type = (uint32)Type;
-    AppendString(Entry->Name, KBN_MAX_ASSET_NAME, 0, Name);
+    AppendString(Entry->Name, ENGA_MAX_ASSET_NAME, 0, Name);
     Entry->Size = Size;
 
     Pack->Data[Pack->Count] = Data;
@@ -68,18 +70,51 @@ internal asset_entry *AddAsset(pack_state *Pack, asset_type Type, const char *Na
     return Entry;
 }
 
-internal void AddMesh(pack_state *Pack, const char *Name, real32 *Vertices, uint32 VertexCount)
+internal void AddMesh(pack_state *Pack, const char *Name, void *Blob, uint64 BlobSize, uint32 VertexCount, uint32 IndexCount)
 {
-    asset_entry *Entry = AddAsset(Pack, Asset_Mesh, Name, Vertices, (uint64)VertexCount * KBN_VERTEX_FLOATS * sizeof(real32));
+    asset_entry *Entry = AddAsset(Pack, Asset_Mesh, Name, Blob, BlobSize);
     Entry->Mesh.VertexCount = VertexCount;
+    Entry->Mesh.IndexCount  = IndexCount;
 }
 
-internal void AddImagePixels(pack_state *Pack, const char *Name, void *Pixels, uint32 Width, uint32 Height, uint32 SRGB)
+internal void AddImage(pack_state *Pack, const char *Name, void *Pixels, uint64 ByteSize, uint32 Width, uint32 Height, uint32 SRGB, uint32 Format, uint32 Layers)
 {
-    asset_entry *Entry = AddAsset(Pack, Asset_Image, Name, Pixels, (uint64)Width * Height * 4);
+    asset_entry *Entry = AddAsset(Pack, Asset_Image, Name, Pixels, ByteSize);
     Entry->Image.Width  = Width;
     Entry->Image.Height = Height;
     Entry->Image.SRGB   = SRGB;
+    Entry->Image.Format = Format;
+    Entry->Image.Layers = Layers;
+}
+
+internal bool32 AddSkyCubemap(pack_state *Pack, memory_arena *Arena, const char *Name, const char *Path, uint32 FaceSize)
+{
+    file_contents File = ReadEntireFile(Path);
+    if (!File.Data)
+    {
+        DebugLog("AssetBuilder: cannot open '%s'\n", Path);
+        return false;
+    }
+
+    loaded_hdr Equirect = ParseHDR(Arena, File.Data, File.Size);
+    if (!Equirect.Pixels)
+    {
+        DebugLog("AssetBuilder: cannot parse '%s'\n", Path);
+        return false;
+    }
+
+    loaded_cubemap Cube = EquirectToCubemap(Arena, &Equirect, FaceSize);
+    if (!Cube.Pixels)
+    {
+        DebugLog("AssetBuilder: cannot convert '%s' to a cubemap\n", Path);
+        return false;
+    }
+
+    AddImage(Pack, Name, Cube.Pixels, Cube.ByteSize, Cube.FaceSize, Cube.FaceSize, 0, ImageFormat_RGBA16F, 6);
+
+    DebugLog("AssetBuilder: '%s' %ux%u equirect -> %u^2 x6 cubemap RGBA16F (%llu bytes)\n",
+             Name, Equirect.Width, Equirect.Height, Cube.FaceSize, Cube.ByteSize);
+    return true;
 }
 
 internal file_contents ReadSiblingFile(const char *BasePath, const char *Uri)
@@ -144,15 +179,14 @@ internal bool32 AddGLTF(pack_state *Pack, memory_arena *Arena, const char *Path)
         json_value *Mesh = Member->Value;
         char *Name = JsonCString(JsonGet(Mesh, "name"));
 
-        uint32  VertexCount = 0;
-        real32 *Vertices = GLTFMeshVertices(Arena, &Gltf, Mesh, &VertexCount);
-        if (!Name || !Vertices)
+        gltf_geometry Geometry = GLTFMeshGeometry(Arena, &Gltf, Mesh);
+        if (!Name || !Geometry.Blob)
         {
             DebugLog("AssetBuilder: mesh '%s' in '%s' skipped\n", Name ? Name : "?", Path);
             continue;
         }
 
-        AddMesh(Pack, Name, Vertices, VertexCount);
+        AddMesh(Pack, Name, Geometry.Blob, Geometry.BlobSize, Geometry.VertexCount, Geometry.IndexCount);
     }
 
     json_value *Images = JsonGet(Gltf.Root, "images");
@@ -178,7 +212,7 @@ internal bool32 AddGLTF(pack_state *Pack, memory_arena *Arena, const char *Path)
             continue;
         }
 
-        AddImagePixels(Pack, Name, Bitmap.Pixels, Bitmap.Width, Bitmap.Height, 1);
+        AddImage(Pack, Name, Bitmap.Pixels, (uint64)Bitmap.Width * Bitmap.Height * 4, Bitmap.Width, Bitmap.Height, 1, ImageFormat_RGBA8, 1);
     }
 
     return true;
@@ -187,8 +221,8 @@ internal bool32 AddGLTF(pack_state *Pack, memory_arena *Arena, const char *Path)
 internal bool32 WritePack(pack_state *Pack, const char *Path)
 {
     asset_file_header Header = {};
-    Header.Magic            = KBN_MAGIC;
-    Header.Version          = KBN_VERSION;
+    Header.Magic            = ENGA_MAGIC;
+    Header.Version          = ENGA_VERSION;
     Header.AssetCount       = Pack->Count;
     Header.AssetTableOffset = (uint32)sizeof(asset_file_header);
 
@@ -221,7 +255,7 @@ internal bool32 WritePack(pack_state *Pack, const char *Path)
 
 int main(int ArgCount, char **Args)
 {
-    const char *OutPath = (ArgCount > 1) ? Args[1] : "assets.kbn";
+    const char *OutPath = (ArgCount > 1) ? Args[1] : "assets.enga";
 
     uint32 ArenaSize = (uint32)Megabytes(64);
     memory_arena Arena;
@@ -230,6 +264,11 @@ int main(int ArgCount, char **Args)
     pack_state Pack = {};
 
     if (!AddGLTF(&Pack, &Arena, "..\\engine\\assets\\models\\TestShapes.gltf"))
+    {
+        return 1;
+    }
+
+    if (!AddSkyCubemap(&Pack, &Arena, "sky", "..\\engine\\assets\\images\\sky.hdr", 512))
     {
         return 1;
     }

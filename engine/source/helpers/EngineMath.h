@@ -8,34 +8,29 @@ union Vector2
 {
     struct { real32 X, Y; };
     real32 E[2];
-};
 
-inline Vector2 V2(real32 X, real32 Y)
-{
-    Vector2 Result;
-    Result.X = X;
-    Result.Y = Y;
-    return Result;
-}
+    Vector2() = default;
+    Vector2(real32 InX, real32 InY) { X = InX; Y = InY; }
+};
 
 inline Vector2 operator+(Vector2 A, Vector2 B)
 {
-    return V2(A.X + B.X, A.Y + B.Y);
+    return Vector2(A.X + B.X, A.Y + B.Y);
 }
 
 inline Vector2 operator-(Vector2 A, Vector2 B)
 {
-    return V2(A.X - B.X, A.Y - B.Y);
+    return Vector2(A.X - B.X, A.Y - B.Y);
 }
 
 inline Vector2 operator*(real32 S, Vector2 A)
 {
-    return V2(S * A.X, S * A.Y);
+    return Vector2(S * A.X, S * A.Y);
 }
 
 inline Vector2 operator*(Vector2 A, real32 S)
 {
-    return V2(S * A.X, S * A.Y);
+    return Vector2(S * A.X, S * A.Y);
 }
 
 inline Vector2 &operator+=(Vector2 &A, Vector2 B)
@@ -55,35 +50,29 @@ union Vector3
     struct { real32 X, Y, Z; };
     struct { Vector2 XY; real32 Z_; };
     real32 E[3];
-};
 
-inline Vector3 V3(real32 X, real32 Y, real32 Z)
-{
-    Vector3 Result;
-    Result.X = X;
-    Result.Y = Y;
-    Result.Z = Z;
-    return Result;
-}
+    Vector3() = default;
+    Vector3(real32 InX, real32 InY, real32 InZ) { X = InX; Y = InY; Z = InZ; }
+};
 
 inline Vector3 operator+(Vector3 A, Vector3 B)
 {
-    return V3(A.X + B.X, A.Y + B.Y, A.Z + B.Z);
+    return Vector3(A.X + B.X, A.Y + B.Y, A.Z + B.Z);
 }
 
 inline Vector3 operator-(Vector3 A, Vector3 B)
 {
-    return V3(A.X - B.X, A.Y - B.Y, A.Z - B.Z);
+    return Vector3(A.X - B.X, A.Y - B.Y, A.Z - B.Z);
 }
 
 inline Vector3 operator*(real32 S, Vector3 A)
 {
-    return V3(S * A.X, S * A.Y, S * A.Z);
+    return Vector3(S * A.X, S * A.Y, S * A.Z);
 }
 
 inline Vector3 operator*(Vector3 A, real32 S)
 {
-    return V3(S * A.X, S * A.Y, S * A.Z);
+    return Vector3(S * A.X, S * A.Y, S * A.Z);
 }
 
 inline Vector3 &operator+=(Vector3 &A, Vector3 B)
@@ -103,18 +92,10 @@ union Vector4
     struct { real32 X, Y, Z, W; };
     struct { Vector3 XYZ; real32 W_; };
     real32 E[4];
+
+    Vector4() = default;
+    Vector4(real32 InX, real32 InY, real32 InZ, real32 InW) { X = InX; Y = InY; Z = InZ; W = InW; }
 };
-
-inline Vector4 V4(real32 X, real32 Y, real32 Z, real32 W)
-{
-    Vector4 Result;
-    Result.X = X;
-    Result.Y = Y;
-    Result.Z = Z;
-    Result.W = W;
-
-    return Result;
-}
 
 struct Matrix4
 {

@@ -31,9 +31,6 @@
   <ItemDefinitionGroup>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <!-- Реальные единицы трансляции. Остальные .cpp попадают в сборку через #include
-         (unity build) и перечислены ниже как ClInclude, иначе IntelliSense разбирает
-         их изолированно и подсвечивает несуществующие ошибки. -->
     <ClCompile Include="..\engine\source\Game\src\Game.cpp" />
     <ClCompile Include="..\engine\source\Platform\win32\Program.cpp" />
     <ClCompile Include="..\engine\source\Physics\Source.cpp" />
@@ -44,6 +41,7 @@
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanCore.cpp" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanDevice.cpp" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanSwapchain.cpp" />
+    <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanDescriptors.cpp" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanPipeline.cpp" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanAssets.cpp" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanFrame.cpp" />
@@ -61,8 +59,9 @@
     <ClInclude Include="..\engine\source\Game\include\Entity.h" />
     <ClInclude Include="..\engine\source\PlatformApi\PlatformAPI.h" />
     <ClInclude Include="..\engine\source\PlatformApi\RenderCommands.h" />
-    <ClInclude Include="..\engine\source\Assets\KBNFormat.h" />
+    <ClInclude Include="..\engine\source\Assets\EngaFormat.h" />
     <ClInclude Include="..\engine\source\Assets\AssetPack.h" />
+    <ClInclude Include="..\engine\source\Assets\DataLake.h" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\Vulkan.h" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\shaders\ShaderInterop.h" />
     <ClInclude Include="..\engine\source\Helpers\EngineMath.h" />
@@ -74,8 +73,13 @@
   <ItemGroup>
     <None Include="..\engine\source\Graphics\Vulkan\shaders\unlit.vert.hlsl" />
     <None Include="..\engine\source\Graphics\Vulkan\shaders\unlit.frag.hlsl" />
-    <None Include="..\engine\assets\models\README.md" />
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\skybox.vert.hlsl" />
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\skybox.frag.hlsl" />
+    <None Include="..\engine\assets\models\TestShapes.gltf" />
+    <None Include="..\engine\assets\models\TestShapes.bin" />
+    <None Include="..\engine\assets\models\TestTexture.tga" />
     <None Include="..\engine\assets\images\TestImage.tga" />
+    <None Include="..\engine\assets\images\sky.hdr" />
     <None Include="..\build.bat" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

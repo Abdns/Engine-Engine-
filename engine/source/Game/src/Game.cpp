@@ -45,12 +45,12 @@ internal Matrix4 UpdateCamera(game_state* GameState, game_input* Input)
     real32 cp = Cos(Pitch);
     real32 sp = Sin(Pitch);
 
-    Vector3 Forward = V3(-sy * cp, sp, -cy * cp);
-    Vector3 Right   = V3(cy, 0.0f, -sy);
-    Vector3 WorldUp = V3(0.0f, 1.0f, 0.0f);
+    Vector3 Forward = Vector3(-sy * cp, sp, -cy * cp);
+    Vector3 Right   = Vector3(cy, 0.0f, -sy);
+    Vector3 WorldUp = Vector3(0.0f, 1.0f, 0.0f);
 
     game_controller_input* Keyboard = &Input->Controllers[0];
-    Vector3 Move = V3(0.0f, 0.0f, 0.0f);
+    Vector3 Move = Vector3(0.0f, 0.0f, 0.0f);
     if (Keyboard->Up.EndedDown)            Move += Forward;
     if (Keyboard->Down.EndedDown)          Move -= Forward;
     if (Keyboard->Right.EndedDown)         Move += Right;
@@ -67,20 +67,36 @@ internal Matrix4 UpdateCamera(game_state* GameState, game_input* Input)
     return View;
 }
 
-internal void LoadAsset(char* name, game_memory *Memory, game_state* GameState)
+internal texture_format TextureFormatFromAsset(uint32 AssetFormat)
 {
-    memory_arena* WorldArena = &GameState->WorldArena;
-
-    platform_file_raw PackFile = Memory->PlatformReadEntireFile(name);
-    LoadGameAssets(&GameState->Assets, WorldArena, PackFile.Data, PackFile.Size);
-    Memory->PlatformFreeFileMemory(PackFile.Data);
-
-    game_assets* Assets = &GameState->Assets;
+    return (AssetFormat == (uint32)ImageFormat_RGBA16F) ? TextureFormat_RGBA16F : TextureFormat_RGBA8;
 }
 
-internal void PushAssetDataInRender()
+internal void PushLakeToRender(data_lake *Lake, render_commands *Commands)
 {
+    for (uint32 Slot = 0; Slot < Lake->MeshCount; ++Slot)
+    {
+        PushLoadMesh(Commands, Slot + 1, LakeMeshVertices(Lake, Slot), Lake->MeshVertexCount[Slot], LakeMeshIndices(Lake, Slot), Lake->MeshIndexCount[Slot]);
+    }
 
+    for (uint32 Slot = 0; Slot < Lake->TextureCount; ++Slot)
+    {
+        PushLoadTexture(Commands, Slot + 1, LakeTexturePixels(Lake, Slot), Lake->TextureWidth[Slot], Lake->TextureHeight[Slot], Lake->TextureSRGB[Slot], TextureFormatFromAsset(Lake->TextureFormat[Slot]));
+    }
+
+    for (uint32 Slot = 0; Slot < Lake->CubemapCount; ++Slot)
+    {
+        PushLoadCubemap(Commands, Slot + 1, LakeCubemapPixels(Lake, Slot), Lake->CubemapFaceSize[Slot], TextureFormatFromAsset(Lake->CubemapFormat[Slot]));
+    }
+}
+
+internal void LoadAssetPack(char* name, game_memory *Memory, game_state* GameState)
+{
+    LakeInit(&GameState->Lake, &GameState->WorldArena);
+
+    platform_file_raw PackFile = Memory->PlatformReadEntireFile(name);
+    LakeLoadPack(&GameState->Lake, PackFile.Data, PackFile.Size);
+    Memory->PlatformFreeFileMemory(PackFile.Data);
 }
 
 extern "C" __declspec(dllexport)
@@ -99,42 +115,34 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         entities* Entities = &GameState->Entities;
         InitEntities(Entities, WorldArena);
 
-        LoadAsset("assets.kbn", Memory, GameState);
-        game_assets* Assets = &GameState->Assets;
+        LoadAssetPack("assets.enga", Memory, GameState);
+        data_lake* Lake = &GameState->Lake;
+        PushLakeToRender(Lake, RenderCommands);
 
-        for (uint32 Index = 0; Index < Assets->MeshCount; ++Index)
-        {
-            PushRenderLoadMesh(RenderCommands, Index, Assets->MeshVertexCount[Index], MeshVertices(Assets, Index));
-        }
-        for (uint32 Index = 0; Index < Assets->TextureCount; ++Index)
-        {
-            PushRenderLoadTexture(RenderCommands, Index, Assets->TextureWidth[Index], Assets->TextureHeight[Index], Assets->TextureSRGB[Index], TexturePixels(Assets, Index));
-        }
+        uint32    MeshCubeHandle = LakeGetMeshHandle(Lake, "cube");
+        uint32    MeshSphereHandle = LakeGetMeshHandle(Lake, "sphere");
+        uint32    TexTestHandle = LakeGetTextureHandle(Lake, "test");
 
-        uint32 MeshCube   = GetMeshID(Assets, "cube");
-        uint32 MeshSphere = GetMeshID(Assets, "sphere");
-        uint32 TexTest    = GetTextureID(Assets, "test");
+        GameState->SkyHandle = LakeGetCubemapHandle(Lake, "sky");
 
-        Vector3 TumbleSpin = V3(0.7f, 1.0f, 0.0f);
+        Vector3 TumbleSpin = Vector3(0.7f, 1.0f, 0.0f);
 
-        uint32 CubeA  = AddEntity(Entities, V3(-1.5f, 0.0f,  0.0f), MeshCube,   TexTest);
-        uint32 Sphere = AddEntity(Entities, V3( 0.0f, 0.0f, -1.5f), MeshSphere, TexTest);
-        uint32 CubeB  = AddEntity(Entities, V3( 1.5f, 0.0f,  0.0f), MeshCube,   TexTest);
+        uint32 CubeA = AddEntity(Entities, Vector3(-1.5f, 0.0f, 0.0f), MeshCubeHandle, TexTestHandle);
+        uint32 Sphere = AddEntity(Entities, Vector3(0.0f, 0.0f, -1.5f), MeshSphereHandle, TexTestHandle);
+        uint32 CubeB = AddEntity(Entities, Vector3(1.5f, 0.0f, 0.0f), MeshCubeHandle, TexTestHandle);
 
-        uint32 CubeMap = AddEntity(Entities, V3(0.0f, 0.0f, 0.0f), MeshCube, TexTest);
-
-        SetEntityAngularVelocity(Entities, CubeA,  TumbleSpin);
+        SetEntityAngularVelocity(Entities, CubeA, TumbleSpin);
         SetEntityAngularVelocity(Entities, Sphere, TumbleSpin);
-        SetEntityAngularVelocity(Entities, CubeB,  TumbleSpin);
+        SetEntityAngularVelocity(Entities, CubeB, TumbleSpin);
 
-        SetEntityTint(Entities, Sphere, V4(1.0f, 0.5f, 0.5f, 1.0f));
-        SetEntityTint(Entities, CubeB,  V4(0.5f, 1.0f, 0.5f, 1.0f));
+        SetEntityTint(Entities, Sphere, Vector4(1.0f, 0.5f, 0.5f, 1.0f));
+        SetEntityTint(Entities, CubeB, Vector4(0.5f, 1.0f, 0.5f, 1.0f));
 
-        GameState->CameraP     = V3(0.0f, 0.0f, 4.0f);
-        GameState->CameraYaw   = 0.0f;
+        GameState->CameraP = Vector3(0.0f, 0.0f, 4.0f);
+        GameState->CameraYaw = 0.0f;
         GameState->CameraPitch = 0.0f;
-        GameState->LastMouseX  = (real32)Input->MouseX;
-        GameState->LastMouseY  = (real32)Input->MouseY;
+        GameState->LastMouseX = (real32)Input->MouseX;
+        GameState->LastMouseY = (real32)Input->MouseY;
 
         Memory->IsInitialized = true;
     }
@@ -145,6 +153,11 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     real32 FovY = 1.047f;
 
     PushRenderCamera(RenderCommands, View, FovY);
+
+    PushRenderPipeline(RenderCommands, Pipeline_Skybox);
+    PushRenderSkybox(RenderCommands, GameState->SkyHandle);
+
+    PushRenderPipeline(RenderCommands, Pipeline_Unlit);
     PushEntitiesToRender(&GameState->Entities, RenderCommands);
 }
 

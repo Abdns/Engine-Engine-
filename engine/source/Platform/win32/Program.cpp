@@ -86,7 +86,6 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
         return 0;
     }
 
-
     HDC DeviceContext = GetDC(Window);
 
     int32  GameUpdateHz = Win32GetMonitorRefreshHz(DeviceContext);

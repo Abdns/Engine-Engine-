@@ -83,6 +83,9 @@
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanSwapchain.cpp">
       <Filter>engine\source\Graphics\Vulkan</Filter>
     </ClInclude>
+    <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanDescriptors.cpp">
+      <Filter>engine\source\Graphics\Vulkan</Filter>
+    </ClInclude>
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanPipeline.cpp">
       <Filter>engine\source\Graphics\Vulkan</Filter>
     </ClInclude>
@@ -140,10 +143,13 @@
     <ClInclude Include="..\engine\source\Graphics\Vulkan\shaders\ShaderInterop.h">
       <Filter>engine\source\Graphics\Vulkan\shaders</Filter>
     </ClInclude>
-    <ClInclude Include="..\engine\source\Assets\KBNFormat.h">
+    <ClInclude Include="..\engine\source\Assets\EngaFormat.h">
       <Filter>engine\source\Assets</Filter>
     </ClInclude>
     <ClInclude Include="..\engine\source\Assets\AssetPack.h">
+      <Filter>engine\source\Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\source\Assets\DataLake.h">
       <Filter>engine\source\Assets</Filter>
     </ClInclude>
     <ClInclude Include="..\engine\source\Helpers\EngineMath.h">
@@ -169,10 +175,25 @@
     <None Include="..\engine\source\Graphics\Vulkan\shaders\unlit.frag.hlsl">
       <Filter>engine\source\Graphics\Vulkan\shaders</Filter>
     </None>
-    <None Include="..\engine\assets\models\README.md">
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\skybox.vert.hlsl">
+      <Filter>engine\source\Graphics\Vulkan\shaders</Filter>
+    </None>
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\skybox.frag.hlsl">
+      <Filter>engine\source\Graphics\Vulkan\shaders</Filter>
+    </None>
+    <None Include="..\engine\assets\models\TestShapes.gltf">
+      <Filter>engine\assets\models</Filter>
+    </None>
+    <None Include="..\engine\assets\models\TestShapes.bin">
+      <Filter>engine\assets\models</Filter>
+    </None>
+    <None Include="..\engine\assets\models\TestTexture.tga">
       <Filter>engine\assets\models</Filter>
     </None>
     <None Include="..\engine\assets\images\TestImage.tga">
+      <Filter>engine\assets\images</Filter>
+    </None>
+    <None Include="..\engine\assets\images\sky.hdr">
       <Filter>engine\assets\images</Filter>
     </None>
     <None Include="..\build.bat" />

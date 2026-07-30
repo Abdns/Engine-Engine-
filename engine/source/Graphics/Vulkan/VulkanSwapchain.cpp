@@ -1,7 +1,7 @@
 #include "Vulkan.h"
 
-#define PREFERRED_SURFACE_FORMAT VK_FORMAT_B8G8R8A8_UNORM
-#define FALLBACK_SURFACE_FORMAT  VK_FORMAT_R8G8B8A8_UNORM
+#define PREFERRED_SURFACE_FORMAT VK_FORMAT_B8G8R8A8_SRGB
+#define FALLBACK_SURFACE_FORMAT  VK_FORMAT_R8G8B8A8_SRGB
 #define REQUIRED_COLOR_SPACE     VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
 #define PREFERRED_PRESENT_MODE   VK_PRESENT_MODE_MAILBOX_KHR
 #define FALLBACK_PRESENT_MODE    VK_PRESENT_MODE_FIFO_KHR
@@ -20,11 +20,14 @@ internal VkSurfaceFormatKHR ChooseSwapSurfaceFormat(swapchain_support_details *s
 
     for (uint32 i = 0; i < support->formatCount; ++i)
     {
-        if (support->formats[i].format == FALLBACK_SURFACE_FORMAT)
+        if (support->formats[i].format == FALLBACK_SURFACE_FORMAT
+            && support->formats[i].colorSpace == REQUIRED_COLOR_SPACE)
         {
             return support->formats[i];
         }
     }
+
+    DebugLog("No sRGB surface format available, colours will be too dark\n");
 
     return support->formats[0];
 }
@@ -130,7 +133,7 @@ internal bool32 CreateSwapchain(vulkan_context *context, HWND hwnd)
     context->swapchainImageFormat = surfaceFormat.format;
     context->swapchainExtent = extent;
 
-    DebugLog("Swapchain created (%u images, %ux%u)\n", count, extent.width, extent.height);
+    DebugLog("Swapchain created (%u images, %ux%u, format %d)\n", count, extent.width, extent.height, surfaceFormat.format);
     return true;
 }
 
@@ -153,7 +156,7 @@ internal bool32 CreateDepthResources(vulkan_context *context)
 {
     context->depthFormat = VK_FORMAT_D32_SFLOAT;
 
-    if (!CreateImage(context, context->swapchainExtent.width, context->swapchainExtent.height,
+    if (!CreateStandaloneImage(context, context->swapchainExtent.width, context->swapchainExtent.height,
                      context->depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
                      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &context->depthImage, &context->depthImageMemory))
     {

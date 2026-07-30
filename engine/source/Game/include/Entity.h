@@ -16,8 +16,9 @@ struct entities
     Vector3 *Rotation;
     Vector3 *AngularVelocity;
     Vector4 *Tint;
-    uint32  *MeshID;
-    uint32  *TextureID;
+
+    uint32 *MeshHandle;
+    uint32 *TextureHandle;
 };
 
 #endif
