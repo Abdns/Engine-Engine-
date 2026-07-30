@@ -248,28 +248,39 @@ internal render_pipeline UnlitPipeline()
     return pipeline;
 }
 
+internal render_pipeline SkyboxPipeline()
+{
+    render_pipeline pipeline = {};
+    pipeline.ShaderName = "skybox";
+
+    pipeline.PushConstantSize   = (uint32)sizeof(draw_push_constants);
+    pipeline.PushConstantStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    pipeline.Topology  = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    pipeline.FrontFace = VK_FRONT_FACE_CLOCKWISE;
+
+    pipeline.DefaultState.CullMode   = VK_CULL_MODE_NONE;
+    pipeline.DefaultState.DepthTest  = VK_FALSE;
+    pipeline.DefaultState.DepthWrite = VK_FALSE;
+    pipeline.DefaultState.AlphaBlend = VK_FALSE;
+
+    return pipeline;
+}
+
 internal bool32 CreatePipeline(vulkan_context* context, pipeline_type pipelineType)
 {
-    if ((uint32)pipelineType >= MAX_PIPELINES)
-    {
-        DebugLog("Invalid pipeline id %d (max %d)\n", pipelineType, MAX_PIPELINES);
-
-        return false;
-    }
-
     render_pipeline *pipeline = &context->Pipelines[pipelineType];
-    if (pipeline->Handle != VK_NULL_HANDLE)
-    {
-        DebugLog("Pipeline slot %d already taken by '%s'\n", pipelineType, pipeline->ShaderName);
-
-        return false;
-    }
 
     switch (pipelineType)
     {
         case Pipeline_Unlit:
         {
             *pipeline = UnlitPipeline();
+        } break;
+
+        case Pipeline_Skybox:
+        {
+            *pipeline = SkyboxPipeline();
         } break;
 
         default:

@@ -5,20 +5,21 @@
 #include "Memory.h"
 #include "PlatformAPI.h"
 #include "RenderCommands.h"
-#include "KBNFormat.h"
+#include "EngaFormat.h"
 #include "EngineMath.h"
 
 #include <vulkan/vulkan.h>
 
 #include "shaders/ShaderInterop.h"
 
-static_assert(sizeof(vertex) == KBN_VERTEX_FLOATS * sizeof(real32), "vertex must match the packed asset layout");
+static_assert(sizeof(vertex) == sizeof(enga_vertex), "vertex must match the packed asset layout");
 
 #define MAX_SURFACE_FORMATS   64
 #define MAX_PRESENT_MODES     8
 #define MAX_SWAPCHAIN_IMAGES  8
-#define MAX_PIPELINES         8
-static_assert(MAX_TEXTURES == RENDER_MAX_TEXTURES, "shader texture array must match the render limit");
+#define MAX_MESHES            256
+#define MAX_POOL_VERTICES     (1u << 20)
+#define MAX_POOL_INDICES      (1u << 21)
 #define IMAGE_POOL_SIZE       Megabytes(64)
 
 struct vulkan_shader
@@ -34,6 +35,15 @@ struct gpu_pool
     void          *Mapped;
     uint32         Stride;
     uint32         Capacity;
+    uint32         Used;
+};
+
+struct gpu_mesh
+{
+    uint32 FirstVertex;
+    uint32 VertexCount;
+    uint32 FirstIndex;
+    uint32 IndexCount;
 };
 
 struct gpu_texture
@@ -111,7 +121,7 @@ struct vulkan_context
     VkSampler        Sampler;
     gpu_pool         CameraBuffer;
 
-    render_pipeline Pipelines[MAX_PIPELINES];
+    render_pipeline Pipelines[Pipeline_Count];
     uint32 PipelineCount;
 
     VkFramebuffer swapchainFramebuffers[MAX_SWAPCHAIN_IMAGES];
@@ -126,7 +136,9 @@ struct vulkan_context
     gpu_pool VertexPool;
     gpu_pool IndexPool;
 
+    gpu_mesh          Meshes[MAX_MESHES];
     gpu_texture       Textures[MAX_TEXTURES];
+    gpu_texture       Cubemaps[MAX_CUBEMAPS];
     image_memory_pool ImagePool;
 
     bool32                          DynamicBlend;

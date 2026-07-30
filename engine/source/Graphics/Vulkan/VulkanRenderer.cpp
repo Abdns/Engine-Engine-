@@ -50,6 +50,7 @@ internal void InitVulkan(HINSTANCE hinstance, HWND hwnd)
     if (!CreateImagePool(context))                     return;
     if (!CreateGlobalResources(context))               return;
     if (!CreatePipeline(context, Pipeline_Unlit))  return;
+    if (!CreatePipeline(context, Pipeline_Skybox)) return;
 
     DebugLog("Vulkan ready: %u pipeline(s) up\n", context->PipelineCount);
 }
@@ -86,7 +87,7 @@ internal void ShutdownVulkan()
 
         DestroyGeometryPools(context);
 
-        for (uint32 i = 0; i < MAX_PIPELINES; ++i)
+        for (uint32 i = 0; i < Pipeline_Count; ++i)
         {
             if (context->Pipelines[i].Handle != VK_NULL_HANDLE)
             {
@@ -101,6 +102,11 @@ internal void ShutdownVulkan()
         {
             vkDestroyImageView(context->device, context->Textures[i].View, nullptr);
             vkDestroyImage(context->device, context->Textures[i].Image, nullptr);
+        }
+        for (uint32 i = 0; i < MAX_CUBEMAPS; ++i)
+        {
+            vkDestroyImageView(context->device, context->Cubemaps[i].View, nullptr);
+            vkDestroyImage(context->device, context->Cubemaps[i].Image, nullptr);
         }
         DestroyImagePool(context);
 

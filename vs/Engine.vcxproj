@@ -59,7 +59,7 @@
     <ClInclude Include="..\engine\source\Game\include\Entity.h" />
     <ClInclude Include="..\engine\source\PlatformApi\PlatformAPI.h" />
     <ClInclude Include="..\engine\source\PlatformApi\RenderCommands.h" />
-    <ClInclude Include="..\engine\source\Assets\KBNFormat.h" />
+    <ClInclude Include="..\engine\source\Assets\EngaFormat.h" />
     <ClInclude Include="..\engine\source\Assets\AssetPack.h" />
     <ClInclude Include="..\engine\source\Assets\DataLake.h" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\Vulkan.h" />
@@ -73,8 +73,13 @@
   <ItemGroup>
     <None Include="..\engine\source\Graphics\Vulkan\shaders\unlit.vert.hlsl" />
     <None Include="..\engine\source\Graphics\Vulkan\shaders\unlit.frag.hlsl" />
-    <None Include="..\engine\assets\models\README.md" />
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\skybox.vert.hlsl" />
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\skybox.frag.hlsl" />
+    <None Include="..\engine\assets\models\TestShapes.gltf" />
+    <None Include="..\engine\assets\models\TestShapes.bin" />
+    <None Include="..\engine\assets\models\TestTexture.tga" />
     <None Include="..\engine\assets\images\TestImage.tga" />
+    <None Include="..\engine\assets\images\sky.hdr" />
     <None Include="..\build.bat" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

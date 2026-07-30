@@ -15,8 +15,10 @@
 #define BINDING_SAMPLER  1
 #define BINDING_VERTICES 2
 #define BINDING_CAMERA   3
+#define BINDING_CUBEMAPS 4
 
 #define MAX_TEXTURES 16
+#define MAX_CUBEMAPS 4
 
 struct vertex
 {
@@ -28,6 +30,10 @@ struct vertex
 struct camera_uniforms
 {
     float4x4 ViewProj;
+
+    float4 SkyRight;
+    float4 SkyUp;
+    float4 SkyForward;
 };
 
 struct draw_push_constants

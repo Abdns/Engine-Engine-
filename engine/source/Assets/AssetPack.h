@@ -2,7 +2,7 @@
 #define ASSETPACK_H
 
 #include "Types.h"
-#include "KBNFormat.h"
+#include "EngaFormat.h"
 
 struct asset_pack
 {
@@ -23,7 +23,7 @@ internal asset_pack AssetPackFromMemory(void *Data, uint32 Size)
     }
 
     asset_file_header *Header = (asset_file_header *)Data;
-    if (Header->Magic != KBN_MAGIC || Header->Version != KBN_VERSION || Header->AssetTableOffset + Header->AssetCount * sizeof(asset_entry) > Size)
+    if (Header->Magic != ENGA_MAGIC || Header->Version != ENGA_VERSION || Header->AssetTableOffset + Header->AssetCount * sizeof(asset_entry) > Size)
     {
         DebugLog("Asset pack is corrupt\n");
         return Result;

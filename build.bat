@@ -8,8 +8,8 @@ pushd build
 del *.pdb > NUL 2> NUL
 
 if not exist CompiledShaders mkdir CompiledShaders
-for %%f in (..\engine\source\Graphics\Vulkan\shaders\*.vert.hlsl) do "%VULKAN_SDK%\Bin\dxc.exe" -spirv -fvk-use-dx-layout -T vs_6_0 -E main "%%f" -Fo "CompiledShaders\%%~nf.spv"
-for %%f in (..\engine\source\Graphics\Vulkan\shaders\*.frag.hlsl) do "%VULKAN_SDK%\Bin\dxc.exe" -spirv -fvk-use-dx-layout -T ps_6_0 -E main "%%f" -Fo "CompiledShaders\%%~nf.spv"
+for %%f in (..\engine\source\Graphics\Vulkan\shaders\*.vert.hlsl) do ("%VULKAN_SDK%\Bin\dxc.exe" -spirv -fvk-use-dx-layout -T vs_6_0 -E main "%%f" -Fo "CompiledShaders\%%~nf.spv" || goto :failed)
+for %%f in (..\engine\source\Graphics\Vulkan\shaders\*.frag.hlsl) do ("%VULKAN_SDK%\Bin\dxc.exe" -spirv -fvk-use-dx-layout -T ps_6_0 -E main "%%f" -Fo "CompiledShaders\%%~nf.spv" || goto :failed)
 
 set CommonCompilerFlags=-MTd^
  -nologo^
@@ -52,7 +52,9 @@ cl %CommonCompilerFlags%^
  ..\engine\tools\AssetBuilder\AssetBuilder.cpp^
  -FeAssetBuilder.exe^
  /link %CommonLinkerFlags%
+if errorlevel 1 goto :failed
 .\AssetBuilder.exe
+if errorlevel 1 goto :failed
 
 echo WAITING_FOR_PDB > lock.tmp
 cl %CommonCompilerFlags%^
@@ -63,7 +65,9 @@ cl %CommonCompilerFlags%^
  -PDB:game_%random%.pdb^
  -EXPORT:GameUpdateAndRender^
  -EXPORT:GameGetSoundSamples
+set GameError=%ERRORLEVEL%
 del lock.tmp
+if not "%GameError%"=="0" goto :failed
 
 cl %CommonCompilerFlags%^
  ..\engine\source\Platform\win32\Program.cpp^
@@ -79,5 +83,13 @@ cl %CommonCompilerFlags%^
  dxguid.lib^
  Xinput.lib^
  vulkan-1.lib
+if errorlevel 1 goto :failed
 
 popd
+exit /b 0
+
+:failed
+echo.
+echo BUILD FAILED
+popd
+exit /b 1

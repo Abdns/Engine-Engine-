@@ -158,10 +158,6 @@ internal uint32 GetDevices(const VkInstance *instance, VkPhysicalDevice *devices
     }
 
     vkEnumeratePhysicalDevices(*instance, &devicesCount, devices);
-    if (result != VK_SUCCESS)
-    {
-        return 0;
-    }
 
     return devicesCount;
 }

@@ -11,10 +11,10 @@ struct game_state
     real32 tSine;
 
     memory_arena WorldArena;
-
     data_lake Lake;
-
     entities Entities;
+
+    uint32 SkyHandle;
 
     Vector3 CameraP;
     real32  CameraYaw;

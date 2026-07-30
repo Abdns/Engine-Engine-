@@ -123,13 +123,21 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
                 command_render_camera *cameraCmd = (command_render_camera *)cmdBase;
                 Matrix4 proj = Mat4Perspective(cameraCmd->FovY, aspect, 0.1f, 100.0f);
                 camera->ViewProj = Mat4Multiply(proj, cameraCmd->View);
+
+                Matrix4 *view = &cameraCmd->View;
+                real32 rightScale = 1.0f / proj.E[0][0];
+                real32 upScale    = 1.0f / proj.E[1][1];
+
+                camera->SkyRight   = Vector4(view->E[0][0] * rightScale, view->E[1][0] * rightScale, view->E[2][0] * rightScale, 0.0f);
+                camera->SkyUp      = Vector4(view->E[0][1] * upScale,    view->E[1][1] * upScale,    view->E[2][1] * upScale,    0.0f);
+                camera->SkyForward = Vector4(-view->E[0][2], -view->E[1][2], -view->E[2][2], 0.0f);
             } break;
 
             case Set_Pipeline:
             {
                 command_set_pipeline *pipelineCmd = (command_set_pipeline *)cmdBase;
 
-                if ((uint32)pipelineCmd->PipelineType >= MAX_PIPELINES || context->Pipelines[pipelineCmd->PipelineType].Handle == VK_NULL_HANDLE)
+                if (context->Pipelines[pipelineCmd->PipelineType].Handle == VK_NULL_HANDLE)
                 {
                     DebugLog("Set pipeline %d ignored: not ready\n", pipelineCmd->PipelineType);
                     break;
@@ -157,24 +165,54 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
                 wanted.AlphaBlend = (stateCmd->BlendMode == Blend_Alpha) ? VK_TRUE : VK_FALSE;
             } break;
 
-            case Render_Mesh:
+            case Render_Skybox:
             {
-                command_render_mesh *meshCmd = (command_render_mesh *)cmdBase;
+                command_render_skybox *skyCmd = (command_render_skybox *)cmdBase;
 
-                mesh_handle *mesh = &meshCmd->Mesh;
-                if (!mesh->IndexCount)
+                if (activeId != Pipeline_Skybox || !skyCmd->CubemapHandle || skyCmd->CubemapHandle > MAX_CUBEMAPS)
+                {
+                    break;
+                }
+
+                uint32 cubeSlot = skyCmd->CubemapHandle - 1;
+                if (!context->Cubemaps[cubeSlot].View)
                 {
                     break;
                 }
 
                 ApplyRenderState(context, cmd, &current, &wanted);
 
-                uint32 texId = (meshCmd->Texture.Index < MAX_TEXTURES && context->Textures[meshCmd->Texture.Index].View) ? meshCmd->Texture.Index : 0;
+                draw_push_constants pc;
+                pc.Model        = Mat4Identity();
+                pc.Tint         = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+                pc.TextureIndex = cubeSlot;
+                vkCmdPushConstants(cmd, pipeline->Layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, (uint32)sizeof(pc), &pc);
+
+                vkCmdDraw(cmd, 3, 1, 0, 0);
+            } break;
+
+            case Render_Mesh:
+            {
+                command_render_mesh *meshCmd = (command_render_mesh *)cmdBase;
+
+                gpu_mesh *mesh = ResolveMesh(context, meshCmd->MeshHandle);
+                if (!mesh || !mesh->IndexCount)
+                {
+                    break;
+                }
+
+                ApplyRenderState(context, cmd, &current, &wanted);
+
+                uint32 texSlot = 0;
+                if (meshCmd->TextureHandle && meshCmd->TextureHandle <= MAX_TEXTURES && context->Textures[meshCmd->TextureHandle - 1].View)
+                {
+                    texSlot = meshCmd->TextureHandle - 1;
+                }
 
                 draw_push_constants pc;
                 pc.Model        = meshCmd->Transform;
                 pc.Tint         = meshCmd->Tint;
-                pc.TextureIndex = texId;
+                pc.TextureIndex = texSlot;
                 vkCmdPushConstants(cmd, pipeline->Layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, (uint32)sizeof(pc), &pc);
 
                 vkCmdDrawIndexed(cmd, mesh->IndexCount, 1, mesh->FirstIndex, (int32)mesh->FirstVertex, 0);

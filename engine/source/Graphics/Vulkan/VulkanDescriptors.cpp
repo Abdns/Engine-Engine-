@@ -102,7 +102,7 @@ internal bool32 AllocateDescriptorSet(vulkan_context *context, VkDescriptorPool 
 
 internal bool32 CreateGlobalResources(vulkan_context *context)
 {
-    VkDescriptorSetLayoutBinding bindings[4] = {};
+    VkDescriptorSetLayoutBinding bindings[5] = {};
     bindings[0].binding         = BINDING_TEXTURES;
     bindings[0].descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
     bindings[0].descriptorCount = MAX_TEXTURES;
@@ -123,8 +123,14 @@ internal bool32 CreateGlobalResources(vulkan_context *context)
     bindings[3].descriptorCount = 1;
     bindings[3].stageFlags      = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
-    VkDescriptorBindingFlags bindingFlags[4] = {};
+    bindings[4].binding         = BINDING_CUBEMAPS;
+    bindings[4].descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    bindings[4].descriptorCount = MAX_CUBEMAPS;
+    bindings[4].stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkDescriptorBindingFlags bindingFlags[5] = {};
     bindingFlags[0] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+    bindingFlags[4] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
 
     VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo{};
     flagsInfo.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
@@ -146,7 +152,7 @@ internal bool32 CreateGlobalResources(vulkan_context *context)
 
     VkDescriptorPoolSize poolSizes[4] = {};
     poolSizes[0].type            = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-    poolSizes[0].descriptorCount = MAX_TEXTURES;
+    poolSizes[0].descriptorCount = MAX_TEXTURES + MAX_CUBEMAPS;
     poolSizes[1].type            = VK_DESCRIPTOR_TYPE_SAMPLER;
     poolSizes[1].descriptorCount = 1;
     poolSizes[2].type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;

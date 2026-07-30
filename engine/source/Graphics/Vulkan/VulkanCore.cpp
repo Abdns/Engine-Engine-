@@ -18,7 +18,7 @@ internal uint32 FindMemoryType(VkPhysicalDevice physicalDevice, uint32 typeFilte
     return INVALID_MEMORY_TYPE;
 }
 
-internal VkImageCreateInfo TextureImageInfo(uint32 width, uint32 height, VkFormat format)
+internal VkImageCreateInfo TextureImageInfo(uint32 width, uint32 height, VkFormat format, uint32 layers)
 {
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -27,7 +27,7 @@ internal VkImageCreateInfo TextureImageInfo(uint32 width, uint32 height, VkForma
     imageInfo.extent.height = height;
     imageInfo.extent.depth  = 1;
     imageInfo.mipLevels = 1;
-    imageInfo.arrayLayers = 1;
+    imageInfo.arrayLayers = layers;
     imageInfo.format = format;
     imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -35,12 +35,17 @@ internal VkImageCreateInfo TextureImageInfo(uint32 width, uint32 height, VkForma
     imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
+    if (layers == 6)
+    {
+        imageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    }
+
     return imageInfo;
 }
 
 internal bool32 CreateImagePool(vulkan_context *context)
 {
-    VkImageCreateInfo probeInfo = TextureImageInfo(1, 1, VK_FORMAT_R8G8B8A8_UNORM);
+    VkImageCreateInfo probeInfo = TextureImageInfo(1, 1, VK_FORMAT_R8G8B8A8_UNORM, 1);
 
     VkImage probe = VK_NULL_HANDLE;
     if (vkCreateImage(context->device, &probeInfo, nullptr, &probe) != VK_SUCCESS)
@@ -84,9 +89,9 @@ internal void DestroyImagePool(vulkan_context *context)
     context->ImagePool = {};
 }
 
-internal bool32 CreatePooledImage(vulkan_context *context, uint32 width, uint32 height, VkFormat format, VkImage *outImage)
+internal bool32 CreatePooledImage(vulkan_context *context, uint32 width, uint32 height, VkFormat format, uint32 layers, VkImage *outImage)
 {
-    VkImageCreateInfo imageInfo = TextureImageInfo(width, height, format);
+    VkImageCreateInfo imageInfo = TextureImageInfo(width, height, format, layers);
 
     if (vkCreateImage(context->device, &imageInfo, nullptr, outImage) != VK_SUCCESS)
     {
@@ -168,12 +173,12 @@ internal bool32 CreateStandaloneImage(vulkan_context *context, uint32 width, uin
     return true;
 }
 
-internal VkImageView CreateImageView(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspectMask)
+internal VkImageView CreateImageView(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspectMask, VkImageViewType viewType, uint32 layers)
 {
     VkImageViewCreateInfo viewInfo{};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     viewInfo.image = image;
-    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.viewType = viewType;
     viewInfo.format = format;
 
     viewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -185,7 +190,7 @@ internal VkImageView CreateImageView(VkDevice device, VkImage image, VkFormat fo
     viewInfo.subresourceRange.baseMipLevel = 0;
     viewInfo.subresourceRange.levelCount = 1;
     viewInfo.subresourceRange.baseArrayLayer = 0;
-    viewInfo.subresourceRange.layerCount = 1;
+    viewInfo.subresourceRange.layerCount = layers;
 
     VkImageView view = VK_NULL_HANDLE;
     if (vkCreateImageView(device, &viewInfo, nullptr, &view) != VK_SUCCESS)
@@ -198,12 +203,17 @@ internal VkImageView CreateImageView(VkDevice device, VkImage image, VkFormat fo
 
 internal VkImageView CreateColorImageView(VkDevice device, VkImage image, VkFormat format)
 {
-    return CreateImageView(device, image, format, VK_IMAGE_ASPECT_COLOR_BIT);
+    return CreateImageView(device, image, format, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_VIEW_TYPE_2D, 1);
+}
+
+internal VkImageView CreateCubeImageView(VkDevice device, VkImage image, VkFormat format)
+{
+    return CreateImageView(device, image, format, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_VIEW_TYPE_CUBE, 6);
 }
 
 internal VkImageView CreateDepthImageView(VkDevice device, VkImage image, VkFormat format)
 {
-    return CreateImageView(device, image, format, VK_IMAGE_ASPECT_DEPTH_BIT);
+    return CreateImageView(device, image, format, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_VIEW_TYPE_2D, 1);
 }
 
 internal bool32 CreateBufferEx(vulkan_context *context, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags preferredProperties, VkMemoryPropertyFlags requiredProperties, VkBuffer *outBuffer, VkDeviceMemory *outMemory)
@@ -274,6 +284,7 @@ internal bool32 CreatePool(vulkan_context *context, gpu_pool *pool, const char *
 {
     pool->Stride   = stride;
     pool->Capacity = capacity;
+    pool->Used     = 0;
 
     VkDeviceSize size = (VkDeviceSize)capacity * stride;
 
@@ -300,18 +311,10 @@ internal void DestroyPool(vulkan_context *context, gpu_pool *pool)
     *pool = {};
 }
 
-internal bool32 PoolWrite(gpu_pool *pool, const char *name, uint32 first, const void *data, uint32 count)
+internal void PoolWrite(gpu_pool *pool, uint32 first, const void *data, uint32 count)
 {
-    if (!count || first > pool->Capacity || count > pool->Capacity - first)
-    {
-        DebugLog("%s pool write out of range (first %u, count %u, capacity %u)\n", name, first, count, pool->Capacity);
-        return false;
-    }
-
     uint8 *destination = (uint8 *)pool->Mapped + (VkDeviceSize)first * pool->Stride;
     CopySize((memory_index)count * pool->Stride, (void *)data, destination);
-
-    return true;
 }
 
 internal VkCommandBuffer BeginSingleTimeCommands(vulkan_context *context)
@@ -348,7 +351,7 @@ internal void EndSingleTimeCommands(vulkan_context *context, VkCommandBuffer cmd
     vkFreeCommandBuffers(context->device, context->commandPool, 1, &cmd);
 }
 
-internal void TransitionImageLayout(vulkan_context *context, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout)
+internal void TransitionImageLayout(vulkan_context *context, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout, uint32 layers)
 {
     VkCommandBuffer cmd = BeginSingleTimeCommands(context);
 
@@ -363,7 +366,7 @@ internal void TransitionImageLayout(vulkan_context *context, VkImage image, VkIm
     barrier.subresourceRange.baseMipLevel = 0;
     barrier.subresourceRange.levelCount = 1;
     barrier.subresourceRange.baseArrayLayer = 0;
-    barrier.subresourceRange.layerCount = 1;
+    barrier.subresourceRange.layerCount = layers;
 
     VkPipelineStageFlags srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
     VkPipelineStageFlags dstStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
@@ -388,7 +391,7 @@ internal void TransitionImageLayout(vulkan_context *context, VkImage image, VkIm
     EndSingleTimeCommands(context, cmd);
 }
 
-internal void CopyBufferToImage(vulkan_context *context, VkBuffer buffer, VkImage image, uint32 width, uint32 height)
+internal void CopyBufferToImage(vulkan_context *context, VkBuffer buffer, VkImage image, uint32 width, uint32 height, uint32 layers)
 {
     VkCommandBuffer cmd = BeginSingleTimeCommands(context);
 
@@ -399,7 +402,7 @@ internal void CopyBufferToImage(vulkan_context *context, VkBuffer buffer, VkImag
     region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     region.imageSubresource.mipLevel = 0;
     region.imageSubresource.baseArrayLayer = 0;
-    region.imageSubresource.layerCount = 1;
+    region.imageSubresource.layerCount = layers;
     region.imageExtent.width  = width;
     region.imageExtent.height = height;
     region.imageExtent.depth  = 1;

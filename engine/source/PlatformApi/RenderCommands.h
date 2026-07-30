@@ -4,31 +4,16 @@
 #include "Types.h"
 #include "EngineMath.h"
 
-#define RENDER_MAX_VERTICES (1u << 20)
-#define RENDER_MAX_INDICES  (1u << 21)
-#define RENDER_MAX_TEXTURES 16
-
 enum command_type
 {
     Render_Mesh = 0,
+    Render_Camera,
+    Render_Skybox,
     Set_Pipeline,
     Set_RenderState,
-    Render_Camera,
     Load_Mesh,
     Load_Texture,
-};
-
-struct mesh_handle
-{
-    uint32 FirstVertex;
-    uint32 VertexCount;
-    uint32 FirstIndex;
-    uint32 IndexCount;
-};
-
-struct texture_handle
-{
-    uint32 Index;
+    Load_Cubemap,
 };
 
 enum cull_mode
@@ -36,6 +21,12 @@ enum cull_mode
     Cull_None = 0,
     Cull_Back,
     Cull_Front,
+};
+
+enum texture_format
+{
+    TextureFormat_RGBA8 = 0,
+    TextureFormat_RGBA16F,
 };
 
 enum blend_mode
@@ -47,6 +38,7 @@ enum blend_mode
 enum pipeline_type
 {
     Pipeline_Unlit = 0,
+    Pipeline_Skybox,
     Pipeline_Count,
 };
 
@@ -55,26 +47,44 @@ struct command_render_mesh
     command_type   Type;
     Matrix4        Transform;
     Vector4        Tint;
-    mesh_handle    Mesh;
-    texture_handle Texture;
+    uint32         MeshHandle;
+    uint32         TextureHandle;
+};
+
+struct command_render_skybox
+{
+    command_type   Type;
+    uint32 CubemapHandle;
 };
 
 struct command_load_mesh
 {
     command_type Type;
-    mesh_handle  Where;
-    real32      *Vertices;
+    uint32       MeshHandle;
+    void        *Vertices;
+    uint32       VertexCount;
     uint32      *Indices;
+    uint32       IndexCount;
 };
 
 struct command_load_texture
 {
     command_type   Type;
-    texture_handle Where;
+    uint32         TextureHandle;
     void          *Pixels;
     uint32         Width;
     uint32         Height;
     uint32         SRGB;
+    texture_format Format;
+};
+
+struct command_load_cubemap
+{
+    command_type   Type;
+    uint32         CubemapHandle;
+    void          *Pixels;
+    uint32         FaceSize;
+    texture_format Format;
 };
 
 struct command_render_camera
@@ -104,9 +114,11 @@ inline uint32 CommandSize(command_type Type)
     switch (Type)
     {
         case Render_Mesh:        return (uint32)sizeof(command_render_mesh);
+        case Render_Skybox:      return (uint32)sizeof(command_render_skybox);
         case Render_Camera:      return (uint32)sizeof(command_render_camera);
         case Load_Mesh:          return (uint32)sizeof(command_load_mesh);
         case Load_Texture:       return (uint32)sizeof(command_load_texture);
+        case Load_Cubemap:       return (uint32)sizeof(command_load_cubemap);
         case Set_Pipeline:        return (uint32)sizeof(command_set_pipeline);
         case Set_RenderState:    return (uint32)sizeof(command_set_render_state);
     }
@@ -196,43 +208,74 @@ inline void PushRenderCamera(render_commands *Commands, Matrix4 View, real32 Fov
     }
 }
 
-inline void PushLoadMesh(render_commands *Commands, mesh_handle Where, real32 *Vertices, uint32 *Indices)
+inline void PushLoadMesh(render_commands *Commands, uint32 MeshHandle, void *Vertices, uint32 VertexCount, uint32 *Indices, uint32 IndexCount)
 {
     command_load_mesh *cmd = (command_load_mesh *)PushRenderCommand(Commands, Load_Mesh);
     if (cmd)
     {
-        cmd->Where    = Where;
-        cmd->Vertices = Vertices;
-        cmd->Indices  = Indices;
+        cmd->MeshHandle       = MeshHandle;
+        cmd->Vertices    = Vertices;
+        cmd->VertexCount = VertexCount;
+        cmd->Indices     = Indices;
+        cmd->IndexCount  = IndexCount;
 
         Commands->LoadCount++;
     }
 }
 
-inline void PushLoadTexture(render_commands *Commands, texture_handle Where, void *Pixels, uint32 Width, uint32 Height, uint32 SRGB)
+inline uint32 TextureFormatBytes(texture_format Format)
+{
+    return (Format == TextureFormat_RGBA16F) ? 8u : 4u;
+}
+
+inline void PushLoadTexture(render_commands *Commands, uint32 TextureHandle, void *Pixels, uint32 Width, uint32 Height, uint32 SRGB, texture_format Format)
 {
     command_load_texture *cmd = (command_load_texture *)PushRenderCommand(Commands, Load_Texture);
     if (cmd)
     {
-        cmd->Where  = Where;
+        cmd->TextureHandle  = TextureHandle;
         cmd->Pixels = Pixels;
         cmd->Width  = Width;
         cmd->Height = Height;
         cmd->SRGB   = SRGB;
+        cmd->Format = Format;
 
         Commands->LoadCount++;
     }
 }
 
-inline void PushRenderMesh(render_commands *Commands, Matrix4 Transform, Vector4 Tint, mesh_handle Mesh, texture_handle Texture)
+inline void PushLoadCubemap(render_commands *Commands, uint32 CubemapHandle, void *Pixels, uint32 FaceSize, texture_format Format)
+{
+    command_load_cubemap *cmd = (command_load_cubemap *)PushRenderCommand(Commands, Load_Cubemap);
+    if (cmd)
+    {
+        cmd->CubemapHandle    = CubemapHandle;
+        cmd->Pixels   = Pixels;
+        cmd->FaceSize = FaceSize;
+        cmd->Format   = Format;
+
+        Commands->LoadCount++;
+    }
+}
+
+inline void PushRenderSkybox(render_commands *Commands, uint32 Cubemap)
+{
+    command_render_skybox *cmd = (command_render_skybox *)PushRenderCommand(Commands, Render_Skybox);
+    if (cmd)
+    {
+        cmd->CubemapHandle = Cubemap;
+    }
+}
+
+inline void PushRenderMesh(render_commands *Commands, Matrix4 Transform, Vector4 Tint, uint32 Mesh, uint32 Texture)
 {
     command_render_mesh* cmd = (command_render_mesh *)PushRenderCommand(Commands, Render_Mesh);
     if (cmd)
     {
         cmd->Transform = Transform;
         cmd->Tint      = Tint;
-        cmd->Mesh      = Mesh;
-        cmd->Texture   = Texture;
+        cmd->MeshHandle      = Mesh;
+        cmd->TextureHandle   = Texture;
     }
 }
 
