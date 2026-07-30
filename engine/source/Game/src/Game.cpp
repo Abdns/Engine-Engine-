@@ -21,6 +21,28 @@ internal void GameOutputSound(game_state* GameState, game_sound_output_buffer* S
     }
 }
 
+struct camera_basis
+{
+    Vector3 Right;
+    Vector3 Up;
+    Vector3 Forward;
+};
+
+internal camera_basis GetCameraBasis(real32 Yaw, real32 Pitch)
+{
+    real32 cy = Cos(Yaw);
+    real32 sy = Sin(Yaw);
+    real32 cp = Cos(Pitch);
+    real32 sp = Sin(Pitch);
+
+    camera_basis Result;
+    Result.Forward = Vector3(-sy * cp, sp, -cy * cp);
+    Result.Right   = Vector3(cy, 0.0f, -sy);
+    Result.Up      = Cross(Result.Right, Result.Forward);
+
+    return Result;
+}
+
 internal Matrix4 UpdateCamera(game_state* GameState, game_input* Input)
 {
     real32 MouseX = (real32)Input->MouseX;
@@ -40,13 +62,10 @@ internal Matrix4 UpdateCamera(game_state* GameState, game_input* Input)
 
     real32 Yaw   = GameState->CameraYaw;
     real32 Pitch = GameState->CameraPitch;
-    real32 cy = Cos(Yaw);
-    real32 sy = Sin(Yaw);
-    real32 cp = Cos(Pitch);
-    real32 sp = Sin(Pitch);
 
-    Vector3 Forward = Vector3(-sy * cp, sp, -cy * cp);
-    Vector3 Right   = Vector3(cy, 0.0f, -sy);
+    camera_basis Basis = GetCameraBasis(Yaw, Pitch);
+    Vector3 Forward = Basis.Forward;
+    Vector3 Right   = Basis.Right;
     Vector3 WorldUp = Vector3(0.0f, 1.0f, 0.0f);
 
     game_controller_input* Keyboard = &Input->Controllers[0];
@@ -115,6 +134,9 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         entities* Entities = &GameState->Entities;
         InitEntities(Entities, WorldArena);
 
+        GameState->ColliderCapacity = Entities->MaxCount;
+        GameState->Colliders = PushArray(WorldArena, GameState->ColliderCapacity, collider);
+
         LoadAssetPack("assets.enga", Memory, GameState);
         data_lake* Lake = &GameState->Lake;
         PushLakeToRender(Lake, RenderCommands);
@@ -143,6 +165,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         GameState->CameraPitch = 0.0f;
         GameState->LastMouseX = (real32)Input->MouseX;
         GameState->LastMouseY = (real32)Input->MouseY;
+        GameState->SelectedEntityID = 0;
 
         Memory->IsInitialized = true;
     }
@@ -152,13 +175,27 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     Matrix4 View = UpdateCamera(GameState, Input);
     real32 FovY = 1.047f;
 
+    bool32 ClickedThisFrame = (Input->MouseButtons[0].EndedDown && Input->MouseButtons[0].HalfTransitionCount);
+    if (ClickedThisFrame && Input->RenderWidth > 0 && Input->RenderHeight > 0)
+    {
+        camera_basis Basis = GetCameraBasis(GameState->CameraYaw, GameState->CameraPitch);
+
+        ray PickRay = RayFromScreen((real32)Input->MouseX, (real32)Input->MouseY,
+                                    (real32)Input->RenderWidth, (real32)Input->RenderHeight, FovY,
+                                    GameState->CameraP, Basis.Right, Basis.Up, Basis.Forward);
+
+        uint32 ColliderCount = BuildEntityColliders(&GameState->Entities, &GameState->Lake, GameState->Colliders, GameState->ColliderCapacity);
+
+        GameState->SelectedEntityID = RayCastColliders(PickRay, GameState->Colliders, ColliderCount, 0);
+    }
+
     PushRenderCamera(RenderCommands, View, FovY);
 
     PushRenderPipeline(RenderCommands, Pipeline_Skybox);
     PushRenderSkybox(RenderCommands, GameState->SkyHandle);
 
     PushRenderPipeline(RenderCommands, Pipeline_Unlit);
-    PushEntitiesToRender(&GameState->Entities, RenderCommands);
+    PushEntitiesToRender(&GameState->Entities, RenderCommands, GameState->SelectedEntityID);
 }
 
 extern "C" __declspec(dllexport)

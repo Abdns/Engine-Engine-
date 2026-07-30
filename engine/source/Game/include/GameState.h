@@ -5,6 +5,7 @@
 #include "Memory.h"
 #include "Entity.h"
 #include "DataLake.h"
+#include "Physics.h"
 
 struct game_state
 {
@@ -21,6 +22,10 @@ struct game_state
     real32  CameraPitch;
     real32  LastMouseX;
     real32  LastMouseY;
+
+    collider *Colliders;
+    uint32    ColliderCapacity;
+    uint32    SelectedEntityID;
 };
 
 #endif

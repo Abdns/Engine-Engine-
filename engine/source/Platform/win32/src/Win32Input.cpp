@@ -132,6 +132,11 @@ void Win32ProcessMouseInput(HWND Window, game_input* NewInput, game_input* OldIn
     NewInput->MouseY = MouseP.y;
     NewInput->MouseZ = 0;
 
+    RECT ClientRect;
+    GetClientRect(Window, &ClientRect);
+    NewInput->RenderWidth  = ClientRect.right - ClientRect.left;
+    NewInput->RenderHeight = ClientRect.bottom - ClientRect.top;
+
     Win32ProcessMouseButton(&NewInput->MouseButtons[0], &OldInput->MouseButtons[0],
                             GetKeyState(VK_LBUTTON) & (1 << 15));
     Win32ProcessMouseButton(&NewInput->MouseButtons[1], &OldInput->MouseButtons[1],

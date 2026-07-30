@@ -60,9 +60,6 @@
     <ClCompile Include="..\engine\source\Game\src\Game.cpp">
       <Filter>engine\source\Game\src</Filter>
     </ClCompile>
-    <ClCompile Include="..\engine\source\Physics\Source.cpp">
-      <Filter>engine\source\Physics</Filter>
-    </ClCompile>
     <ClCompile Include="..\engine\source\Platform\win32\Program.cpp">
       <Filter>engine\source\Platform\win32</Filter>
     </ClCompile>
@@ -151,6 +148,9 @@
     </ClInclude>
     <ClInclude Include="..\engine\source\Assets\DataLake.h">
       <Filter>engine\source\Assets</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\source\Physics\Physics.h">
+      <Filter>engine\source\Physics</Filter>
     </ClInclude>
     <ClInclude Include="..\engine\source\Helpers\EngineMath.h">
       <Filter>engine\source\Helpers</Filter>

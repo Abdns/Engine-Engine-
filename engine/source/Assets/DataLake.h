@@ -4,6 +4,7 @@
 #include "Types.h"
 #include "Memory.h"
 #include "Strings.h"
+#include "EngineMath.h"
 #include "EngaFormat.h"
 #include "AssetPack.h"
 
@@ -29,6 +30,8 @@ struct data_lake
     uint32 *MeshVertexCount;
     uint32 *MeshFirstIndex;
     uint32 *MeshIndexCount;
+    Vector3 *MeshBoundsMin;
+    Vector3 *MeshBoundsMax;
     uint32  MeshCount, MeshCapacity;
 
     char   *TextureNames;
@@ -66,6 +69,8 @@ internal void LakeInit(data_lake *Lake, memory_arena *Arena)
     Lake->MeshVertexCount = PushArray(Arena, Lake->MeshCapacity, uint32);
     Lake->MeshFirstIndex  = PushArray(Arena, Lake->MeshCapacity, uint32);
     Lake->MeshIndexCount  = PushArray(Arena, Lake->MeshCapacity, uint32);
+    Lake->MeshBoundsMin   = PushArray(Arena, Lake->MeshCapacity, Vector3);
+    Lake->MeshBoundsMax   = PushArray(Arena, Lake->MeshCapacity, Vector3);
 
     Lake->TextureNames     = PushArray(Arena, (memory_index)Lake->TextureCapacity * ENGA_MAX_ASSET_NAME, char);
     Lake->TextureFirstByte = PushArray(Arena, Lake->TextureCapacity, uint64);
@@ -78,6 +83,11 @@ internal void LakeInit(data_lake *Lake, memory_arena *Arena)
     Lake->CubemapFirstByte = PushArray(Arena, Lake->CubemapCapacity, uint64);
     Lake->CubemapFaceSize  = PushArray(Arena, Lake->CubemapCapacity, uint32);
     Lake->CubemapFormat    = PushArray(Arena, Lake->CubemapCapacity, uint32);
+}
+
+inline Vector3 EngaVertexPosition(enga_vertex *Vertex)
+{
+    return Vector3(Vertex->Pos[0], Vertex->Pos[1], Vertex->Pos[2]);
 }
 
 internal enga_vertex *LakeMeshVertices(data_lake *Lake, uint32 Slot)
@@ -125,6 +135,20 @@ internal uint32 LakeAddMesh(data_lake *Lake, const char *Name, enga_vertex *Vert
 
     CopySize((memory_index)VertexCount * sizeof(enga_vertex), Vertices, LakeMeshVertices(Lake, Slot));
     CopySize((memory_index)IndexCount * sizeof(uint32), Indices, LakeMeshIndices(Lake, Slot));
+
+    Vector3 BoundsMin = Vector3( REAL32_LARGE,  REAL32_LARGE,  REAL32_LARGE);
+    Vector3 BoundsMax = Vector3(-REAL32_LARGE, -REAL32_LARGE, -REAL32_LARGE);
+    for (uint32 VertexIndex = 0; VertexIndex < VertexCount; ++VertexIndex)
+    {
+        Vector3 P = EngaVertexPosition(Vertices + VertexIndex);
+        for (int Axis = 0; Axis < 3; ++Axis)
+        {
+            BoundsMin.E[Axis] = Minimum(BoundsMin.E[Axis], P.E[Axis]);
+            BoundsMax.E[Axis] = Maximum(BoundsMax.E[Axis], P.E[Axis]);
+        }
+    }
+    Lake->MeshBoundsMin[Slot] = BoundsMin;
+    Lake->MeshBoundsMax[Slot] = BoundsMax;
 
     AppendString(Lake->MeshNames + (memory_index)Slot * ENGA_MAX_ASSET_NAME, ENGA_MAX_ASSET_NAME, 0, Name);
 
