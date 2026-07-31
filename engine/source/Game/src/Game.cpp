@@ -1,4 +1,5 @@
 #include "Game.h"
+#include "Camera.cpp"
 #include "Entity.cpp"
 
 internal void GameOutputSound(game_state* GameState, game_sound_output_buffer* SoundBuffer)
@@ -19,71 +20,6 @@ internal void GameOutputSound(game_state* GameState, game_sound_output_buffer* S
 
         GameState->tSine += 2.0f * Pi32 * 1.0f / (real32)WavePeriod;
     }
-}
-
-struct camera_basis
-{
-    Vector3 Right;
-    Vector3 Up;
-    Vector3 Forward;
-};
-
-internal camera_basis GetCameraBasis(real32 Yaw, real32 Pitch)
-{
-    real32 cy = Cos(Yaw);
-    real32 sy = Sin(Yaw);
-    real32 cp = Cos(Pitch);
-    real32 sp = Sin(Pitch);
-
-    camera_basis Result;
-    Result.Forward = Vector3(-sy * cp, sp, -cy * cp);
-    Result.Right   = Vector3(cy, 0.0f, -sy);
-    Result.Up      = Cross(Result.Right, Result.Forward);
-
-    return Result;
-}
-
-internal Matrix4 UpdateCamera(game_state* GameState, game_input* Input)
-{
-    real32 MouseX = (real32)Input->MouseX;
-    real32 MouseY = (real32)Input->MouseY;
-    real32 dMouseX = MouseX - GameState->LastMouseX;
-    real32 dMouseY = MouseY - GameState->LastMouseY;
-    GameState->LastMouseX = MouseX;
-    GameState->LastMouseY = MouseY;
-
-    if (Input->MouseButtons[2].EndedDown)
-    {
-        real32 Sensitivity = 0.003f;
-        GameState->CameraYaw   -= dMouseX * Sensitivity;
-        GameState->CameraPitch -= dMouseY * Sensitivity;
-        GameState->CameraPitch = Clamp(-1.55f, GameState->CameraPitch, 1.55f);
-    }
-
-    real32 Yaw   = GameState->CameraYaw;
-    real32 Pitch = GameState->CameraPitch;
-
-    camera_basis Basis = GetCameraBasis(Yaw, Pitch);
-    Vector3 Forward = Basis.Forward;
-    Vector3 Right   = Basis.Right;
-    Vector3 WorldUp = Vector3(0.0f, 1.0f, 0.0f);
-
-    game_controller_input* Keyboard = &Input->Controllers[0];
-    Vector3 Move = Vector3(0.0f, 0.0f, 0.0f);
-    if (Keyboard->Up.EndedDown)            Move += Forward;
-    if (Keyboard->Down.EndedDown)          Move -= Forward;
-    if (Keyboard->Right.EndedDown)         Move += Right;
-    if (Keyboard->Left.EndedDown)          Move -= Right;
-    if (Keyboard->RightShoulder.EndedDown) Move += WorldUp;
-    if (Keyboard->LeftShoulder.EndedDown)  Move -= WorldUp;
-
-    real32 Speed = 4.0f;
-    GameState->CameraP += (Speed * Input->dtForFrame) * Move;
-
-    Vector3 P = GameState->CameraP;
-    Matrix4 View = Mat4Multiply(Mat4RotationX(-Pitch), Mat4Multiply(Mat4RotationY(-Yaw), Mat4Translation(-P.X, -P.Y, -P.Z)));
-
-    return View;
 }
 
 internal texture_format TextureFormatFromAsset(uint32 AssetFormat)
@@ -160,11 +96,8 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         SetEntityTint(Entities, Sphere, Vector4(1.0f, 0.5f, 0.5f, 1.0f));
         SetEntityTint(Entities, CubeB, Vector4(0.5f, 1.0f, 0.5f, 1.0f));
 
-        GameState->CameraP = Vector3(0.0f, 0.0f, 4.0f);
-        GameState->CameraYaw = 0.0f;
-        GameState->CameraPitch = 0.0f;
-        GameState->LastMouseX = (real32)Input->MouseX;
-        GameState->LastMouseY = (real32)Input->MouseY;
+        InitCamera(&GameState->Camera, Vector3(0.0f, 0.0f, 4.0f), DegToRad(75.0f));
+
         GameState->SelectedEntityID = 0;
 
         Memory->IsInitialized = true;
@@ -172,24 +105,18 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     UpdateEntities(&GameState->Entities, Input->dtForFrame);
 
-    Matrix4 View = UpdateCamera(GameState, Input);
-    real32 FovY = 1.047f;
+    camera* Camera = &GameState->Camera;
+    UpdateCamera(Camera, Input);
 
     bool32 ClickedThisFrame = (Input->MouseButtons[0].EndedDown && Input->MouseButtons[0].HalfTransitionCount);
     if (ClickedThisFrame && Input->RenderWidth > 0 && Input->RenderHeight > 0)
     {
-        camera_basis Basis = GetCameraBasis(GameState->CameraYaw, GameState->CameraPitch);
-
-        ray PickRay = RayFromScreen((real32)Input->MouseX, (real32)Input->MouseY,
-                                    (real32)Input->RenderWidth, (real32)Input->RenderHeight, FovY,
-                                    GameState->CameraP, Basis.Right, Basis.Up, Basis.Forward);
-
+        ray PickRay = CameraRayFromScreen(Camera, (real32)Input->MouseX, (real32)Input->MouseY, (real32)Input->RenderWidth, (real32)Input->RenderHeight);
         uint32 ColliderCount = BuildEntityColliders(&GameState->Entities, &GameState->Lake, GameState->Colliders, GameState->ColliderCapacity);
-
         GameState->SelectedEntityID = RayCastColliders(PickRay, GameState->Colliders, ColliderCount, 0);
     }
 
-    PushRenderCamera(RenderCommands, View, FovY);
+    PushRenderCamera(RenderCommands, CameraView(Camera), Camera->FovY);
 
     PushRenderPipeline(RenderCommands, Pipeline_Skybox);
     PushRenderSkybox(RenderCommands, GameState->SkyHandle);

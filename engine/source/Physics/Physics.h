@@ -40,12 +40,12 @@ internal bool32 RayIntersectsAABB(ray Ray, Vector3 BoxMin, Vector3 BoxMax, real3
 
     for (int Axis = 0; Axis < 3; ++Axis)
     {
-        real32 D = Ray.Direction.E[Axis];
-        real32 O = Ray.Origin.E[Axis];
+        real32 D = Ray.Direction.Elements[Axis];
+        real32 O = Ray.Origin.Elements[Axis];
 
         if (AbsoluteValue(D) < 1.0e-8f)
         {
-            if (O < BoxMin.E[Axis] || O > BoxMax.E[Axis])
+            if (O < BoxMin.Elements[Axis] || O > BoxMax.Elements[Axis])
             {
                 return false;
             }
@@ -53,8 +53,8 @@ internal bool32 RayIntersectsAABB(ray Ray, Vector3 BoxMin, Vector3 BoxMax, real3
         else
         {
             real32 InvD = 1.0f / D;
-            real32 T0 = (BoxMin.E[Axis] - O) * InvD;
-            real32 T1 = (BoxMax.E[Axis] - O) * InvD;
+            real32 T0 = (BoxMin.Elements[Axis] - O) * InvD;
+            real32 T1 = (BoxMax.Elements[Axis] - O) * InvD;
             if (T0 > T1)
             {
                 real32 Swap = T0;

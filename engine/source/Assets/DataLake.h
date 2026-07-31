@@ -143,8 +143,8 @@ internal uint32 LakeAddMesh(data_lake *Lake, const char *Name, enga_vertex *Vert
         Vector3 P = EngaVertexPosition(Vertices + VertexIndex);
         for (int Axis = 0; Axis < 3; ++Axis)
         {
-            BoundsMin.E[Axis] = Minimum(BoundsMin.E[Axis], P.E[Axis]);
-            BoundsMax.E[Axis] = Maximum(BoundsMax.E[Axis], P.E[Axis]);
+            BoundsMin.Elements[Axis] = Minimum(BoundsMin.Elements[Axis], P.Elements[Axis]);
+            BoundsMax.Elements[Axis] = Maximum(BoundsMax.Elements[Axis], P.Elements[Axis]);
         }
     }
     Lake->MeshBoundsMin[Slot] = BoundsMin;

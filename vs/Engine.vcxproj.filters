@@ -65,6 +65,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\engine\source\Game\src\Camera.cpp">
+      <Filter>engine\source\Game\src</Filter>
+    </ClInclude>
     <ClInclude Include="..\engine\source\Game\src\Entity.cpp">
       <Filter>engine\source\Game\src</Filter>
     </ClInclude>
@@ -123,6 +126,9 @@
       <Filter>engine\source\Game\include</Filter>
     </ClInclude>
     <ClInclude Include="..\engine\source\Game\include\GameState.h">
+      <Filter>engine\source\Game\include</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\source\Game\include\Camera.h">
       <Filter>engine\source\Game\include</Filter>
     </ClInclude>
     <ClInclude Include="..\engine\source\Game\include\Entity.h">

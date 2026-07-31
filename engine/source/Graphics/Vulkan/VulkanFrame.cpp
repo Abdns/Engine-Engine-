@@ -125,12 +125,12 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
                 camera->ViewProj = Mat4Multiply(proj, cameraCmd->View);
 
                 Matrix4 *view = &cameraCmd->View;
-                real32 rightScale = 1.0f / proj.E[0][0];
-                real32 upScale    = 1.0f / proj.E[1][1];
+                real32 rightScale = 1.0f / proj.Elements[0][0];
+                real32 upScale    = 1.0f / proj.Elements[1][1];
 
-                camera->SkyRight   = Vector4(view->E[0][0] * rightScale, view->E[1][0] * rightScale, view->E[2][0] * rightScale, 0.0f);
-                camera->SkyUp      = Vector4(view->E[0][1] * upScale,    view->E[1][1] * upScale,    view->E[2][1] * upScale,    0.0f);
-                camera->SkyForward = Vector4(-view->E[0][2], -view->E[1][2], -view->E[2][2], 0.0f);
+                camera->SkyRight   = Vector4(view->Elements[0][0] * rightScale, view->Elements[1][0] * rightScale, view->Elements[2][0] * rightScale, 0.0f);
+                camera->SkyUp      = Vector4(view->Elements[0][1] * upScale,    view->Elements[1][1] * upScale,    view->Elements[2][1] * upScale,    0.0f);
+                camera->SkyForward = Vector4(-view->Elements[0][2], -view->Elements[1][2], -view->Elements[2][2], 0.0f);
             } break;
 
             case Set_Pipeline:

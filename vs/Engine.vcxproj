@@ -35,6 +35,7 @@
     <ClCompile Include="..\engine\source\Platform\win32\Program.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\engine\source\Game\src\Camera.cpp" />
     <ClInclude Include="..\engine\source\Game\src\Entity.cpp" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanRenderer.cpp" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanCore.cpp" />
@@ -55,6 +56,7 @@
     <ClInclude Include="..\engine\source\Platform\win32\src\Win32Window.cpp" />
     <ClInclude Include="..\engine\source\Game\include\Game.h" />
     <ClInclude Include="..\engine\source\Game\include\GameState.h" />
+    <ClInclude Include="..\engine\source\Game\include\Camera.h" />
     <ClInclude Include="..\engine\source\Game\include\Entity.h" />
     <ClInclude Include="..\engine\source\PlatformApi\PlatformAPI.h" />
     <ClInclude Include="..\engine\source\PlatformApi\RenderCommands.h" />

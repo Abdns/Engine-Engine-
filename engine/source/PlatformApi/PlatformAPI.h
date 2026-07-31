@@ -76,6 +76,8 @@ struct game_input
     int32 MouseX;
     int32 MouseY;
     int32 MouseZ;
+    int32 LastMouseX;
+    int32 LastMouseY;
 
     int32 RenderWidth;
     int32 RenderHeight;
