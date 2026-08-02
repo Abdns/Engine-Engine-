@@ -4,10 +4,15 @@ internal render_target CreateRenderTarget(vulkan_context *context, VkFormat form
 {
     render_target target = {};
 
-    if (!CreateStandaloneImage(context, context->swapchainExtent.width, context->swapchainExtent.height,
-                               format, VK_IMAGE_TILING_OPTIMAL,
-                               VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &target.Image, &target.Memory))
+    if (!CreateStandaloneImage(
+        context, 
+        context->swapchainExtent.width, 
+        context->swapchainExtent.height,
+        format, 
+        VK_IMAGE_TILING_OPTIMAL,
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
+        &target.Image, &target.Memory))
     {
         DebugLog("Fail to create render target image\n");
         return target;

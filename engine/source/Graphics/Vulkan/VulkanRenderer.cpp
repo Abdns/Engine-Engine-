@@ -19,7 +19,7 @@ internal bool32 CreateFramePasses(vulkan_context *context)
         return false;
     }
 
-    WriteImageDescriptor(context, GlobalResources.GlobalSet.Handle, BINDING_TEXTURES, TEXTURE_SLOT_SCENE, SceneTarget.View);
+    UpdateImageDescriptorInSet(context, GlobalResources.GlobalSet.Handle, BINDING_TEXTURES, TEXTURE_SLOT_SCENE, SceneTarget.View);
 
     Passes[Pass_Scene] = CreateScenePass(context, SceneTarget.View, context->depthImageView);
     Passes[Pass_Post]  = CreatePostPass(context, context->swapchainImageViews, context->swapchainImageCount);

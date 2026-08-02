@@ -31,7 +31,7 @@ internal bool32 CreateTextureSampler(vulkan_context *context, vulkan_resources *
     return true;
 }
 
-internal void WriteImageDescriptor(vulkan_context *context, VkDescriptorSet set, uint32 binding, uint32 arrayElement, VkImageView view)
+internal void UpdateImageDescriptorInSet(vulkan_context *context, VkDescriptorSet set, uint32 binding, uint32 arrayElement, VkImageView view)
 {
     VkDescriptorImageInfo imageInfo{};
     imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -49,7 +49,7 @@ internal void WriteImageDescriptor(vulkan_context *context, VkDescriptorSet set,
     vkUpdateDescriptorSets(context->device, 1, &write, 0, nullptr);
 }
 
-internal void WriteSamplerDescriptor(vulkan_context *context, VkDescriptorSet set, uint32 binding, VkSampler sampler)
+internal void UpdateSamplerDescriptorInSet(vulkan_context *context, VkDescriptorSet set, uint32 binding, VkSampler sampler)
 {
     VkDescriptorImageInfo imageInfo{};
     imageInfo.sampler = sampler;
@@ -66,7 +66,7 @@ internal void WriteSamplerDescriptor(vulkan_context *context, VkDescriptorSet se
     vkUpdateDescriptorSets(context->device, 1, &write, 0, nullptr);
 }
 
-internal void WriteBufferDescriptor(vulkan_context *context, VkDescriptorSet set, uint32 binding, VkDescriptorType type, VkBuffer buffer, VkDeviceSize range)
+internal void UpdateBufferDescriptorInSet(vulkan_context *context, VkDescriptorSet set, uint32 binding, VkDescriptorType type, VkBuffer buffer, VkDeviceSize range)
 {
     VkDescriptorBufferInfo bufferInfo{};
     bufferInfo.buffer = buffer;
@@ -205,10 +205,10 @@ internal bool32 CreateGlobalResources(vulkan_context *context, vulkan_resources 
     {
         return false;
     }
-    WriteSamplerDescriptor(context, res->GlobalSet.Handle, BINDING_SAMPLER, res->Sampler);
+    UpdateSamplerDescriptorInSet(context, res->GlobalSet.Handle, BINDING_SAMPLER, res->Sampler);
 
     gpu_pool *vertexPool = &res->VertexPool;
-    WriteBufferDescriptor(context, res->GlobalSet.Handle, BINDING_VERTICES, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, vertexPool->Buffer, (VkDeviceSize)vertexPool->Capacity * vertexPool->Stride);
+    UpdateBufferDescriptorInSet(context, res->GlobalSet.Handle, BINDING_VERTICES, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, vertexPool->Buffer, (VkDeviceSize)vertexPool->Capacity * vertexPool->Stride);
 
     gpu_pool *cameraBuffer = &res->CameraBuffer;
     if (!CreatePool(context, cameraBuffer, "Camera", VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, (uint32)sizeof(camera_uniforms), 1))
@@ -216,7 +216,7 @@ internal bool32 CreateGlobalResources(vulkan_context *context, vulkan_resources 
         return false;
     }
 
-    WriteBufferDescriptor(context, res->GlobalSet.Handle, BINDING_CAMERA, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, cameraBuffer->Buffer, cameraBuffer->Stride);
+    UpdateBufferDescriptorInSet(context, res->GlobalSet.Handle, BINDING_CAMERA, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, cameraBuffer->Buffer, cameraBuffer->Stride);
 
     gpu_pool *materialBuffer = &res->MaterialBuffer;
     if (!CreatePool(context, materialBuffer, "Material", VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, (uint32)sizeof(gpu_material), MAX_MATERIALS))
@@ -224,7 +224,7 @@ internal bool32 CreateGlobalResources(vulkan_context *context, vulkan_resources 
         return false;
     }
 
-    WriteBufferDescriptor(context, res->GlobalSet.Handle, BINDING_MATERIALS, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, materialBuffer->Buffer, (VkDeviceSize)materialBuffer->Capacity * materialBuffer->Stride);
+    UpdateBufferDescriptorInSet(context, res->GlobalSet.Handle, BINDING_MATERIALS, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, materialBuffer->Buffer, (VkDeviceSize)materialBuffer->Capacity * materialBuffer->Stride);
 
     return true;
 }
@@ -359,7 +359,7 @@ internal bool32 WriteTexture(uint32 TextureHandle, void *Pixels, uint32 Width, u
 
     texture->View = CreateColorImageView(context->device, texture->Image, format);
 
-    WriteImageDescriptor(context, res->GlobalSet.Handle, BINDING_TEXTURES, slot, texture->View);
+    UpdateImageDescriptorInSet(context, res->GlobalSet.Handle, BINDING_TEXTURES, slot, texture->View);
 
     return true;
 }
@@ -418,7 +418,7 @@ internal bool32 WriteCubemap(uint32 CubemapHandle, void *Pixels, uint32 FaceSize
 
     cube->View = CreateCubeImageView(context->device, cube->Image, format);
 
-    WriteImageDescriptor(context, res->GlobalSet.Handle, BINDING_CUBEMAPS, slot, cube->View);
+    UpdateImageDescriptorInSet(context, res->GlobalSet.Handle, BINDING_CUBEMAPS, slot, cube->View);
 
     return true;
 }
