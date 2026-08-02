@@ -65,9 +65,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\engine\source\Game\src\Camera.cpp">
-      <Filter>engine\source\Game\src</Filter>
-    </ClInclude>
     <ClInclude Include="..\engine\source\Game\src\Entity.cpp">
       <Filter>engine\source\Game\src</Filter>
     </ClInclude>
@@ -80,16 +77,13 @@
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanDevice.cpp">
       <Filter>engine\source\Graphics\Vulkan</Filter>
     </ClInclude>
-    <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanSwapchain.cpp">
+    <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanResources.cpp">
       <Filter>engine\source\Graphics\Vulkan</Filter>
     </ClInclude>
-    <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanDescriptors.cpp">
+    <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanPasses.cpp">
       <Filter>engine\source\Graphics\Vulkan</Filter>
     </ClInclude>
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanPipeline.cpp">
-      <Filter>engine\source\Graphics\Vulkan</Filter>
-    </ClInclude>
-    <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanAssets.cpp">
       <Filter>engine\source\Graphics\Vulkan</Filter>
     </ClInclude>
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanFrame.cpp">
@@ -134,6 +128,9 @@
     <ClInclude Include="..\engine\source\Game\include\Entity.h">
       <Filter>engine\source\Game\include</Filter>
     </ClInclude>
+    <ClInclude Include="..\engine\source\Game\include\Material.h">
+      <Filter>engine\source\Game\include</Filter>
+    </ClInclude>
     <ClInclude Include="..\engine\source\PlatformApi\PlatformAPI.h">
       <Filter>engine\source\PlatformApi</Filter>
     </ClInclude>
@@ -141,6 +138,9 @@
       <Filter>engine\source\PlatformApi</Filter>
     </ClInclude>
     <ClInclude Include="..\engine\source\Graphics\Vulkan\Vulkan.h">
+      <Filter>engine\source\Graphics\Vulkan</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanRender.h">
       <Filter>engine\source\Graphics\Vulkan</Filter>
     </ClInclude>
     <ClInclude Include="..\engine\source\Graphics\Vulkan\shaders\ShaderInterop.h">
@@ -185,6 +185,12 @@
       <Filter>engine\source\Graphics\Vulkan\shaders</Filter>
     </None>
     <None Include="..\engine\source\Graphics\Vulkan\shaders\skybox.frag.hlsl">
+      <Filter>engine\source\Graphics\Vulkan\shaders</Filter>
+    </None>
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\post.vert.hlsl">
+      <Filter>engine\source\Graphics\Vulkan\shaders</Filter>
+    </None>
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\post.frag.hlsl">
       <Filter>engine\source\Graphics\Vulkan\shaders</Filter>
     </None>
     <None Include="..\engine\assets\models\TestShapes.gltf">

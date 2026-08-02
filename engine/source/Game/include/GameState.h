@@ -5,6 +5,7 @@
 #include "Memory.h"
 #include "Camera.h"
 #include "Entity.h"
+#include "Material.h"
 #include "DataLake.h"
 #include "Physics.h"
 
@@ -15,6 +16,7 @@ struct game_state
     memory_arena WorldArena;
     data_lake Lake;
     entities Entities;
+    materials Materials;
 
     uint32 SkyHandle;
 

@@ -10,10 +10,10 @@ enum command_type
     Render_Camera,
     Render_Skybox,
     Set_Pipeline,
-    Set_RenderState,
     Load_Mesh,
     Load_Texture,
     Load_Cubemap,
+    Load_Material,
 };
 
 enum cull_mode
@@ -38,7 +38,10 @@ enum blend_mode
 enum pipeline_type
 {
     Pipeline_Unlit = 0,
+    Pipeline_MeshCount,
+
     Pipeline_Skybox,
+    Pipeline_Post,
     Pipeline_Count,
 };
 
@@ -48,7 +51,7 @@ struct command_render_mesh
     Matrix4        Transform;
     Vector4        Tint;
     uint32         MeshHandle;
-    uint32         TextureHandle;
+    uint32         MaterialHandle;
 };
 
 struct command_render_skybox
@@ -87,6 +90,21 @@ struct command_load_cubemap
     texture_format Format;
 };
 
+struct command_load_material
+{
+    command_type  Type;
+    uint32        MaterialHandle;
+
+    pipeline_type Pipeline;
+    cull_mode     CullMode;
+    blend_mode    BlendMode;
+    bool32        DepthTest;
+    bool32        DepthWrite;
+
+    Vector4       BaseColor;
+    uint32        TextureHandle;
+};
+
 struct command_render_camera
 {
     command_type Type;
@@ -100,15 +118,6 @@ struct command_set_pipeline
     pipeline_type PipelineType;
 };
 
-struct command_set_render_state
-{
-    command_type Type;
-    cull_mode    CullMode;
-    blend_mode   BlendMode;
-    bool32       DepthTest;
-    bool32       DepthWrite;
-};
-
 inline uint32 CommandSize(command_type Type)
 {
     switch (Type)
@@ -119,8 +128,8 @@ inline uint32 CommandSize(command_type Type)
         case Load_Mesh:          return (uint32)sizeof(command_load_mesh);
         case Load_Texture:       return (uint32)sizeof(command_load_texture);
         case Load_Cubemap:       return (uint32)sizeof(command_load_cubemap);
-        case Set_Pipeline:        return (uint32)sizeof(command_set_pipeline);
-        case Set_RenderState:    return (uint32)sizeof(command_set_render_state);
+        case Load_Material:      return (uint32)sizeof(command_load_material);
+        case Set_Pipeline:       return (uint32)sizeof(command_set_pipeline);
     }
     return 0;
 }
@@ -186,18 +195,6 @@ inline void PushRenderPipeline(render_commands* Commands, pipeline_type type)
     }
 }
 
-inline void PushRenderState(render_commands *Commands, cull_mode CullMode, blend_mode BlendMode, bool32 DepthTest, bool32 DepthWrite)
-{
-    command_set_render_state *cmd = (command_set_render_state *)PushRenderCommand(Commands, Set_RenderState);
-    if (cmd)
-    {
-        cmd->CullMode   = CullMode;
-        cmd->BlendMode  = BlendMode;
-        cmd->DepthTest  = DepthTest;
-        cmd->DepthWrite = DepthWrite;
-    }
-}
-
 inline void PushRenderCamera(render_commands *Commands, Matrix4 View, real32 FovY)
 {
     command_render_camera *cmd = (command_render_camera *)PushRenderCommand(Commands, Render_Camera);
@@ -258,6 +255,24 @@ inline void PushLoadCubemap(render_commands *Commands, uint32 CubemapHandle, voi
     }
 }
 
+inline void PushLoadMaterial(render_commands *Commands, uint32 MaterialHandle, pipeline_type Pipeline, cull_mode CullMode, blend_mode BlendMode, bool32 DepthTest, bool32 DepthWrite, Vector4 BaseColor, uint32 TextureHandle)
+{
+    command_load_material *cmd = (command_load_material *)PushRenderCommand(Commands, Load_Material);
+    if (cmd)
+    {
+        cmd->MaterialHandle = MaterialHandle;
+        cmd->Pipeline       = Pipeline;
+        cmd->CullMode       = CullMode;
+        cmd->BlendMode      = BlendMode;
+        cmd->DepthTest      = DepthTest;
+        cmd->DepthWrite     = DepthWrite;
+        cmd->BaseColor      = BaseColor;
+        cmd->TextureHandle  = TextureHandle;
+
+        Commands->LoadCount++;
+    }
+}
+
 inline void PushRenderSkybox(render_commands *Commands, uint32 Cubemap)
 {
     command_render_skybox *cmd = (command_render_skybox *)PushRenderCommand(Commands, Render_Skybox);
@@ -267,15 +282,15 @@ inline void PushRenderSkybox(render_commands *Commands, uint32 Cubemap)
     }
 }
 
-inline void PushRenderMesh(render_commands *Commands, Matrix4 Transform, Vector4 Tint, uint32 Mesh, uint32 Texture)
+inline void PushRenderMesh(render_commands *Commands, Matrix4 Transform, Vector4 Tint, uint32 Mesh, uint32 Material)
 {
     command_render_mesh* cmd = (command_render_mesh *)PushRenderCommand(Commands, Render_Mesh);
     if (cmd)
     {
-        cmd->Transform = Transform;
-        cmd->Tint      = Tint;
-        cmd->MeshHandle      = Mesh;
-        cmd->TextureHandle   = Texture;
+        cmd->Transform      = Transform;
+        cmd->Tint           = Tint;
+        cmd->MeshHandle     = Mesh;
+        cmd->MaterialHandle = Material;
     }
 }
 

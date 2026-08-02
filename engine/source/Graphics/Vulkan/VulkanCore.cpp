@@ -43,7 +43,7 @@ internal VkImageCreateInfo TextureImageInfo(uint32 width, uint32 height, VkForma
     return imageInfo;
 }
 
-internal bool32 CreateImagePool(vulkan_context *context)
+internal bool32 CreateImagePool(vulkan_context *context, image_memory_pool *pool)
 {
     VkImageCreateInfo probeInfo = TextureImageInfo(1, 1, VK_FORMAT_R8G8B8A8_UNORM, 1);
 
@@ -70,26 +70,26 @@ internal bool32 CreateImagePool(vulkan_context *context)
     allocInfo.allocationSize = IMAGE_POOL_SIZE;
     allocInfo.memoryTypeIndex = memoryType;
 
-    if (vkAllocateMemory(context->device, &allocInfo, nullptr, &context->ImagePool.Memory) != VK_SUCCESS)
+    if (vkAllocateMemory(context->device, &allocInfo, nullptr, &pool->Memory) != VK_SUCCESS)
     {
         DebugLog("Fail to allocate image pool\n");
         return false;
     }
 
-    context->ImagePool.Capacity = IMAGE_POOL_SIZE;
-    context->ImagePool.Used     = 0;
+    pool->Capacity = IMAGE_POOL_SIZE;
+    pool->Used     = 0;
 
     DebugLog("Image pool created (%llu bytes)\n", (uint64)IMAGE_POOL_SIZE);
     return true;
 }
 
-internal void DestroyImagePool(vulkan_context *context)
+internal void DestroyImagePool(vulkan_context *context, image_memory_pool *pool)
 {
-    vkFreeMemory(context->device, context->ImagePool.Memory, nullptr);
-    context->ImagePool = {};
+    vkFreeMemory(context->device, pool->Memory, nullptr);
+    *pool = {};
 }
 
-internal bool32 CreatePooledImage(vulkan_context *context, uint32 width, uint32 height, VkFormat format, uint32 layers, VkImage *outImage)
+internal bool32 CreatePooledImage(vulkan_context *context, image_memory_pool *pool, uint32 width, uint32 height, VkFormat format, uint32 layers, VkImage *outImage)
 {
     VkImageCreateInfo imageInfo = TextureImageInfo(width, height, format, layers);
 
@@ -102,7 +102,6 @@ internal bool32 CreatePooledImage(vulkan_context *context, uint32 width, uint32 
     VkMemoryRequirements memReq;
     vkGetImageMemoryRequirements(context->device, *outImage, &memReq);
 
-    image_memory_pool *pool = &context->ImagePool;
     VkDeviceSize offset = AlignPow2(pool->Used, memReq.alignment);
 
     if (offset + memReq.size > pool->Capacity)

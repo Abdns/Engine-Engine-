@@ -16,7 +16,7 @@ internal void InitEntities(entities* Entities, memory_arena* WorldArena)
     Entities->AngularVelocity = PushArray(WorldArena, Entities->MaxCount, Vector3);
     Entities->Tint = PushArray(WorldArena, Entities->MaxCount, Vector4);
     Entities->MeshHandle = PushArray(WorldArena, Entities->MaxCount, uint32);
-    Entities->TextureHandle = PushArray(WorldArena, Entities->MaxCount, uint32);
+    Entities->MaterialHandle = PushArray(WorldArena, Entities->MaxCount, uint32);
 }
 
 internal Matrix4 EntityTransform(entities* Entities, uint32 Index)
@@ -43,7 +43,7 @@ internal uint32 FindEntityIndex(entities* Entities, uint32 EntityID)
     return 0;
 }
 
-internal uint32 AddEntity(entities* Entities, Vector3 Position, uint32 MeshHandle, uint32 TextureHandle)
+internal uint32 AddEntity(entities* Entities, Vector3 Position, uint32 MeshHandle, uint32 MaterialHandle)
 {
     Assert(Entities->Count < Entities->MaxCount);
     uint32 Index = Entities->Count++;
@@ -55,8 +55,8 @@ internal uint32 AddEntity(entities* Entities, Vector3 Position, uint32 MeshHandl
     Entities->Velocity[Index]        = Vector3(0.0f, 0.0f, 0.0f);
     Entities->AngularVelocity[Index] = Vector3(0.0f, 0.0f, 0.0f);
     Entities->Tint[Index]            = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
-    Entities->MeshHandle[Index]            = MeshHandle;
-    Entities->TextureHandle[Index]         = TextureHandle;
+    Entities->MeshHandle[Index]      = MeshHandle;
+    Entities->MaterialHandle[Index]  = MaterialHandle;
 
     return EntityID;
 }
@@ -119,6 +119,6 @@ internal void PushEntitiesToRender(entities* Entities, render_commands* Commands
             Tint = Vector4(1.0f, 0.85f, 0.2f, Tint.W);
         }
 
-        PushRenderMesh(Commands, EntityTransform(Entities, EntityIndex), Tint, Entities->MeshHandle[EntityIndex], Entities->TextureHandle[EntityIndex]);
+        PushRenderMesh(Commands, EntityTransform(Entities, EntityIndex), Tint, Entities->MeshHandle[EntityIndex], Entities->MaterialHandle[EntityIndex]);
     }
 }

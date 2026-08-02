@@ -1,5 +1,4 @@
 #include "Game.h"
-#include "Camera.cpp"
 #include "Entity.cpp"
 
 internal void GameOutputSound(game_state* GameState, game_sound_output_buffer* SoundBuffer)
@@ -83,18 +82,21 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         GameState->SkyHandle = LakeGetCubemapHandle(Lake, "sky");
 
+        materials* Materials = &GameState->Materials;
+        uint32 MatPlain = AddMaterial(Materials, UnlitMaterial(Vector4(1.0f, 1.0f, 1.0f, 1.0f), TexTestHandle));
+        uint32 MatPink  = AddMaterial(Materials, UnlitMaterial(Vector4(1.0f, 0.5f, 0.5f, 1.0f), TexTestHandle));
+        uint32 MatGreen = AddMaterial(Materials, UnlitMaterial(Vector4(0.5f, 1.0f, 0.5f, 1.0f), TexTestHandle));
+        PushMaterialsToRender(Materials, RenderCommands);
+
         Vector3 TumbleSpin = Vector3(0.7f, 1.0f, 0.0f);
 
-        uint32 CubeA = AddEntity(Entities, Vector3(-1.5f, 0.0f, 0.0f), MeshCubeHandle, TexTestHandle);
-        uint32 Sphere = AddEntity(Entities, Vector3(0.0f, 0.0f, -1.5f), MeshSphereHandle, TexTestHandle);
-        uint32 CubeB = AddEntity(Entities, Vector3(1.5f, 0.0f, 0.0f), MeshCubeHandle, TexTestHandle);
+        uint32 CubeA = AddEntity(Entities, Vector3(-1.5f, 0.0f, 0.0f), MeshCubeHandle, MatPlain);
+        uint32 Sphere = AddEntity(Entities, Vector3(0.0f, 0.0f, -1.5f), MeshSphereHandle, MatPink);
+        uint32 CubeB = AddEntity(Entities, Vector3(1.5f, 0.0f, 0.0f), MeshCubeHandle, MatGreen);
 
         SetEntityAngularVelocity(Entities, CubeA, TumbleSpin);
         SetEntityAngularVelocity(Entities, Sphere, TumbleSpin);
         SetEntityAngularVelocity(Entities, CubeB, TumbleSpin);
-
-        SetEntityTint(Entities, Sphere, Vector4(1.0f, 0.5f, 0.5f, 1.0f));
-        SetEntityTint(Entities, CubeB, Vector4(0.5f, 1.0f, 0.5f, 1.0f));
 
         InitCamera(&GameState->Camera, Vector3(0.0f, 0.0f, 4.0f), DegToRad(75.0f));
 
@@ -121,7 +123,6 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     PushRenderPipeline(RenderCommands, Pipeline_Skybox);
     PushRenderSkybox(RenderCommands, GameState->SkyHandle);
 
-    PushRenderPipeline(RenderCommands, Pipeline_Unlit);
     PushEntitiesToRender(&GameState->Entities, RenderCommands, GameState->SelectedEntityID);
 }
 

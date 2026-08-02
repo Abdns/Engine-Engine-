@@ -35,15 +35,13 @@
     <ClCompile Include="..\engine\source\Platform\win32\Program.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\engine\source\Game\src\Camera.cpp" />
     <ClInclude Include="..\engine\source\Game\src\Entity.cpp" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanRenderer.cpp" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanCore.cpp" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanDevice.cpp" />
-    <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanSwapchain.cpp" />
-    <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanDescriptors.cpp" />
+    <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanResources.cpp" />
+    <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanPasses.cpp" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanPipeline.cpp" />
-    <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanAssets.cpp" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanFrame.cpp" />
     <ClInclude Include="..\engine\source\Platform\win32\src\Win32FileIO.cpp" />
     <ClInclude Include="..\engine\source\Platform\win32\src\Win32GameCode.cpp" />
@@ -58,6 +56,7 @@
     <ClInclude Include="..\engine\source\Game\include\GameState.h" />
     <ClInclude Include="..\engine\source\Game\include\Camera.h" />
     <ClInclude Include="..\engine\source\Game\include\Entity.h" />
+    <ClInclude Include="..\engine\source\Game\include\Material.h" />
     <ClInclude Include="..\engine\source\PlatformApi\PlatformAPI.h" />
     <ClInclude Include="..\engine\source\PlatformApi\RenderCommands.h" />
     <ClInclude Include="..\engine\source\Assets\EngaFormat.h" />
@@ -65,6 +64,7 @@
     <ClInclude Include="..\engine\source\Assets\DataLake.h" />
     <ClInclude Include="..\engine\source\Physics\Physics.h" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\Vulkan.h" />
+    <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanRender.h" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\shaders\ShaderInterop.h" />
     <ClInclude Include="..\engine\source\Helpers\EngineMath.h" />
     <ClInclude Include="..\engine\source\Helpers\Intrinsics.h" />
@@ -77,6 +77,8 @@
     <None Include="..\engine\source\Graphics\Vulkan\shaders\unlit.frag.hlsl" />
     <None Include="..\engine\source\Graphics\Vulkan\shaders\skybox.vert.hlsl" />
     <None Include="..\engine\source\Graphics\Vulkan\shaders\skybox.frag.hlsl" />
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\post.vert.hlsl" />
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\post.frag.hlsl" />
     <None Include="..\engine\assets\models\TestShapes.gltf" />
     <None Include="..\engine\assets\models\TestShapes.bin" />
     <None Include="..\engine\assets\models\TestTexture.tga" />

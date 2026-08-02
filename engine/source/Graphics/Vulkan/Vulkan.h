@@ -11,83 +11,12 @@
 #include <vulkan/vulkan.h>
 
 #include "shaders/ShaderInterop.h"
+#include "VulkanRender.h"
 
 static_assert(sizeof(vertex) == sizeof(enga_vertex), "vertex must match the packed asset layout");
 
 #define MAX_SURFACE_FORMATS   64
 #define MAX_PRESENT_MODES     8
-#define MAX_SWAPCHAIN_IMAGES  8
-#define MAX_MESHES            256
-#define MAX_POOL_VERTICES     (1u << 20)
-#define MAX_POOL_INDICES      (1u << 21)
-#define IMAGE_POOL_SIZE       Megabytes(64)
-
-struct vulkan_shader
-{
-    platform_file_raw vert;
-    platform_file_raw frag;
-};
-
-struct gpu_pool
-{
-    VkBuffer       Buffer;
-    VkDeviceMemory Memory;
-    void          *Mapped;
-    uint32         Stride;
-    uint32         Capacity;
-    uint32         Used;
-};
-
-struct gpu_mesh
-{
-    uint32 FirstVertex;
-    uint32 VertexCount;
-    uint32 FirstIndex;
-    uint32 IndexCount;
-};
-
-struct gpu_texture
-{
-    VkImage     Image;
-    VkImageView View;
-};
-
-struct image_memory_pool
-{
-    VkDeviceMemory Memory;
-    VkDeviceSize   Capacity;
-    VkDeviceSize   Used;
-};
-
-struct descriptor_set
-{
-    VkDescriptorSetLayout Layout;
-    VkDescriptorSet       Handle;
-};
-
-struct render_state
-{
-    VkCullModeFlags CullMode;
-    VkBool32        DepthTest;
-    VkBool32        DepthWrite;
-    VkBool32        AlphaBlend;
-    bool32          Valid;
-};
-
-struct render_pipeline
-{
-    const char *ShaderName;
-
-    uint32             PushConstantSize;
-    VkShaderStageFlags PushConstantStages;
-
-    VkPrimitiveTopology Topology;
-    VkFrontFace         FrontFace;
-    render_state        DefaultState;
-
-    VkPipeline       Handle;
-    VkPipelineLayout Layout;
-};
 
 struct vulkan_context
 {
@@ -108,23 +37,10 @@ struct vulkan_context
     VkFormat swapchainImageFormat;
     VkExtent2D swapchainExtent;
 
-    VkRenderPass renderPass;
-
     VkImage depthImage;
     VkDeviceMemory depthImageMemory;
     VkImageView depthImageView;
     VkFormat depthFormat;
-
-    descriptor_set   GlobalSet;
-
-    VkDescriptorPool GlobalDescriptorPool;
-    VkSampler        Sampler;
-    gpu_pool         CameraBuffer;
-
-    render_pipeline Pipelines[Pipeline_Count];
-    uint32 PipelineCount;
-
-    VkFramebuffer swapchainFramebuffers[MAX_SWAPCHAIN_IMAGES];
 
     VkCommandPool commandPool;
     VkCommandBuffer commandBuffer;
@@ -132,14 +48,6 @@ struct vulkan_context
     VkSemaphore imageAvailableSemaphore;
     VkSemaphore renderFinishedSemaphores[MAX_SWAPCHAIN_IMAGES];
     VkFence inFlightFence;
-
-    gpu_pool VertexPool;
-    gpu_pool IndexPool;
-
-    gpu_mesh          Meshes[MAX_MESHES];
-    gpu_texture       Textures[MAX_TEXTURES];
-    gpu_texture       Cubemaps[MAX_CUBEMAPS];
-    image_memory_pool ImagePool;
 
     bool32                          DynamicBlend;
     PFN_vkCmdSetColorBlendEnableEXT CmdSetColorBlendEnableEXT;
@@ -165,6 +73,5 @@ struct swapchain_support_details
 internal void InitVulkan(HINSTANCE hinstance, HWND hwnd);
 internal void RenderVulkanFrame(render_commands *Commands);
 internal void ShutdownVulkan();
-
 
 #endif

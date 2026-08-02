@@ -55,7 +55,7 @@ internal VkShaderModule CreateShaderModule(VkDevice device, void *code, uint32 c
     return module;
 }
 
-internal bool32 CreatePipelineLayout(vulkan_context *context, render_pipeline *pipeline)
+internal bool32 CreatePipelineLayout(vulkan_context *context, render_pipeline *pipeline, VkDescriptorSetLayout setLayout)
 {
     VkPushConstantRange pushRange{};
     pushRange.stageFlags = pipeline->PushConstantStages;
@@ -65,7 +65,7 @@ internal bool32 CreatePipelineLayout(vulkan_context *context, render_pipeline *p
     VkPipelineLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     layoutInfo.setLayoutCount = 1;
-    layoutInfo.pSetLayouts = &context->GlobalSet.Layout;
+    layoutInfo.pSetLayouts = &setLayout;
     if (pipeline->PushConstantSize > 0)
     {
         layoutInfo.pushConstantRangeCount = 1;
@@ -81,7 +81,7 @@ internal bool32 CreatePipelineLayout(vulkan_context *context, render_pipeline *p
     return true;
 }
 
-internal bool32 CreateGraphicsPipeline(vulkan_context *context, render_pipeline *pipeline)
+internal bool32 CreateGraphicsPipeline(vulkan_context *context, render_pipeline *pipeline, VkRenderPass renderPass)
 {
     vulkan_shader shader = LoadShader(pipeline->ShaderName);
     if (!shader.vert.Data || !shader.frag.Data)
@@ -201,7 +201,7 @@ internal bool32 CreateGraphicsPipeline(vulkan_context *context, render_pipeline 
     pipelineInfo.pColorBlendState = &colorBlending;
     pipelineInfo.pDynamicState = &dynamicState;
     pipelineInfo.layout = pipeline->Layout;
-    pipelineInfo.renderPass = context->renderPass;
+    pipelineInfo.renderPass = renderPass;
     pipelineInfo.subpass = 0;
     pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
     pipelineInfo.basePipelineIndex = -1;
@@ -267,35 +267,32 @@ internal render_pipeline SkyboxPipeline()
     return pipeline;
 }
 
-internal bool32 CreatePipeline(vulkan_context* context, pipeline_type pipelineType)
+internal render_pipeline PostPipeline()
 {
-    render_pipeline *pipeline = &context->Pipelines[pipelineType];
+    render_pipeline pipeline = {};
+    pipeline.ShaderName = "post";
 
-    switch (pipelineType)
-    {
-        case Pipeline_Unlit:
-        {
-            *pipeline = UnlitPipeline();
-        } break;
+    pipeline.PushConstantSize   = (uint32)sizeof(draw_push_constants);
+    pipeline.PushConstantStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
-        case Pipeline_Skybox:
-        {
-            *pipeline = SkyboxPipeline();
-        } break;
+    pipeline.Topology  = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    pipeline.FrontFace = VK_FRONT_FACE_CLOCKWISE;
 
-        default:
-        {
-            return false;
-        }
-    }
+    pipeline.DefaultState.CullMode   = VK_CULL_MODE_NONE;
+    pipeline.DefaultState.DepthTest  = VK_FALSE;
+    pipeline.DefaultState.DepthWrite = VK_FALSE;
+    pipeline.DefaultState.AlphaBlend = VK_FALSE;
 
-    if (!CreatePipelineLayout(context, pipeline) || !CreateGraphicsPipeline(context, pipeline))
+    return pipeline;
+}
+
+internal bool32 BuildPipeline(vulkan_context *context, render_pipeline *pipeline, VkRenderPass renderPass, VkDescriptorSetLayout setLayout)
+{
+    if (!CreatePipelineLayout(context, pipeline, setLayout) || !CreateGraphicsPipeline(context, pipeline, renderPass))
     {
         DestroyRenderPipeline(context, pipeline);
         return false;
     }
-
-    context->PipelineCount++;
 
     return true;
 }
