@@ -46,6 +46,11 @@ internal void BindPipelineState(vulkan_context *context, VkCommandBuffer cmd, re
 {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->Handle);
 
+    if (pipeline->Set.Handle != VK_NULL_HANDLE)
+    {
+        BindPipelineSet(cmd, &pipeline->Set, pipeline->Layout);
+    }
+
     vkCmdSetPrimitiveTopology(cmd, PIPELINE_TOPOLOGY);
     vkCmdSetFrontFace(cmd, PIPELINE_FRONT_FACE);
     vkCmdSetDepthCompareOp(cmd, VK_COMPARE_OP_LESS);

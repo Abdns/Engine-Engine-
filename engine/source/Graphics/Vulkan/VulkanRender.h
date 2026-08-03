@@ -154,6 +154,7 @@ struct pipeline_desc
 
     VkBool32 DepthTest;
     VkBool32 DepthWrite;
+    bool32   OwnSet;
 };
 
 struct render_pipeline
@@ -163,6 +164,7 @@ struct render_pipeline
 
     VkPipeline       Handle;
     VkPipelineLayout Layout;
+    descriptor_set   Set;
 };
 
 struct vulkan_frame

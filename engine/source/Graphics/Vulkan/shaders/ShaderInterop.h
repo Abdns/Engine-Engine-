@@ -10,6 +10,7 @@
 #endif
 
 #define SET_GLOBAL       0
+#define SET_PIPELINE     1
 
 #define BINDING_TEXTURES  0
 #define BINDING_SAMPLER   1
@@ -18,11 +19,11 @@
 #define BINDING_CUBEMAPS  4
 #define BINDING_MATERIALS 5
 
+#define BINDING_PIPELINE_IMAGE 0
+
 #define MAX_TEXTURES  16
 #define MAX_CUBEMAPS  4
 #define MAX_MATERIALS 64
-
-#define TEXTURE_SLOT_SCENE (MAX_TEXTURES - 1)
 
 struct vertex
 {

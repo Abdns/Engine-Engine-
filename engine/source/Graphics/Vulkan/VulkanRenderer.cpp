@@ -13,9 +13,9 @@ global_variable render_pipeline Pipelines[Pipeline_Count];
 
 global_variable pipeline_desc PipelineDescs[] =
 {
-    { "unlit",  Pass_Scene, VK_TRUE,  VK_TRUE  },
-    { "skybox", Pass_Scene, VK_FALSE, VK_FALSE },
-    { "post",   Pass_Post,  VK_FALSE, VK_FALSE },
+    { "unlit",  Pass_Scene, VK_TRUE,  VK_TRUE,  false },
+    { "skybox", Pass_Scene, VK_FALSE, VK_FALSE, false },
+    { "post",   Pass_Post,  VK_FALSE, VK_FALSE, true  },
 };
 
 static_assert(ArrayCount(PipelineDescs) == Pipeline_Count, "PipelineDescs must describe every pipeline_type");
@@ -27,8 +27,6 @@ internal bool32 CreateFramePasses(vulkan_context *context)
     {
         return false;
     }
-
-    UpdateImageDescriptorInSet(context, GlobalResources.GlobalSet.Handle, BINDING_TEXTURES, TEXTURE_SLOT_SCENE, SceneTarget.View);
 
     Passes[Pass_Scene] = CreateScenePass(context, SceneTarget.View, context->depthImageView);
     Passes[Pass_Post]  = CreatePostPass(context, context->swapchainImageViews, context->swapchainImageCount);
@@ -49,6 +47,14 @@ internal void DestroyFramePasses(vulkan_context *context)
     DestroyRenderTarget(context, &SceneTarget);
 }
 
+internal void WritePipelineResources(vulkan_context *context)
+{
+    if (Pipelines[Pipeline_Post].Set.Handle != VK_NULL_HANDLE)
+    {
+        UpdateImageDescriptorInSet(context, Pipelines[Pipeline_Post].Set.Handle, BINDING_PIPELINE_IMAGE, 0, SceneTarget.View);
+    }
+}
+
 internal void ResizeRenderer(vulkan_context *context)
 {
     if (!RecreateSwapchain(context))
@@ -57,7 +63,11 @@ internal void ResizeRenderer(vulkan_context *context)
     }
 
     DestroyFramePasses(context);
-    CreateFramePasses(context);
+
+    if (CreateFramePasses(context))
+    {
+        WritePipelineResources(context);
+    }
 }
 
 internal void InitVulkan(HINSTANCE hinstance, HWND hwnd)
@@ -106,18 +116,19 @@ internal void InitVulkan(HINSTANCE hinstance, HWND hwnd)
     }
 
     if (!CreateGlobalResources(context, &GlobalResources)) return;
-
     if (!CreateFramePasses(context))                   return;
 
     for (uint32 i = 0; i < Pipeline_Count; ++i)
     {
         pipeline_desc *desc = &PipelineDescs[i];
 
-        if (!BuildPipeline(context, &Pipelines[i], desc, Passes[desc->Pass].Handle, GlobalResources.GlobalSet.Layout))
+        if (!BuildPipeline(context, &GlobalResources, &Pipelines[i], desc, Passes[desc->Pass].Handle))
         {
             return;
         }
     }
+
+    WritePipelineResources(context);
 
     DebugLog("Vulkan ready\n");
 }
@@ -128,6 +139,12 @@ internal void RenderVulkanFrame(render_commands *Commands)
 
     if (Pipelines[Pipeline_Unlit].Handle == VK_NULL_HANDLE)
     {
+        return;
+    }
+
+    if (Passes[Pass_Scene].Handle == VK_NULL_HANDLE || Passes[Pass_Post].Handle == VK_NULL_HANDLE)
+    {
+        ResizeRenderer(context);
         return;
     }
 

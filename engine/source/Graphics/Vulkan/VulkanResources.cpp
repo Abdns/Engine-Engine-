@@ -159,7 +159,7 @@ internal bool32 CreateGlobalResources(vulkan_context *context, vulkan_resources 
 
     VkDescriptorPoolSize poolSizes[4] = {};
     poolSizes[0].type            = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-    poolSizes[0].descriptorCount = MAX_TEXTURES + MAX_CUBEMAPS;
+    poolSizes[0].descriptorCount = MAX_TEXTURES + MAX_CUBEMAPS + Pipeline_Count;
     poolSizes[1].type            = VK_DESCRIPTOR_TYPE_SAMPLER;
     poolSizes[1].descriptorCount = 1;
     poolSizes[2].type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -172,7 +172,7 @@ internal bool32 CreateGlobalResources(vulkan_context *context, vulkan_resources 
     poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
     poolInfo.poolSizeCount = (uint32)ArrayCount(poolSizes);
     poolInfo.pPoolSizes = poolSizes;
-    poolInfo.maxSets = 1;
+    poolInfo.maxSets = 1 + Pipeline_Count;
 
     if (vkCreateDescriptorPool(context->device, &poolInfo, nullptr, &res->DescriptorPool) != VK_SUCCESS)
     {
@@ -226,9 +226,43 @@ internal void DestroyGlobalResources(vulkan_context *context, vulkan_resources *
     res->GlobalSet      = {};
 }
 
+internal bool32 CreatePipelineSet(vulkan_context *context, vulkan_resources *res, descriptor_set *set)
+{
+    VkDescriptorSetLayoutBinding binding = {};
+    binding.binding         = BINDING_PIPELINE_IMAGE;
+    binding.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    binding.descriptorCount = 1;
+    binding.stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkDescriptorSetLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = 1;
+    layoutInfo.pBindings    = &binding;
+
+    if (vkCreateDescriptorSetLayout(context->device, &layoutInfo, nullptr, &set->Layout) != VK_SUCCESS)
+    {
+        DebugLog("Fail to create pipeline descriptor set layout\n");
+        return false;
+    }
+
+    return AllocateDescriptorSet(context, res->DescriptorPool, set->Layout, &set->Handle);
+}
+
+internal void DestroyPipelineSet(vulkan_context *context, descriptor_set *set)
+{
+    vkDestroyDescriptorSetLayout(context->device, set->Layout, nullptr);
+
+    *set = {};
+}
+
 internal void BindGlobalSet(VkCommandBuffer cmd, vulkan_resources *res, VkPipelineLayout layout)
 {
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1, &res->GlobalSet.Handle, 0, nullptr);
+}
+
+internal void BindPipelineSet(VkCommandBuffer cmd, descriptor_set *set, VkPipelineLayout layout)
+{
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1, 1, &set->Handle, 0, nullptr);
 }
 
 internal void *CameraUniforms(vulkan_resources *res)
@@ -293,9 +327,9 @@ internal bool32 WriteTexture(uint32 TextureHandle, void *Pixels, uint32 Width, u
     vulkan_context   *context = &GlobalVulkan;
     vulkan_resources *res     = &GlobalResources;
 
-    if (!TextureHandle || TextureHandle > TEXTURE_SLOT_SCENE)
+    if (!TextureHandle || TextureHandle > MAX_TEXTURES)
     {
-        DebugLog("Texture id %u out of range (max %d, last slot reserved for the scene target)\n", TextureHandle, TEXTURE_SLOT_SCENE);
+        DebugLog("Texture id %u out of range (max %d)\n", TextureHandle, MAX_TEXTURES);
         return false;
     }
 

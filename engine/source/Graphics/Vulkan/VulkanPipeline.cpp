@@ -55,17 +55,19 @@ internal VkShaderModule CreateShaderModule(VkDevice device, void *code, uint32 c
     return module;
 }
 
-internal bool32 CreatePipelineLayout(vulkan_context *context, render_pipeline *pipeline, VkDescriptorSetLayout setLayout)
+internal bool32 CreatePipelineLayout(vulkan_context *context, render_pipeline *pipeline, VkDescriptorSetLayout globalSetLayout, VkDescriptorSetLayout pipelineSetLayout)
 {
     VkPushConstantRange pushRange{};
     pushRange.stageFlags = PIPELINE_PUSH_STAGES;
     pushRange.offset = 0;
     pushRange.size = (uint32)sizeof(draw_push_constants);
 
+    VkDescriptorSetLayout setLayouts[2] = { globalSetLayout, pipelineSetLayout };
+
     VkPipelineLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    layoutInfo.setLayoutCount = 1;
-    layoutInfo.pSetLayouts = &setLayout;
+    layoutInfo.setLayoutCount = (pipelineSetLayout != VK_NULL_HANDLE) ? 2 : 1;
+    layoutInfo.pSetLayouts = setLayouts;
     layoutInfo.pushConstantRangeCount = 1;
     layoutInfo.pPushConstantRanges = &pushRange;
 
@@ -222,11 +224,12 @@ internal void DestroyRenderPipeline(vulkan_context *context, render_pipeline *pi
 {
     vkDestroyPipeline(context->device, pipeline->Handle, nullptr);
     vkDestroyPipelineLayout(context->device, pipeline->Layout, nullptr);
+    DestroyPipelineSet(context, &pipeline->Set);
 
     *pipeline = {};
 }
 
-internal bool32 BuildPipeline(vulkan_context *context, render_pipeline *pipeline, pipeline_desc *desc, VkRenderPass renderPass, VkDescriptorSetLayout setLayout)
+internal bool32 BuildPipeline(vulkan_context *context, vulkan_resources *res, render_pipeline *pipeline, pipeline_desc *desc, VkRenderPass renderPass)
 {
     pipeline->Desc = *desc;
 
@@ -235,7 +238,13 @@ internal bool32 BuildPipeline(vulkan_context *context, render_pipeline *pipeline
     pipeline->DefaultState.DepthWrite = desc->DepthWrite;
     pipeline->DefaultState.AlphaBlend = VK_FALSE;
 
-    if (!CreatePipelineLayout(context, pipeline, setLayout) || !CreateGraphicsPipeline(context, pipeline, renderPass))
+    if (desc->OwnSet && !CreatePipelineSet(context, res, &pipeline->Set))
+    {
+        DestroyRenderPipeline(context, pipeline);
+        return false;
+    }
+
+    if (!CreatePipelineLayout(context, pipeline, res->GlobalSet.Layout, pipeline->Set.Layout) || !CreateGraphicsPipeline(context, pipeline, renderPass))
     {
         DestroyRenderPipeline(context, pipeline);
         return false;
