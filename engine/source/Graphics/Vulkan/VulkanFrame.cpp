@@ -46,8 +46,8 @@ internal void BindPipelineState(vulkan_context *context, VkCommandBuffer cmd, re
 {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->Handle);
 
-    vkCmdSetPrimitiveTopology(cmd, pipeline->Topology);
-    vkCmdSetFrontFace(cmd, pipeline->FrontFace);
+    vkCmdSetPrimitiveTopology(cmd, PIPELINE_TOPOLOGY);
+    vkCmdSetFrontFace(cmd, PIPELINE_FRONT_FACE);
     vkCmdSetDepthCompareOp(cmd, VK_COMPARE_OP_LESS);
 
     *wanted = pipeline->DefaultState;
@@ -183,7 +183,7 @@ internal void ExecuteRenderCommands(vulkan_context *context, VkCommandBuffer cmd
                 pc.Tint          = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
                 pc.MaterialIndex = 0;
                 pc.CubemapIndex  = cubeSlot;
-                vkCmdPushConstants(cmd, pipeline->Layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, (uint32)sizeof(pc), &pc);
+                vkCmdPushConstants(cmd, pipeline->Layout, PIPELINE_PUSH_STAGES, 0, (uint32)sizeof(pc), &pc);
 
                 vkCmdDraw(cmd, 3, 1, 0, 0);
             } break;
@@ -231,7 +231,7 @@ internal void ExecuteRenderCommands(vulkan_context *context, VkCommandBuffer cmd
                 pc.Tint          = meshCmd->Tint;
                 pc.MaterialIndex = materialSlot;
                 pc.CubemapIndex  = 0;
-                vkCmdPushConstants(cmd, pipeline->Layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, (uint32)sizeof(pc), &pc);
+                vkCmdPushConstants(cmd, pipeline->Layout, PIPELINE_PUSH_STAGES, 0, (uint32)sizeof(pc), &pc);
 
                 vkCmdDrawIndexed(cmd, mesh->IndexCount, 1, mesh->FirstIndex, (int32)mesh->FirstVertex, 0);
             } break;

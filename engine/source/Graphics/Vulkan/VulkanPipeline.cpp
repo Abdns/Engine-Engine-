@@ -58,19 +58,16 @@ internal VkShaderModule CreateShaderModule(VkDevice device, void *code, uint32 c
 internal bool32 CreatePipelineLayout(vulkan_context *context, render_pipeline *pipeline, VkDescriptorSetLayout setLayout)
 {
     VkPushConstantRange pushRange{};
-    pushRange.stageFlags = pipeline->PushConstantStages;
+    pushRange.stageFlags = PIPELINE_PUSH_STAGES;
     pushRange.offset = 0;
-    pushRange.size = pipeline->PushConstantSize;
+    pushRange.size = (uint32)sizeof(draw_push_constants);
 
     VkPipelineLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     layoutInfo.setLayoutCount = 1;
     layoutInfo.pSetLayouts = &setLayout;
-    if (pipeline->PushConstantSize > 0)
-    {
-        layoutInfo.pushConstantRangeCount = 1;
-        layoutInfo.pPushConstantRanges = &pushRange;
-    }
+    layoutInfo.pushConstantRangeCount = 1;
+    layoutInfo.pPushConstantRanges = &pushRange;
 
     if (vkCreatePipelineLayout(context->device, &layoutInfo, nullptr, &pipeline->Layout) != VK_SUCCESS)
     {
@@ -83,10 +80,10 @@ internal bool32 CreatePipelineLayout(vulkan_context *context, render_pipeline *p
 
 internal bool32 CreateGraphicsPipeline(vulkan_context *context, render_pipeline *pipeline, VkRenderPass renderPass)
 {
-    vulkan_shader shader = LoadShader(pipeline->ShaderName);
+    vulkan_shader shader = LoadShader(pipeline->Desc.ShaderName);
     if (!shader.vert.Data || !shader.frag.Data)
     {
-        DebugLog("Fail to load '%s' shader\n", pipeline->ShaderName);
+        DebugLog("Fail to load '%s' shader\n", pipeline->Desc.ShaderName);
         FreeShader(&shader);
 
         return false;
@@ -117,7 +114,7 @@ internal bool32 CreateGraphicsPipeline(vulkan_context *context, render_pipeline 
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    inputAssembly.topology = pipeline->Topology;
+    inputAssembly.topology = PIPELINE_TOPOLOGY;
     inputAssembly.primitiveRestartEnable = VK_FALSE;
 
     VkPipelineViewportStateCreateInfo viewportState{};
@@ -132,7 +129,7 @@ internal bool32 CreateGraphicsPipeline(vulkan_context *context, render_pipeline 
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
     rasterizer.cullMode = pipeline->DefaultState.CullMode;
-    rasterizer.frontFace = pipeline->FrontFace;
+    rasterizer.frontFace = PIPELINE_FRONT_FACE;
     rasterizer.depthBiasEnable = VK_FALSE;
 
     VkPipelineMultisampleStateCreateInfo multisampling{};
@@ -229,65 +226,15 @@ internal void DestroyRenderPipeline(vulkan_context *context, render_pipeline *pi
     *pipeline = {};
 }
 
-internal render_pipeline UnlitPipeline()
+internal bool32 BuildPipeline(vulkan_context *context, render_pipeline *pipeline, pipeline_desc *desc, VkRenderPass renderPass, VkDescriptorSetLayout setLayout)
 {
-    render_pipeline pipeline = {};
-    pipeline.ShaderName = "unlit";
+    pipeline->Desc = *desc;
 
-    pipeline.PushConstantSize   = (uint32)sizeof(draw_push_constants);
-    pipeline.PushConstantStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    pipeline->DefaultState.CullMode   = VK_CULL_MODE_NONE;
+    pipeline->DefaultState.DepthTest  = desc->DepthTest;
+    pipeline->DefaultState.DepthWrite = desc->DepthWrite;
+    pipeline->DefaultState.AlphaBlend = VK_FALSE;
 
-    pipeline.Topology  = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    pipeline.FrontFace = VK_FRONT_FACE_CLOCKWISE;
-
-    pipeline.DefaultState.CullMode   = VK_CULL_MODE_NONE;
-    pipeline.DefaultState.DepthTest  = VK_TRUE;
-    pipeline.DefaultState.DepthWrite = VK_TRUE;
-    pipeline.DefaultState.AlphaBlend = VK_FALSE;
-
-    return pipeline;
-}
-
-internal render_pipeline SkyboxPipeline()
-{
-    render_pipeline pipeline = {};
-    pipeline.ShaderName = "skybox";
-
-    pipeline.PushConstantSize   = (uint32)sizeof(draw_push_constants);
-    pipeline.PushConstantStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-
-    pipeline.Topology  = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    pipeline.FrontFace = VK_FRONT_FACE_CLOCKWISE;
-
-    pipeline.DefaultState.CullMode   = VK_CULL_MODE_NONE;
-    pipeline.DefaultState.DepthTest  = VK_FALSE;
-    pipeline.DefaultState.DepthWrite = VK_FALSE;
-    pipeline.DefaultState.AlphaBlend = VK_FALSE;
-
-    return pipeline;
-}
-
-internal render_pipeline PostPipeline()
-{
-    render_pipeline pipeline = {};
-    pipeline.ShaderName = "post";
-
-    pipeline.PushConstantSize   = (uint32)sizeof(draw_push_constants);
-    pipeline.PushConstantStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-
-    pipeline.Topology  = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    pipeline.FrontFace = VK_FRONT_FACE_CLOCKWISE;
-
-    pipeline.DefaultState.CullMode   = VK_CULL_MODE_NONE;
-    pipeline.DefaultState.DepthTest  = VK_FALSE;
-    pipeline.DefaultState.DepthWrite = VK_FALSE;
-    pipeline.DefaultState.AlphaBlend = VK_FALSE;
-
-    return pipeline;
-}
-
-internal bool32 BuildPipeline(vulkan_context *context, render_pipeline *pipeline, VkRenderPass renderPass, VkDescriptorSetLayout setLayout)
-{
     if (!CreatePipelineLayout(context, pipeline, setLayout) || !CreateGraphicsPipeline(context, pipeline, renderPass))
     {
         DestroyRenderPipeline(context, pipeline);

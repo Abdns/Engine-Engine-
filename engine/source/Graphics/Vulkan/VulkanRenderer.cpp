@@ -11,6 +11,15 @@ global_variable render_target   SceneTarget;
 global_variable render_pass     Passes[Pass_Count];
 global_variable render_pipeline Pipelines[Pipeline_Count];
 
+global_variable pipeline_desc PipelineDescs[] =
+{
+    { "unlit",  Pass_Scene, VK_TRUE,  VK_TRUE  },
+    { "skybox", Pass_Scene, VK_FALSE, VK_FALSE },
+    { "post",   Pass_Post,  VK_FALSE, VK_FALSE },
+};
+
+static_assert(ArrayCount(PipelineDescs) == Pipeline_Count, "PipelineDescs must describe every pipeline_type");
+
 internal bool32 CreateFramePasses(vulkan_context *context)
 {
     SceneTarget = CreateRenderTarget(context, VK_FORMAT_R16G16B16A16_SFLOAT);
@@ -93,13 +102,15 @@ internal void InitVulkan(HINSTANCE hinstance, HWND hwnd)
 
     if (!CreateFramePasses(context))                   return;
 
-    Pipelines[Pipeline_Unlit]  = UnlitPipeline();
-    Pipelines[Pipeline_Skybox] = SkyboxPipeline();
-    Pipelines[Pipeline_Post]   = PostPipeline();
+    for (uint32 i = 0; i < Pipeline_Count; ++i)
+    {
+        pipeline_desc *desc = &PipelineDescs[i];
 
-    if (!BuildPipeline(context, &Pipelines[Pipeline_Unlit],  Passes[Pass_Scene].Handle, GlobalResources.GlobalSet.Layout)) return;
-    if (!BuildPipeline(context, &Pipelines[Pipeline_Skybox], Passes[Pass_Scene].Handle, GlobalResources.GlobalSet.Layout)) return;
-    if (!BuildPipeline(context, &Pipelines[Pipeline_Post],   Passes[Pass_Post].Handle,  GlobalResources.GlobalSet.Layout)) return;
+        if (!BuildPipeline(context, &Pipelines[i], desc, Passes[desc->Pass].Handle, GlobalResources.GlobalSet.Layout))
+        {
+            return;
+        }
+    }
 
     DebugLog("Vulkan ready\n");
 }

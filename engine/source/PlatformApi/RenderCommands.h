@@ -38,11 +38,11 @@ enum blend_mode
 enum pipeline_type
 {
     Pipeline_Unlit = 0,
-    Pipeline_MeshCount,
-
     Pipeline_Skybox,
     Pipeline_Post,
     Pipeline_Count,
+
+    Pipeline_MeshCount = Pipeline_Skybox,
 };
 
 struct command_render_mesh

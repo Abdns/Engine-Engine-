@@ -32,6 +32,50 @@ internal void DestroyRenderTarget(vulkan_context *context, render_target *target
     *target = {};
 }
 
+internal uint32 BuildPassDependencies(pass_sync sync, VkSubpassDependency *deps)
+{
+    switch (sync)
+    {
+        case Sync_WriteThenSample:
+        {
+            deps[0].srcSubpass    = VK_SUBPASS_EXTERNAL;
+            deps[0].dstSubpass    = 0;
+            deps[0].srcStageMask  = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            deps[0].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            deps[0].dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+            deps[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+            deps[1].srcSubpass    = 0;
+            deps[1].dstSubpass    = VK_SUBPASS_EXTERNAL;
+            deps[1].srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            deps[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            deps[1].dstStageMask  = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            deps[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+            return 2;
+        }
+
+        case Sync_WriteThenPresent:
+        {
+            deps[0].srcSubpass    = VK_SUBPASS_EXTERNAL;
+            deps[0].dstSubpass    = 0;
+            deps[0].srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+            deps[0].srcAccessMask = 0;
+            deps[0].dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+            deps[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+            return 1;
+        }
+
+        case Sync_None:
+        {
+            return 0;
+        }
+    }
+
+    return 0;
+}
+
 internal render_pass CreatePass(vulkan_context *context, pass_desc *Desc, VkImageView *colorViews, uint32 colorViewCount, VkImageView depthView)
 {
     render_pass pass = {};
@@ -77,38 +121,8 @@ internal render_pass CreatePass(vulkan_context *context, pass_desc *Desc, VkImag
     subpass.pColorAttachments       = &colorRef;
     subpass.pDepthStencilAttachment = Desc->UseDepth ? &depthRef : nullptr;
 
-    VkSubpassDependency deps[2] = {};
-    uint32 depCount = 0;
-
-    if (Desc->ColorFinalLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-    {
-        deps[0].srcSubpass    = VK_SUBPASS_EXTERNAL;
-        deps[0].dstSubpass    = 0;
-        deps[0].srcStageMask  = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        deps[0].srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        deps[0].dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-        deps[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-        deps[1].srcSubpass    = 0;
-        deps[1].dstSubpass    = VK_SUBPASS_EXTERNAL;
-        deps[1].srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        deps[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        deps[1].dstStageMask  = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-        deps[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-        depCount = 2;
-    }
-    else
-    {
-        deps[0].srcSubpass    = VK_SUBPASS_EXTERNAL;
-        deps[0].dstSubpass    = 0;
-        deps[0].srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-        deps[0].srcAccessMask = 0;
-        deps[0].dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-        deps[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-        depCount = 1;
-    }
+    VkSubpassDependency deps[MAX_PASS_DEPENDENCIES] = {};
+    uint32 depCount = BuildPassDependencies(Desc->Sync, deps);
 
     VkRenderPassCreateInfo passInfo{};
     passInfo.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -151,13 +165,15 @@ internal render_pass CreatePass(vulkan_context *context, pass_desc *Desc, VkImag
 internal render_pass CreateScenePass(vulkan_context *context, VkImageView target, VkImageView depthView)
 {
     pass_desc Desc = {};
-    Desc.Name             = "scene";
-    Desc.ColorFormat      = VK_FORMAT_R16G16B16A16_SFLOAT;
-    Desc.ColorLoad        = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    Desc.ColorStore       = VK_ATTACHMENT_STORE_OP_STORE;
-    Desc.ColorFinalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    Desc.ClearColor       = Vector4(0.05f, 0.05f, 0.08f, 1.0f);
-    Desc.UseDepth         = true;
+    Desc.Name              = "scene";
+    Desc.ColorFormat       = VK_FORMAT_R16G16B16A16_SFLOAT;
+    Desc.ColorLoad         = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    Desc.ColorStore        = VK_ATTACHMENT_STORE_OP_STORE;
+    Desc.ColorFinalLayout  = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    Desc.ClearColor        = Vector4(0.05f, 0.05f, 0.08f, 1.0f);
+    Desc.UseDepth          = true;
+    Desc.PerSwapchainImage = false;
+    Desc.Sync              = Sync_WriteThenSample;
 
     return CreatePass(context, &Desc, &target, 1, depthView);
 }
@@ -165,12 +181,14 @@ internal render_pass CreateScenePass(vulkan_context *context, VkImageView target
 internal render_pass CreatePostPass(vulkan_context *context, VkImageView *swapchainViews, uint32 swapchainViewCount)
 {
     pass_desc Desc = {};
-    Desc.Name             = "post";
-    Desc.ColorFormat      = context->swapchainImageFormat;
-    Desc.ColorLoad        = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    Desc.ColorStore       = VK_ATTACHMENT_STORE_OP_STORE;
-    Desc.ColorFinalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    Desc.UseDepth         = false;
+    Desc.Name              = "post";
+    Desc.ColorFormat       = context->swapchainImageFormat;
+    Desc.ColorLoad         = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    Desc.ColorStore        = VK_ATTACHMENT_STORE_OP_STORE;
+    Desc.ColorFinalLayout  = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    Desc.UseDepth          = false;
+    Desc.PerSwapchainImage = true;
+    Desc.Sync              = Sync_WriteThenPresent;
 
     return CreatePass(context, &Desc, swapchainViews, swapchainViewCount, VK_NULL_HANDLE);
 }
@@ -197,10 +215,12 @@ internal void BeginPass(VkCommandBuffer cmd, render_pass *pass, VkExtent2D exten
     clears[1].depthStencil.depth   = 1.0f;
     clears[1].depthStencil.stencil = 0;
 
+    uint32 framebufferIndex = pass->Desc.PerSwapchainImage ? imageIndex : 0;
+
     VkRenderPassBeginInfo beginInfo{};
     beginInfo.sType             = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     beginInfo.renderPass        = pass->Handle;
-    beginInfo.framebuffer       = pass->Framebuffers[(pass->FramebufferCount > 1) ? imageIndex : 0];
+    beginInfo.framebuffer       = pass->Framebuffers[framebufferIndex];
     beginInfo.renderArea.extent = extent;
     beginInfo.clearValueCount   = pass->Desc.UseDepth ? 2 : 1;
     beginInfo.pClearValues      = clears;

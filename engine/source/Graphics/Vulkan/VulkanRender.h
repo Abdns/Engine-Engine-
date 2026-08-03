@@ -15,6 +15,12 @@
 #define MAX_POOL_INDICES      (1u << 21)
 #define IMAGE_POOL_SIZE       Megabytes(64)
 
+#define MAX_PASS_DEPENDENCIES 2
+
+#define PIPELINE_TOPOLOGY     VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
+#define PIPELINE_FRONT_FACE   VK_FRONT_FACE_CLOCKWISE
+#define PIPELINE_PUSH_STAGES  (VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT)
+
 struct vulkan_shader
 {
     platform_file_raw vert;
@@ -92,6 +98,13 @@ enum pass_id
     Pass_Count,
 };
 
+enum pass_sync
+{
+    Sync_None = 0,
+    Sync_WriteThenSample,
+    Sync_WriteThenPresent,
+};
+
 struct render_target
 {
     VkImage        Image;
@@ -110,6 +123,9 @@ struct pass_desc
     Vector4             ClearColor;
 
     bool32 UseDepth;
+    bool32 PerSwapchainImage;
+
+    pass_sync Sync;
 };
 
 struct render_pass
@@ -130,16 +146,19 @@ struct render_state
     bool32          Valid;
 };
 
-struct render_pipeline
+struct pipeline_desc
 {
     const char *ShaderName;
+    pass_id     Pass;
 
-    uint32             PushConstantSize;
-    VkShaderStageFlags PushConstantStages;
+    VkBool32 DepthTest;
+    VkBool32 DepthWrite;
+};
 
-    VkPrimitiveTopology Topology;
-    VkFrontFace         FrontFace;
-    render_state        DefaultState;
+struct render_pipeline
+{
+    pipeline_desc Desc;
+    render_state  DefaultState;
 
     VkPipeline       Handle;
     VkPipelineLayout Layout;
