@@ -11,9 +11,9 @@
 
 #define MAX_SWAPCHAIN_IMAGES  8
 #define MAX_MESHES            256
-#define MAX_POOL_VERTICES     (1u << 20)
-#define MAX_POOL_INDICES      (1u << 21)
-#define IMAGE_POOL_SIZE       Megabytes(64)
+#define MAX_VERTICES          (1u << 20)
+#define MAX_INDICES           (1u << 21)
+#define IMAGE_ARENA_SIZE      Megabytes(64)
 
 #define MAX_PASS_DEPENDENCIES 2
 
@@ -27,14 +27,21 @@ struct vulkan_shader
     platform_file_raw frag;
 };
 
-struct gpu_pool
+struct gpu_buffer
 {
-    VkBuffer       Buffer;
     VkDeviceMemory Memory;
-    void          *Mapped;
+    VkBuffer       Buffer;
     uint32         Stride;
     uint32         Capacity;
     uint32         Used;
+    void          *Mapped;
+};
+
+struct gpu_memory_arena
+{
+    VkDeviceMemory Memory;
+    VkDeviceSize   Capacity;
+    VkDeviceSize   Used;
 };
 
 struct gpu_mesh
@@ -51,12 +58,6 @@ struct gpu_texture
     VkImageView View;
 };
 
-struct image_memory_pool
-{
-    VkDeviceMemory Memory;
-    VkDeviceSize   Capacity;
-    VkDeviceSize   Used;
-};
 
 struct descriptor_set
 {
@@ -79,16 +80,16 @@ struct vulkan_resources
     descriptor_set   GlobalSet;
     VkSampler        Sampler;
 
-    gpu_pool CameraBuffer;
-    gpu_pool MaterialBuffer;
-    gpu_pool VertexPool;
-    gpu_pool IndexPool;
+    gpu_buffer CameraBuffer;
+    gpu_buffer MaterialBuffer;
+    gpu_buffer VertexBuffer;
+    gpu_buffer IndexBuffer;
 
     gpu_mesh          Meshes[MAX_MESHES];
     gpu_texture       Textures[MAX_TEXTURES];
     gpu_texture       Cubemaps[MAX_CUBEMAPS];
     material_state    MaterialStates[MAX_MATERIALS];
-    image_memory_pool ImagePool;
+    gpu_memory_arena  ImageArena;
 };
 
 enum pass_id

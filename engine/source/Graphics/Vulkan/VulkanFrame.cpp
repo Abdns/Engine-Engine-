@@ -116,7 +116,7 @@ internal void ExecuteRenderCommands(vulkan_context *context, VkCommandBuffer cmd
 
     BindGlobalSet(cmd, res, pipeline->Layout);
 
-    vkCmdBindIndexBuffer(cmd, res->IndexPool.Buffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdBindIndexBuffer(cmd, res->IndexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
 
     uint32 activeId = Pipeline_Unlit;
     uint32 offset   = 0;

@@ -96,9 +96,16 @@ internal void InitVulkan(HINSTANCE hinstance, HWND hwnd)
     if (!CreateCommandBuffer(context))                 return;
     if (!CreateSyncObjects(context))                   return;
 
-    if (!CreateGeometryPools(context, &GlobalResources))       return;
-    if (!CreateImagePool(context, &GlobalResources.ImagePool)) return;
-    if (!CreateGlobalResources(context, &GlobalResources))     return;
+    GlobalResources.VertexBuffer = CreateBuffer(context, "Vertex", VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, (uint32)sizeof(vertex),  MAX_VERTICES);
+    GlobalResources.IndexBuffer  = CreateBuffer(context, "Index",  VK_BUFFER_USAGE_INDEX_BUFFER_BIT,   (uint32)sizeof(uint32),  MAX_INDICES);
+    GlobalResources.ImageArena   = CreateImageArena(context);
+
+    if (GlobalResources.VertexBuffer.Buffer == VK_NULL_HANDLE || GlobalResources.IndexBuffer.Buffer  == VK_NULL_HANDLE || GlobalResources.ImageArena.Memory   == VK_NULL_HANDLE)
+    {
+        return;
+    }
+
+    if (!CreateGlobalResources(context, &GlobalResources)) return;
 
     if (!CreateFramePasses(context))                   return;
 
@@ -179,7 +186,8 @@ internal void ShutdownVulkan()
             }
         }
 
-        DestroyGeometryPools(context, &GlobalResources);
+        DestroyBuffer(context, &GlobalResources.IndexBuffer);
+        DestroyBuffer(context, &GlobalResources.VertexBuffer);
         DestroyGlobalResources(context, &GlobalResources);
 
         for (uint32 i = 0; i < MAX_TEXTURES; ++i)
@@ -192,7 +200,7 @@ internal void ShutdownVulkan()
             vkDestroyImageView(context->device, GlobalResources.Cubemaps[i].View, nullptr);
             vkDestroyImage(context->device, GlobalResources.Cubemaps[i].Image, nullptr);
         }
-        DestroyImagePool(context, &GlobalResources.ImagePool);
+        DestroyImageArena(context, &GlobalResources.ImageArena);
 
         vkDestroyImageView(context->device, context->depthImageView, nullptr);
         vkDestroyImage(context->device, context->depthImage, nullptr);

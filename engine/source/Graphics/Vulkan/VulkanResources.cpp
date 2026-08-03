@@ -102,22 +102,6 @@ internal bool32 AllocateDescriptorSet(vulkan_context *context, VkDescriptorPool 
     return true;
 }
 
-internal bool32 CreateGeometryPools(vulkan_context *context, vulkan_resources *res)
-{
-    if (!CreatePool(context, &res->VertexPool, "Vertex", VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, (uint32)sizeof(vertex), MAX_POOL_VERTICES))
-    {
-        return false;
-    }
-
-    return CreatePool(context, &res->IndexPool, "Index", VK_BUFFER_USAGE_INDEX_BUFFER_BIT, (uint32)sizeof(uint32), MAX_POOL_INDICES);
-}
-
-internal void DestroyGeometryPools(vulkan_context *context, vulkan_resources *res)
-{
-    DestroyPool(context, &res->IndexPool);
-    DestroyPool(context, &res->VertexPool);
-}
-
 internal bool32 CreateGlobalResources(vulkan_context *context, vulkan_resources *res)
 {
     VkDescriptorSetLayoutBinding bindings[6] = {};
@@ -207,32 +191,31 @@ internal bool32 CreateGlobalResources(vulkan_context *context, vulkan_resources 
     }
     UpdateSamplerDescriptorInSet(context, res->GlobalSet.Handle, BINDING_SAMPLER, res->Sampler);
 
-    gpu_pool *vertexPool = &res->VertexPool;
-    UpdateBufferDescriptorInSet(context, res->GlobalSet.Handle, BINDING_VERTICES, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, vertexPool->Buffer, (VkDeviceSize)vertexPool->Capacity * vertexPool->Stride);
+    UpdateBufferDescriptorInSet(context, res->GlobalSet.Handle, BINDING_VERTICES, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, res->VertexBuffer.Buffer, (VkDeviceSize)res->VertexBuffer.Capacity * res->VertexBuffer.Stride);
 
-    gpu_pool *cameraBuffer = &res->CameraBuffer;
-    if (!CreatePool(context, cameraBuffer, "Camera", VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, (uint32)sizeof(camera_uniforms), 1))
+    res->CameraBuffer = CreateBuffer(context, "Camera", VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, (uint32)sizeof(camera_uniforms), 1);
+    if (res->CameraBuffer.Buffer == VK_NULL_HANDLE)
     {
         return false;
     }
 
-    UpdateBufferDescriptorInSet(context, res->GlobalSet.Handle, BINDING_CAMERA, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, cameraBuffer->Buffer, cameraBuffer->Stride);
+    UpdateBufferDescriptorInSet(context, res->GlobalSet.Handle, BINDING_CAMERA, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, res->CameraBuffer.Buffer, res->CameraBuffer.Stride);
 
-    gpu_pool *materialBuffer = &res->MaterialBuffer;
-    if (!CreatePool(context, materialBuffer, "Material", VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, (uint32)sizeof(gpu_material), MAX_MATERIALS))
+    res->MaterialBuffer = CreateBuffer(context, "Material", VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, (uint32)sizeof(gpu_material), MAX_MATERIALS);
+    if (res->MaterialBuffer.Buffer == VK_NULL_HANDLE)
     {
         return false;
     }
 
-    UpdateBufferDescriptorInSet(context, res->GlobalSet.Handle, BINDING_MATERIALS, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, materialBuffer->Buffer, (VkDeviceSize)materialBuffer->Capacity * materialBuffer->Stride);
+    UpdateBufferDescriptorInSet(context, res->GlobalSet.Handle, BINDING_MATERIALS, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, res->MaterialBuffer.Buffer, (VkDeviceSize)res->MaterialBuffer.Capacity * res->MaterialBuffer.Stride);
 
     return true;
 }
 
 internal void DestroyGlobalResources(vulkan_context *context, vulkan_resources *res)
 {
-    DestroyPool(context, &res->MaterialBuffer);
-    DestroyPool(context, &res->CameraBuffer);
+    DestroyBuffer(context, &res->MaterialBuffer);
+    DestroyBuffer(context, &res->CameraBuffer);
 
     vkDestroySampler(context->device, res->Sampler, nullptr);
     vkDestroyDescriptorPool(context->device, res->DescriptorPool, nullptr);
@@ -280,27 +263,27 @@ internal bool32 WriteMesh(uint32 MeshHandle, void *Vertices, uint32 VertexCount,
         return false;
     }
 
-    gpu_pool *vertexPool = &res->VertexPool;
-    gpu_pool *indexPool  = &res->IndexPool;
+    gpu_buffer *vertexBuffer = &res->VertexBuffer;
+    gpu_buffer *indexBuffer  = &res->IndexBuffer;
 
     if (!VertexCount || !IndexCount ||
-        VertexCount > vertexPool->Capacity - vertexPool->Used ||
-        IndexCount  > indexPool->Capacity  - indexPool->Used)
+        VertexCount > vertexBuffer->Capacity - vertexBuffer->Used ||
+        IndexCount  > indexBuffer->Capacity  - indexBuffer->Used)
     {
-        DebugLog("Geometry pools out of space for mesh id %u (%u vertices, %u indices)\n", MeshHandle, VertexCount, IndexCount);
+        DebugLog("Geometry buffers out of space for mesh id %u (%u vertices, %u indices)\n", MeshHandle, VertexCount, IndexCount);
         return false;
     }
 
-    PoolWrite(vertexPool, vertexPool->Used, Vertices, VertexCount);
-    PoolWrite(indexPool,  indexPool->Used,  Indices,  IndexCount);
+    BufferWrite(vertexBuffer, vertexBuffer->Used, Vertices, VertexCount);
+    BufferWrite(indexBuffer,  indexBuffer->Used,  Indices,  IndexCount);
 
-    mesh->FirstVertex = vertexPool->Used;
+    mesh->FirstVertex = vertexBuffer->Used;
     mesh->VertexCount = VertexCount;
-    mesh->FirstIndex  = indexPool->Used;
+    mesh->FirstIndex  = indexBuffer->Used;
     mesh->IndexCount  = IndexCount;
 
-    vertexPool->Used += VertexCount;
-    indexPool->Used  += IndexCount;
+    vertexBuffer->Used += VertexCount;
+    indexBuffer->Used  += IndexCount;
 
     return true;
 }
@@ -331,22 +314,14 @@ internal bool32 WriteTexture(uint32 TextureHandle, void *Pixels, uint32 Width, u
 
     VkBuffer       staging       = VK_NULL_HANDLE;
     VkDeviceMemory stagingMemory = VK_NULL_HANDLE;
-    if (!CreateBuffer(context, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                      &staging, &stagingMemory))
+    if (!CreateStagingBuffer(context, imageSize, Pixels, &staging, &stagingMemory))
     {
         return false;
     }
 
-    void *mapped = nullptr;
-    vkMapMemory(context->device, stagingMemory, 0, imageSize, 0, &mapped);
-    CopySize(imageSize, Pixels, mapped);
-    vkUnmapMemory(context->device, stagingMemory);
-
-    if (!CreatePooledImage(context, &res->ImagePool, Width, Height, format, 1, &texture->Image))
+    if (!ArenaPushImage(context, &res->ImageArena, Width, Height, format, 1, &texture->Image))
     {
-        vkDestroyBuffer(context->device, staging, nullptr);
-        vkFreeMemory(context->device, stagingMemory, nullptr);
+        FreeBuffer(context, &staging, &stagingMemory);
         return false;
     }
 
@@ -354,8 +329,7 @@ internal bool32 WriteTexture(uint32 TextureHandle, void *Pixels, uint32 Width, u
     CopyBufferToImage(context, staging, texture->Image, Width, Height, 1);
     TransitionImageLayout(context, texture->Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 1);
 
-    vkDestroyBuffer(context->device, staging, nullptr);
-    vkFreeMemory(context->device, stagingMemory, nullptr);
+    FreeBuffer(context, &staging, &stagingMemory);
 
     texture->View = CreateColorImageView(context->device, texture->Image, format);
 
@@ -390,22 +364,14 @@ internal bool32 WriteCubemap(uint32 CubemapHandle, void *Pixels, uint32 FaceSize
 
     VkBuffer       staging       = VK_NULL_HANDLE;
     VkDeviceMemory stagingMemory = VK_NULL_HANDLE;
-    if (!CreateBuffer(context, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                      &staging, &stagingMemory))
+    if (!CreateStagingBuffer(context, imageSize, Pixels, &staging, &stagingMemory))
     {
         return false;
     }
 
-    void *mapped = nullptr;
-    vkMapMemory(context->device, stagingMemory, 0, imageSize, 0, &mapped);
-    CopySize(imageSize, Pixels, mapped);
-    vkUnmapMemory(context->device, stagingMemory);
-
-    if (!CreatePooledImage(context, &res->ImagePool, FaceSize, FaceSize, format, 6, &cube->Image))
+    if (!ArenaPushImage(context, &res->ImageArena, FaceSize, FaceSize, format, 6, &cube->Image))
     {
-        vkDestroyBuffer(context->device, staging, nullptr);
-        vkFreeMemory(context->device, stagingMemory, nullptr);
+        FreeBuffer(context, &staging, &stagingMemory);
         return false;
     }
 
@@ -413,8 +379,7 @@ internal bool32 WriteCubemap(uint32 CubemapHandle, void *Pixels, uint32 FaceSize
     CopyBufferToImage(context, staging, cube->Image, FaceSize, FaceSize, 6);
     TransitionImageLayout(context, cube->Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 6);
 
-    vkDestroyBuffer(context->device, staging, nullptr);
-    vkFreeMemory(context->device, stagingMemory, nullptr);
+    FreeBuffer(context, &staging, &stagingMemory);
 
     cube->View = CreateCubeImageView(context->device, cube->Image, format);
 
