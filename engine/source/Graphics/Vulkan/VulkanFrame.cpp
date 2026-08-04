@@ -46,8 +46,13 @@ internal void BindPipelineState(vulkan_context *context, VkCommandBuffer cmd, re
 {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->Handle);
 
-    vkCmdSetPrimitiveTopology(cmd, pipeline->Topology);
-    vkCmdSetFrontFace(cmd, pipeline->FrontFace);
+    if (pipeline->Set.Handle != VK_NULL_HANDLE)
+    {
+        BindPipelineSet(cmd, &pipeline->Set, pipeline->Layout);
+    }
+
+    vkCmdSetPrimitiveTopology(cmd, PIPELINE_TOPOLOGY);
+    vkCmdSetFrontFace(cmd, PIPELINE_FRONT_FACE);
     vkCmdSetDepthCompareOp(cmd, VK_COMPARE_OP_LESS);
 
     *wanted = pipeline->DefaultState;
@@ -56,8 +61,25 @@ internal void BindPipelineState(vulkan_context *context, VkCommandBuffer cmd, re
     ApplyRenderState(context, cmd, current, wanted);
 }
 
-internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipeline, VkCommandBuffer cmd, uint32 imageIndex, render_commands *commands)
+internal void WaitForFrame(vulkan_context *context)
 {
+    vkWaitForFences(context->device, 1, &context->inFlightFence, VK_TRUE, UINT64_MAX);
+}
+
+internal vulkan_frame BeginFrame(vulkan_context *context)
+{
+    vulkan_frame Frame = {};
+
+    VkResult acquire = vkAcquireNextImageKHR(context->device, context->swapchain, UINT64_MAX, context->imageAvailableSemaphore, VK_NULL_HANDLE, &Frame.ImageIndex);
+    if (acquire == VK_ERROR_OUT_OF_DATE_KHR)
+    {
+        Frame.NeedsResize = true;
+        return Frame;
+    }
+
+    vkResetFences(context->device, 1, &context->inFlightFence);
+
+    VkCommandBuffer cmd = context->commandBuffer;
     vkResetCommandBuffer(cmd, 0);
 
     VkCommandBufferBeginInfo beginInfo{};
@@ -65,26 +87,6 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
     beginInfo.flags = 0;
     beginInfo.pInheritanceInfo = nullptr;
     vkBeginCommandBuffer(cmd, &beginInfo);
-
-    VkClearValue clearValues[2] = {};
-    clearValues[0].color.float32[0] = 0.05f;
-    clearValues[0].color.float32[1] = 0.05f;
-    clearValues[0].color.float32[2] = 0.08f;
-    clearValues[0].color.float32[3] = 1.0f;
-    clearValues[1].depthStencil.depth = 1.0f;
-    clearValues[1].depthStencil.stencil = 0;
-
-    VkRenderPassBeginInfo renderPassInfo{};
-    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderPassInfo.renderPass = context->renderPass;
-    renderPassInfo.framebuffer = context->swapchainFramebuffers[imageIndex];
-    renderPassInfo.renderArea.offset.x = 0;
-    renderPassInfo.renderArea.offset.y = 0;
-    renderPassInfo.renderArea.extent = context->swapchainExtent;
-    renderPassInfo.clearValueCount = 2;
-    renderPassInfo.pClearValues = clearValues;
-
-    vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
     VkViewport viewport{};
     viewport.x = 0.0f;
@@ -101,16 +103,25 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
     scissor.extent = context->swapchainExtent;
     vkCmdSetScissor(cmd, 0, 1, &scissor);
 
+    Frame.Cmd   = cmd;
+    Frame.Ready = true;
+    return Frame;
+}
+
+internal void ExecuteRenderCommands(vulkan_context *context, VkCommandBuffer cmd, vulkan_resources *res, render_pipeline *pipelines, render_commands *commands)
+{
+    render_pipeline *pipeline = &pipelines[Pipeline_Unlit];
+
     render_state current = {};
     render_state wanted  = {};
     BindPipelineState(context, cmd, pipeline, &current, &wanted);
 
     real32 aspect = (real32)context->swapchainExtent.width / (real32)context->swapchainExtent.height;
-    camera_uniforms *camera = (camera_uniforms *)CameraUniforms(context);
+    camera_uniforms *camera = (camera_uniforms *)CameraUniforms(res);
 
-    BindGlobalSet(cmd, context, pipeline);
+    BindGlobalSet(cmd, res, pipeline->Layout);
 
-    vkCmdBindIndexBuffer(cmd, context->IndexPool.Buffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdBindIndexBuffer(cmd, res->IndexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
 
     uint32 activeId = Pipeline_Unlit;
     uint32 offset   = 0;
@@ -125,19 +136,19 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
                 camera->ViewProj = Mat4Multiply(proj, cameraCmd->View);
 
                 Matrix4 *view = &cameraCmd->View;
-                real32 rightScale = 1.0f / proj.E[0][0];
-                real32 upScale    = 1.0f / proj.E[1][1];
+                real32 rightScale = 1.0f / proj.Elements[0][0];
+                real32 upScale    = 1.0f / proj.Elements[1][1];
 
-                camera->SkyRight   = Vector4(view->E[0][0] * rightScale, view->E[1][0] * rightScale, view->E[2][0] * rightScale, 0.0f);
-                camera->SkyUp      = Vector4(view->E[0][1] * upScale,    view->E[1][1] * upScale,    view->E[2][1] * upScale,    0.0f);
-                camera->SkyForward = Vector4(-view->E[0][2], -view->E[1][2], -view->E[2][2], 0.0f);
+                camera->SkyRight   = Vector4(view->Elements[0][0] * rightScale, view->Elements[1][0] * rightScale, view->Elements[2][0] * rightScale, 0.0f);
+                camera->SkyUp      = Vector4(view->Elements[0][1] * upScale,    view->Elements[1][1] * upScale,    view->Elements[2][1] * upScale,    0.0f);
+                camera->SkyForward = Vector4(-view->Elements[0][2], -view->Elements[1][2], -view->Elements[2][2], 0.0f);
             } break;
 
             case Set_Pipeline:
             {
                 command_set_pipeline *pipelineCmd = (command_set_pipeline *)cmdBase;
 
-                if (context->Pipelines[pipelineCmd->PipelineType].Handle == VK_NULL_HANDLE)
+                if (pipelines[pipelineCmd->PipelineType].Handle == VK_NULL_HANDLE)
                 {
                     DebugLog("Set pipeline %d ignored: not ready\n", pipelineCmd->PipelineType);
                     break;
@@ -149,20 +160,10 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
                 }
 
                 activeId = (uint32)pipelineCmd->PipelineType;
-                pipeline = &context->Pipelines[activeId];
+                pipeline = &pipelines[activeId];
 
                 BindPipelineState(context, cmd, pipeline, &current, &wanted);
 
-            } break;
-
-            case Set_RenderState:
-            {
-                command_set_render_state *stateCmd = (command_set_render_state *)cmdBase;
-
-                wanted.CullMode   = ToVulkanCullMode(stateCmd->CullMode);
-                wanted.DepthTest  = stateCmd->DepthTest  ? VK_TRUE : VK_FALSE;
-                wanted.DepthWrite = stateCmd->DepthWrite ? VK_TRUE : VK_FALSE;
-                wanted.AlphaBlend = (stateCmd->BlendMode == Blend_Alpha) ? VK_TRUE : VK_FALSE;
             } break;
 
             case Render_Skybox:
@@ -175,7 +176,7 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
                 }
 
                 uint32 cubeSlot = skyCmd->CubemapHandle - 1;
-                if (!context->Cubemaps[cubeSlot].View)
+                if (!res->Cubemaps[cubeSlot].View)
                 {
                     break;
                 }
@@ -183,10 +184,11 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
                 ApplyRenderState(context, cmd, &current, &wanted);
 
                 draw_push_constants pc;
-                pc.Model        = Mat4Identity();
-                pc.Tint         = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
-                pc.TextureIndex = cubeSlot;
-                vkCmdPushConstants(cmd, pipeline->Layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, (uint32)sizeof(pc), &pc);
+                pc.Model         = Mat4Identity();
+                pc.Tint          = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+                pc.MaterialIndex = 0;
+                pc.CubemapIndex  = cubeSlot;
+                vkCmdPushConstants(cmd, pipeline->Layout, PIPELINE_PUSH_STAGES, 0, (uint32)sizeof(pc), &pc);
 
                 vkCmdDraw(cmd, 3, 1, 0, 0);
             } break;
@@ -195,61 +197,74 @@ internal void RecordCommandBuffer(vulkan_context *context, render_pipeline *pipe
             {
                 command_render_mesh *meshCmd = (command_render_mesh *)cmdBase;
 
-                gpu_mesh *mesh = ResolveMesh(context, meshCmd->MeshHandle);
+                gpu_mesh *mesh = ResolveMesh(res, meshCmd->MeshHandle);
                 if (!mesh || !mesh->IndexCount)
                 {
                     break;
                 }
 
-                ApplyRenderState(context, cmd, &current, &wanted);
-
-                uint32 texSlot = 0;
-                if (meshCmd->TextureHandle && meshCmd->TextureHandle <= MAX_TEXTURES && context->Textures[meshCmd->TextureHandle - 1].View)
+                uint32 materialSlot = 0;
+                if (meshCmd->MaterialHandle && meshCmd->MaterialHandle <= MAX_MATERIALS)
                 {
-                    texSlot = meshCmd->TextureHandle - 1;
+                    materialSlot = meshCmd->MaterialHandle - 1;
                 }
 
+                material_state *material = &res->MaterialStates[materialSlot];
+
+                if ((uint32)material->Pipeline != activeId)
+                {
+                    if (pipelines[material->Pipeline].Handle == VK_NULL_HANDLE)
+                    {
+                        break;
+                    }
+
+                    activeId = (uint32)material->Pipeline;
+                    pipeline = &pipelines[activeId];
+
+                    BindPipelineState(context, cmd, pipeline, &current, &wanted);
+                }
+
+                wanted.CullMode   = ToVulkanCullMode(material->CullMode);
+                wanted.DepthTest  = material->DepthTest  ? VK_TRUE : VK_FALSE;
+                wanted.DepthWrite = material->DepthWrite ? VK_TRUE : VK_FALSE;
+                wanted.AlphaBlend = (material->BlendMode == Blend_Alpha) ? VK_TRUE : VK_FALSE;
+
+                ApplyRenderState(context, cmd, &current, &wanted);
+
                 draw_push_constants pc;
-                pc.Model        = meshCmd->Transform;
-                pc.Tint         = meshCmd->Tint;
-                pc.TextureIndex = texSlot;
-                vkCmdPushConstants(cmd, pipeline->Layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, (uint32)sizeof(pc), &pc);
+                pc.Model         = meshCmd->Transform;
+                pc.Tint          = meshCmd->Tint;
+                pc.MaterialIndex = materialSlot;
+                pc.CubemapIndex  = 0;
+                vkCmdPushConstants(cmd, pipeline->Layout, PIPELINE_PUSH_STAGES, 0, (uint32)sizeof(pc), &pc);
 
                 vkCmdDrawIndexed(cmd, mesh->IndexCount, 1, mesh->FirstIndex, (int32)mesh->FirstVertex, 0);
             } break;
         }
     }
-
-    vkCmdEndRenderPass(cmd);
-    vkEndCommandBuffer(cmd);
 }
 
-internal bool32 DrawFrame(vulkan_context *context, render_commands *commands)
+internal void DrawFullscreen(vulkan_context *context, VkCommandBuffer cmd, render_pipeline *pipeline)
 {
-    render_pipeline *pipeline = &context->Pipelines[Pipeline_Unlit];
     if (pipeline->Handle == VK_NULL_HANDLE)
     {
-        return false;
+        return;
     }
 
-    vkWaitForFences(context->device, 1, &context->inFlightFence, VK_TRUE, UINT64_MAX);
+    render_state current = {};
+    render_state wanted  = {};
+    BindPipelineState(context, cmd, pipeline, &current, &wanted);
 
-    ProcessLoadCommands(context, commands);
+    vkCmdDraw(cmd, 3, 1, 0, 0);
+}
 
-    uint32 imageIndex = 0;
-    VkResult acquire = vkAcquireNextImageKHR(context->device, context->swapchain, UINT64_MAX, context->imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
-    if (acquire == VK_ERROR_OUT_OF_DATE_KHR)
-    {
-        return true;
-    }
-
-    vkResetFences(context->device, 1, &context->inFlightFence);
-
-    RecordCommandBuffer(context, pipeline, context->commandBuffer, imageIndex, commands);
+internal bool32 EndFrame(vulkan_context *context, vulkan_frame *Frame)
+{
+    vkEndCommandBuffer(Frame->Cmd);
 
     VkSemaphore          waitSems[]   = { context->imageAvailableSemaphore };
     VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-    VkSemaphore          signalSems[] = { context->renderFinishedSemaphores[imageIndex] };
+    VkSemaphore          signalSems[] = { context->renderFinishedSemaphores[Frame->ImageIndex] };
 
     VkSubmitInfo submitInfo{};
     submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -257,7 +272,7 @@ internal bool32 DrawFrame(vulkan_context *context, render_commands *commands)
     submitInfo.pWaitSemaphores = waitSems;
     submitInfo.pWaitDstStageMask = waitStages;
     submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &context->commandBuffer;
+    submitInfo.pCommandBuffers = &Frame->Cmd;
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = signalSems;
 
@@ -274,7 +289,7 @@ internal bool32 DrawFrame(vulkan_context *context, render_commands *commands)
     presentInfo.pWaitSemaphores = signalSems;
     presentInfo.swapchainCount = 1;
     presentInfo.pSwapchains = swapchains;
-    presentInfo.pImageIndices = &imageIndex;
+    presentInfo.pImageIndices = &Frame->ImageIndex;
 
     VkResult present = vkQueuePresentKHR(context->presentQueue, &presentInfo);
     if (present == VK_ERROR_OUT_OF_DATE_KHR || present == VK_SUBOPTIMAL_KHR)

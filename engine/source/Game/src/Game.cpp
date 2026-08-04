@@ -21,52 +21,6 @@ internal void GameOutputSound(game_state* GameState, game_sound_output_buffer* S
     }
 }
 
-internal Matrix4 UpdateCamera(game_state* GameState, game_input* Input)
-{
-    real32 MouseX = (real32)Input->MouseX;
-    real32 MouseY = (real32)Input->MouseY;
-    real32 dMouseX = MouseX - GameState->LastMouseX;
-    real32 dMouseY = MouseY - GameState->LastMouseY;
-    GameState->LastMouseX = MouseX;
-    GameState->LastMouseY = MouseY;
-
-    if (Input->MouseButtons[2].EndedDown)
-    {
-        real32 Sensitivity = 0.003f;
-        GameState->CameraYaw   -= dMouseX * Sensitivity;
-        GameState->CameraPitch -= dMouseY * Sensitivity;
-        GameState->CameraPitch = Clamp(-1.55f, GameState->CameraPitch, 1.55f);
-    }
-
-    real32 Yaw   = GameState->CameraYaw;
-    real32 Pitch = GameState->CameraPitch;
-    real32 cy = Cos(Yaw);
-    real32 sy = Sin(Yaw);
-    real32 cp = Cos(Pitch);
-    real32 sp = Sin(Pitch);
-
-    Vector3 Forward = Vector3(-sy * cp, sp, -cy * cp);
-    Vector3 Right   = Vector3(cy, 0.0f, -sy);
-    Vector3 WorldUp = Vector3(0.0f, 1.0f, 0.0f);
-
-    game_controller_input* Keyboard = &Input->Controllers[0];
-    Vector3 Move = Vector3(0.0f, 0.0f, 0.0f);
-    if (Keyboard->Up.EndedDown)            Move += Forward;
-    if (Keyboard->Down.EndedDown)          Move -= Forward;
-    if (Keyboard->Right.EndedDown)         Move += Right;
-    if (Keyboard->Left.EndedDown)          Move -= Right;
-    if (Keyboard->RightShoulder.EndedDown) Move += WorldUp;
-    if (Keyboard->LeftShoulder.EndedDown)  Move -= WorldUp;
-
-    real32 Speed = 4.0f;
-    GameState->CameraP += (Speed * Input->dtForFrame) * Move;
-
-    Vector3 P = GameState->CameraP;
-    Matrix4 View = Mat4Multiply(Mat4RotationX(-Pitch), Mat4Multiply(Mat4RotationY(-Yaw), Mat4Translation(-P.X, -P.Y, -P.Z)));
-
-    return View;
-}
-
 internal texture_format TextureFormatFromAsset(uint32 AssetFormat)
 {
     return (AssetFormat == (uint32)ImageFormat_RGBA16F) ? TextureFormat_RGBA16F : TextureFormat_RGBA8;
@@ -115,6 +69,9 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         entities* Entities = &GameState->Entities;
         InitEntities(Entities, WorldArena);
 
+        GameState->ColliderCapacity = Entities->MaxCount;
+        GameState->Colliders = PushArray(WorldArena, GameState->ColliderCapacity, collider);
+
         LoadAssetPack("assets.enga", Memory, GameState);
         data_lake* Lake = &GameState->Lake;
         PushLakeToRender(Lake, RenderCommands);
@@ -125,40 +82,48 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         GameState->SkyHandle = LakeGetCubemapHandle(Lake, "sky");
 
+        materials* Materials = &GameState->Materials;
+        uint32 MatPlain = AddMaterial(Materials, UnlitMaterial(Vector4(1.0f, 1.0f, 1.0f, 1.0f), TexTestHandle));
+        uint32 MatPink  = AddMaterial(Materials, UnlitMaterial(Vector4(1.0f, 0.5f, 0.5f, 1.0f), TexTestHandle));
+        uint32 MatGreen = AddMaterial(Materials, UnlitMaterial(Vector4(0.5f, 1.0f, 0.5f, 1.0f), TexTestHandle));
+        PushMaterialsToRender(Materials, RenderCommands);
+
         Vector3 TumbleSpin = Vector3(0.7f, 1.0f, 0.0f);
 
-        uint32 CubeA = AddEntity(Entities, Vector3(-1.5f, 0.0f, 0.0f), MeshCubeHandle, TexTestHandle);
-        uint32 Sphere = AddEntity(Entities, Vector3(0.0f, 0.0f, -1.5f), MeshSphereHandle, TexTestHandle);
-        uint32 CubeB = AddEntity(Entities, Vector3(1.5f, 0.0f, 0.0f), MeshCubeHandle, TexTestHandle);
+        uint32 CubeA = AddEntity(Entities, Vector3(-1.5f, 0.0f, 0.0f), MeshCubeHandle, MatPlain);
+        uint32 Sphere = AddEntity(Entities, Vector3(0.0f, 0.0f, -1.5f), MeshSphereHandle, MatPink);
+        uint32 CubeB = AddEntity(Entities, Vector3(1.5f, 0.0f, 0.0f), MeshCubeHandle, MatGreen);
 
         SetEntityAngularVelocity(Entities, CubeA, TumbleSpin);
         SetEntityAngularVelocity(Entities, Sphere, TumbleSpin);
         SetEntityAngularVelocity(Entities, CubeB, TumbleSpin);
 
-        SetEntityTint(Entities, Sphere, Vector4(1.0f, 0.5f, 0.5f, 1.0f));
-        SetEntityTint(Entities, CubeB, Vector4(0.5f, 1.0f, 0.5f, 1.0f));
+        InitCamera(&GameState->Camera, Vector3(0.0f, 0.0f, 4.0f), DegToRad(75.0f));
 
-        GameState->CameraP = Vector3(0.0f, 0.0f, 4.0f);
-        GameState->CameraYaw = 0.0f;
-        GameState->CameraPitch = 0.0f;
-        GameState->LastMouseX = (real32)Input->MouseX;
-        GameState->LastMouseY = (real32)Input->MouseY;
+        GameState->SelectedEntityID = 0;
 
         Memory->IsInitialized = true;
     }
 
     UpdateEntities(&GameState->Entities, Input->dtForFrame);
 
-    Matrix4 View = UpdateCamera(GameState, Input);
-    real32 FovY = 1.047f;
+    camera* Camera = &GameState->Camera;
+    UpdateCamera(Camera, Input);
 
-    PushRenderCamera(RenderCommands, View, FovY);
+    bool32 ClickedThisFrame = (Input->MouseButtons[0].EndedDown && Input->MouseButtons[0].HalfTransitionCount);
+    if (ClickedThisFrame && Input->RenderWidth > 0 && Input->RenderHeight > 0)
+    {
+        ray PickRay = CameraRayFromScreen(Camera, (real32)Input->MouseX, (real32)Input->MouseY, (real32)Input->RenderWidth, (real32)Input->RenderHeight);
+        uint32 ColliderCount = BuildEntityColliders(&GameState->Entities, &GameState->Lake, GameState->Colliders, GameState->ColliderCapacity);
+        GameState->SelectedEntityID = RayCastColliders(PickRay, GameState->Colliders, ColliderCount, 0);
+    }
+
+    PushRenderCamera(RenderCommands, CameraView(Camera), Camera->FovY);
 
     PushRenderPipeline(RenderCommands, Pipeline_Skybox);
     PushRenderSkybox(RenderCommands, GameState->SkyHandle);
 
-    PushRenderPipeline(RenderCommands, Pipeline_Unlit);
-    PushEntitiesToRender(&GameState->Entities, RenderCommands);
+    PushEntitiesToRender(&GameState->Entities, RenderCommands, GameState->SelectedEntityID);
 }
 
 extern "C" __declspec(dllexport)

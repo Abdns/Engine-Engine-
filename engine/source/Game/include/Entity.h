@@ -18,7 +18,7 @@ struct entities
     Vector4 *Tint;
 
     uint32 *MeshHandle;
-    uint32 *TextureHandle;
+    uint32 *MaterialHandle;
 };
 
 #endif

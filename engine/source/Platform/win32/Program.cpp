@@ -109,6 +109,7 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
     game_input  Input[2] = {};
     game_input* NewInput = &Input[0];
     game_input* OldInput = &Input[1];
+    Win32PrimeMouseInput(Window, NewInput, OldInput);
 
     InitVulkan(Instance, Window);
 

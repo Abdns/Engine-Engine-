@@ -13,7 +13,7 @@ struct ps_input
 
 float4 main(ps_input input) : SV_Target
 {
-    float3 Radiance = Sky[pc.TextureIndex].Sample(Samp, normalize(input.Direction)).rgb * pc.Tint.rgb;
+    float3 Radiance = Sky[pc.CubemapIndex].Sample(Samp, normalize(input.Direction)).rgb * pc.Tint.rgb;
 
-    return float4(Radiance / (Radiance + 1.0), 1.0);
+    return float4(Radiance, 1.0);
 }

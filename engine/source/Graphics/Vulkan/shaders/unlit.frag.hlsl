@@ -1,7 +1,8 @@
 #include "ShaderInterop.h"
 
-[[vk::binding(BINDING_TEXTURES, SET_GLOBAL)]] Texture2D    Tex[MAX_TEXTURES];
-[[vk::binding(BINDING_SAMPLER,  SET_GLOBAL)]] SamplerState Samp;
+[[vk::binding(BINDING_TEXTURES,  SET_GLOBAL)]] Texture2D    Tex[MAX_TEXTURES];
+[[vk::binding(BINDING_SAMPLER,   SET_GLOBAL)]] SamplerState Samp;
+[[vk::binding(BINDING_MATERIALS, SET_GLOBAL)]] StructuredBuffer<gpu_material> Materials;
 
 [[vk::push_constant]] draw_push_constants pc;
 
@@ -14,5 +15,7 @@ struct ps_input
 
 float4 main(ps_input input) : SV_Target
 {
-    return Tex[pc.TextureIndex].Sample(Samp, input.UV) * pc.Tint;
+    gpu_material Material = Materials[pc.MaterialIndex];
+
+    return Tex[Material.TextureIndex].Sample(Samp, input.UV) * Material.BaseColor * pc.Tint;
 }

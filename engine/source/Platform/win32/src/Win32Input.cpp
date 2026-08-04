@@ -123,14 +123,38 @@ internal void Win32ProcessMouseButton(game_button_state* NewState, game_button_s
     NewState->HalfTransitionCount = (OldState->EndedDown != IsDown) ? 1 : 0;
 }
 
-void Win32ProcessMouseInput(HWND Window, game_input* NewInput, game_input* OldInput)
+internal void Win32GetMousePosition(HWND Window, int32* MouseX, int32* MouseY)
 {
     POINT MouseP;
     GetCursorPos(&MouseP);
     ScreenToClient(Window, &MouseP);
-    NewInput->MouseX = MouseP.x;
-    NewInput->MouseY = MouseP.y;
+
+    *MouseX = MouseP.x;
+    *MouseY = MouseP.y;
+}
+
+void Win32PrimeMouseInput(HWND Window, game_input* NewInput, game_input* OldInput)
+{
+    Win32GetMousePosition(Window, &OldInput->MouseX, &OldInput->MouseY);
+    OldInput->LastMouseX = OldInput->MouseX;
+    OldInput->LastMouseY = OldInput->MouseY;
+
+    NewInput->MouseX = NewInput->LastMouseX = OldInput->MouseX;
+    NewInput->MouseY = NewInput->LastMouseY = OldInput->MouseY;
+}
+
+void Win32ProcessMouseInput(HWND Window, game_input* NewInput, game_input* OldInput)
+{
+    Win32GetMousePosition(Window, &NewInput->MouseX, &NewInput->MouseY);
     NewInput->MouseZ = 0;
+
+    NewInput->LastMouseX = OldInput->MouseX;
+    NewInput->LastMouseY = OldInput->MouseY;
+
+    RECT ClientRect;
+    GetClientRect(Window, &ClientRect);
+    NewInput->RenderWidth  = ClientRect.right - ClientRect.left;
+    NewInput->RenderHeight = ClientRect.bottom - ClientRect.top;
 
     Win32ProcessMouseButton(&NewInput->MouseButtons[0], &OldInput->MouseButtons[0],
                             GetKeyState(VK_LBUTTON) & (1 << 15));

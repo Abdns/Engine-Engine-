@@ -3,8 +3,11 @@
 
 #include "Types.h"
 #include "Memory.h"
+#include "Camera.h"
 #include "Entity.h"
+#include "Material.h"
 #include "DataLake.h"
+#include "Physics.h"
 
 struct game_state
 {
@@ -13,14 +16,15 @@ struct game_state
     memory_arena WorldArena;
     data_lake Lake;
     entities Entities;
+    materials Materials;
 
     uint32 SkyHandle;
 
-    Vector3 CameraP;
-    real32  CameraYaw;
-    real32  CameraPitch;
-    real32  LastMouseX;
-    real32  LastMouseY;
+    camera Camera;
+
+    collider *Colliders;
+    uint32    ColliderCapacity;
+    uint32    SelectedEntityID;
 };
 
 #endif
