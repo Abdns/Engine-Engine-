@@ -162,6 +162,18 @@ internal render_pass CreatePass(vulkan_context *context, pass_desc *Desc, VkImag
     return pass;
 }
 
+internal void DestroyPass(vulkan_context *context, render_pass *pass)
+{
+    for (uint32 i = 0; i < pass->FramebufferCount; ++i)
+    {
+        vkDestroyFramebuffer(context->device, pass->Framebuffers[i], nullptr);
+    }
+
+    vkDestroyRenderPass(context->device, pass->Handle, nullptr);
+
+    *pass = {};
+}
+
 internal render_pass CreateScenePass(vulkan_context *context, VkImageView target, VkImageView depthView)
 {
     pass_desc Desc = {};
@@ -191,18 +203,6 @@ internal render_pass CreatePostPass(vulkan_context *context, VkImageView *swapch
     Desc.Sync              = Sync_WriteThenPresent;
 
     return CreatePass(context, &Desc, swapchainViews, swapchainViewCount, VK_NULL_HANDLE);
-}
-
-internal void DestroyPass(vulkan_context *context, render_pass *pass)
-{
-    for (uint32 i = 0; i < pass->FramebufferCount; ++i)
-    {
-        vkDestroyFramebuffer(context->device, pass->Framebuffers[i], nullptr);
-    }
-
-    vkDestroyRenderPass(context->device, pass->Handle, nullptr);
-
-    *pass = {};
 }
 
 internal void BeginPass(VkCommandBuffer cmd, render_pass *pass, VkExtent2D extent, uint32 imageIndex)

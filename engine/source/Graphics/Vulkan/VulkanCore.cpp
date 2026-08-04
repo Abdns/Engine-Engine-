@@ -18,6 +18,152 @@ internal uint32 FindMemoryType(VkPhysicalDevice physicalDevice, uint32 typeFilte
     return INVALID_MEMORY_TYPE;
 }
 
+internal void FreeBuffer(vulkan_context *context, VkBuffer *buffer, VkDeviceMemory *memory)
+{
+    vkDestroyBuffer(context->device, *buffer, nullptr);
+    vkFreeMemory(context->device, *memory, nullptr);
+
+    *buffer = VK_NULL_HANDLE;
+    *memory = VK_NULL_HANDLE;
+}
+
+internal bool32 AllocateBuffer(vulkan_context *context, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags preferredProperties, VkMemoryPropertyFlags requiredProperties, VkBuffer *outBuffer, VkDeviceMemory *outMemory)
+{
+    *outBuffer = VK_NULL_HANDLE;
+    *outMemory = VK_NULL_HANDLE;
+
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = size;
+    bufferInfo.usage = usage;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    if (vkCreateBuffer(context->device, &bufferInfo, nullptr, outBuffer) != VK_SUCCESS)
+    {
+        DebugLog("Fail to create buffer\n");
+        return false;
+    }
+
+    VkMemoryRequirements memReq;
+    vkGetBufferMemoryRequirements(context->device, *outBuffer, &memReq);
+
+    uint32 memoryType = FindMemoryType(context->physicalDevice, memReq.memoryTypeBits, preferredProperties);
+    if (memoryType == INVALID_MEMORY_TYPE && preferredProperties != requiredProperties)
+    {
+        DebugLog("No device-local host-visible memory, buffer falls back to system memory\n");
+        memoryType = FindMemoryType(context->physicalDevice, memReq.memoryTypeBits, requiredProperties);
+    }
+
+    if (memoryType == INVALID_MEMORY_TYPE)
+    {
+        DebugLog("Fail to find suitable memory type for buffer\n");
+        FreeBuffer(context, outBuffer, outMemory);
+        return false;
+    }
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memReq.size;
+    allocInfo.memoryTypeIndex = memoryType;
+
+    if (vkAllocateMemory(context->device, &allocInfo, nullptr, outMemory) != VK_SUCCESS)
+    {
+        DebugLog("Fail to allocate buffer memory\n");
+        FreeBuffer(context, outBuffer, outMemory);
+        return false;
+    }
+
+    if (vkBindBufferMemory(context->device, *outBuffer, *outMemory, 0) != VK_SUCCESS)
+    {
+        DebugLog("Fail to bind buffer memory\n");
+        FreeBuffer(context, outBuffer, outMemory);
+        return false;
+    }
+
+    return true;
+}
+
+internal bool32 CreateStagingBuffer(vulkan_context *context, VkDeviceSize size, void *data, VkBuffer *outBuffer, VkDeviceMemory *outMemory)
+{
+    VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+    if (!AllocateBuffer(context, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, properties, properties, outBuffer, outMemory))
+    {
+        return false;
+    }
+
+    void *mapped = nullptr;
+    if (vkMapMemory(context->device, *outMemory, 0, size, 0, &mapped) != VK_SUCCESS)
+    {
+        DebugLog("Fail to map staging buffer\n");
+        FreeBuffer(context, outBuffer, outMemory);
+        return false;
+    }
+
+    CopySize(size, data, mapped);
+    vkUnmapMemory(context->device, *outMemory);
+
+    return true;
+}
+
+internal bool32 CreateMappedBuffer(vulkan_context *context, VkDeviceSize size, VkBufferUsageFlags usage, VkBuffer *outBuffer, VkDeviceMemory *outMemory, void **outMapped)
+{
+    VkMemoryPropertyFlags preferred = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    VkMemoryPropertyFlags required  = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+    if (!AllocateBuffer(context, size, usage, preferred, required, outBuffer, outMemory))
+    {
+        return false;
+    }
+
+    if (vkMapMemory(context->device, *outMemory, 0, size, 0, outMapped) != VK_SUCCESS)
+    {
+        DebugLog("Fail to map buffer memory\n");
+        FreeBuffer(context, outBuffer, outMemory);
+        return false;
+    }
+
+    return true;
+}
+
+internal gpu_buffer CreateBuffer(vulkan_context *context, const char *name, VkBufferUsageFlags usage, uint32 stride, uint32 capacity)
+{
+    gpu_buffer buffer = {};
+
+    VkDeviceSize size = (VkDeviceSize)capacity * stride;
+
+    if (!CreateMappedBuffer(context, size, usage, &buffer.Buffer, &buffer.Memory, &buffer.Mapped))
+    {
+        DebugLog("Fail to create %s buffer\n", name);
+        return buffer;
+    }
+
+    buffer.Stride   = stride;
+    buffer.Capacity = capacity;
+
+    DebugLog("%s buffer created (%u entries, %llu bytes)\n", name, capacity, (uint64)size);
+
+    return buffer;
+}
+
+internal void DestroyBuffer(vulkan_context *context, gpu_buffer *buffer)
+{
+    if (buffer->Mapped)
+    {
+        vkUnmapMemory(context->device, buffer->Memory);
+    }
+
+    FreeBuffer(context, &buffer->Buffer, &buffer->Memory);
+
+    *buffer = {};
+}
+
+internal void BufferWrite(gpu_buffer *buffer, uint32 first, const void *data, uint32 count)
+{
+    uint8 *destination = (uint8 *)buffer->Mapped + (VkDeviceSize)first * buffer->Stride;
+    CopySize((memory_index)count * buffer->Stride, (void *)data, destination);
+}
+
 internal VkImageCreateInfo TextureImageInfo(uint32 width, uint32 height, VkFormat format, uint32 layers)
 {
     VkImageCreateInfo imageInfo{};
@@ -215,152 +361,6 @@ internal VkImageView CreateCubeImageView(VkDevice device, VkImage image, VkForma
 internal VkImageView CreateDepthImageView(VkDevice device, VkImage image, VkFormat format)
 {
     return CreateImageView(device, image, format, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_VIEW_TYPE_2D, 1);
-}
-
-internal void FreeBuffer(vulkan_context *context, VkBuffer *buffer, VkDeviceMemory *memory)
-{
-    vkDestroyBuffer(context->device, *buffer, nullptr);
-    vkFreeMemory(context->device, *memory, nullptr);
-
-    *buffer = VK_NULL_HANDLE;
-    *memory = VK_NULL_HANDLE;
-}
-
-internal bool32 AllocateBuffer(vulkan_context *context, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags preferredProperties, VkMemoryPropertyFlags requiredProperties, VkBuffer *outBuffer, VkDeviceMemory *outMemory)
-{
-    *outBuffer = VK_NULL_HANDLE;
-    *outMemory = VK_NULL_HANDLE;
-
-    VkBufferCreateInfo bufferInfo{};
-    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = size;
-    bufferInfo.usage = usage;
-    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    if (vkCreateBuffer(context->device, &bufferInfo, nullptr, outBuffer) != VK_SUCCESS)
-    {
-        DebugLog("Fail to create buffer\n");
-        return false;
-    }
-
-    VkMemoryRequirements memReq;
-    vkGetBufferMemoryRequirements(context->device, *outBuffer, &memReq);
-
-    uint32 memoryType = FindMemoryType(context->physicalDevice, memReq.memoryTypeBits, preferredProperties);
-    if (memoryType == INVALID_MEMORY_TYPE && preferredProperties != requiredProperties)
-    {
-        DebugLog("No device-local host-visible memory, buffer falls back to system memory\n");
-        memoryType = FindMemoryType(context->physicalDevice, memReq.memoryTypeBits, requiredProperties);
-    }
-
-    if (memoryType == INVALID_MEMORY_TYPE)
-    {
-        DebugLog("Fail to find suitable memory type for buffer\n");
-        FreeBuffer(context, outBuffer, outMemory);
-        return false;
-    }
-
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memReq.size;
-    allocInfo.memoryTypeIndex = memoryType;
-
-    if (vkAllocateMemory(context->device, &allocInfo, nullptr, outMemory) != VK_SUCCESS)
-    {
-        DebugLog("Fail to allocate buffer memory\n");
-        FreeBuffer(context, outBuffer, outMemory);
-        return false;
-    }
-
-    if (vkBindBufferMemory(context->device, *outBuffer, *outMemory, 0) != VK_SUCCESS)
-    {
-        DebugLog("Fail to bind buffer memory\n");
-        FreeBuffer(context, outBuffer, outMemory);
-        return false;
-    }
-
-    return true;
-}
-
-internal bool32 CreateStagingBuffer(vulkan_context *context, VkDeviceSize size, void *data, VkBuffer *outBuffer, VkDeviceMemory *outMemory)
-{
-    VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-
-    if (!AllocateBuffer(context, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, properties, properties, outBuffer, outMemory))
-    {
-        return false;
-    }
-
-    void *mapped = nullptr;
-    if (vkMapMemory(context->device, *outMemory, 0, size, 0, &mapped) != VK_SUCCESS)
-    {
-        DebugLog("Fail to map staging buffer\n");
-        FreeBuffer(context, outBuffer, outMemory);
-        return false;
-    }
-
-    CopySize(size, data, mapped);
-    vkUnmapMemory(context->device, *outMemory);
-
-    return true;
-}
-
-internal bool32 CreateMappedBuffer(vulkan_context *context, VkDeviceSize size, VkBufferUsageFlags usage, VkBuffer *outBuffer, VkDeviceMemory *outMemory, void **outMapped)
-{
-    VkMemoryPropertyFlags preferred = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    VkMemoryPropertyFlags required  = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-
-    if (!AllocateBuffer(context, size, usage, preferred, required, outBuffer, outMemory))
-    {
-        return false;
-    }
-
-    if (vkMapMemory(context->device, *outMemory, 0, size, 0, outMapped) != VK_SUCCESS)
-    {
-        DebugLog("Fail to map buffer memory\n");
-        FreeBuffer(context, outBuffer, outMemory);
-        return false;
-    }
-
-    return true;
-}
-
-internal gpu_buffer CreateBuffer(vulkan_context *context, const char *name, VkBufferUsageFlags usage, uint32 stride, uint32 capacity)
-{
-    gpu_buffer buffer = {};
-
-    VkDeviceSize size = (VkDeviceSize)capacity * stride;
-
-    if (!CreateMappedBuffer(context, size, usage, &buffer.Buffer, &buffer.Memory, &buffer.Mapped))
-    {
-        DebugLog("Fail to create %s buffer\n", name);
-        return buffer;
-    }
-
-    buffer.Stride   = stride;
-    buffer.Capacity = capacity;
-
-    DebugLog("%s buffer created (%u entries, %llu bytes)\n", name, capacity, (uint64)size);
-
-    return buffer;
-}
-
-internal void DestroyBuffer(vulkan_context *context, gpu_buffer *buffer)
-{
-    if (buffer->Mapped)
-    {
-        vkUnmapMemory(context->device, buffer->Memory);
-    }
-
-    FreeBuffer(context, &buffer->Buffer, &buffer->Memory);
-
-    *buffer = {};
-}
-
-internal void BufferWrite(gpu_buffer *buffer, uint32 first, const void *data, uint32 count)
-{
-    uint8 *destination = (uint8 *)buffer->Mapped + (VkDeviceSize)first * buffer->Stride;
-    CopySize((memory_index)count * buffer->Stride, (void *)data, destination);
 }
 
 internal VkCommandBuffer BeginSingleTimeCommands(vulkan_context *context)

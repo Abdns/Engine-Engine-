@@ -26,6 +26,12 @@ global_variable const char *OptionalDeviceExtensions[] =
 #define MAX_FAMILY_COUNT      8
 #define MAX_DEVICE_EXTENSIONS 256
 
+#define PREFERRED_SURFACE_FORMAT VK_FORMAT_B8G8R8A8_SRGB
+#define FALLBACK_SURFACE_FORMAT  VK_FORMAT_R8G8B8A8_SRGB
+#define REQUIRED_COLOR_SPACE     VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
+#define PREFERRED_PRESENT_MODE   VK_PRESENT_MODE_MAILBOX_KHR
+#define FALLBACK_PRESENT_MODE    VK_PRESENT_MODE_FIFO_KHR
+
 global_variable vulkan_context GlobalVulkan;
 
 internal uint32 GetExtensions(VkExtensionProperties *props, uint32 maxCount)
@@ -443,76 +449,6 @@ internal bool32 CreateLogicalDevice(vulkan_context *context)
     return true;
 }
 
-internal bool32 CreateCommandPool(vulkan_context *context)
-{
-    VkCommandPoolCreateInfo poolInfo{};
-    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    poolInfo.queueFamilyIndex = context->graphicsFamilyIndex;
-
-    if (vkCreateCommandPool(context->device, &poolInfo, nullptr, &context->commandPool) != VK_SUCCESS)
-    {
-        DebugLog("Fail to create command pool\n");
-        return false;
-    }
-
-    DebugLog("Command pool created\n");
-    return true;
-}
-
-internal bool32 CreateCommandBuffer(vulkan_context *context)
-{
-    VkCommandBufferAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.commandPool = context->commandPool;
-    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandBufferCount = 1;
-
-    if (vkAllocateCommandBuffers(context->device, &allocInfo, &context->commandBuffer) != VK_SUCCESS)
-    {
-        DebugLog("Fail to allocate command buffer\n");
-        return false;
-    }
-
-    DebugLog("Command buffer allocated\n");
-    return true;
-}
-
-internal bool32 CreateSyncObjects(vulkan_context *context)
-{
-    VkSemaphoreCreateInfo semInfo{};
-    semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-    VkFenceCreateInfo fenceInfo{};
-    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-    if (vkCreateSemaphore(context->device, &semInfo, nullptr, &context->imageAvailableSemaphore) != VK_SUCCESS ||
-        vkCreateFence(context->device, &fenceInfo, nullptr, &context->inFlightFence) != VK_SUCCESS)
-    {
-        DebugLog("Fail to create sync objects\n");
-        return false;
-    }
-
-    for (uint32 i = 0; i < context->swapchainImageCount; ++i)
-    {
-        if (vkCreateSemaphore(context->device, &semInfo, nullptr, &context->renderFinishedSemaphores[i]) != VK_SUCCESS)
-        {
-            DebugLog("Fail to create render-finished semaphore\n");
-            return false;
-        }
-    }
-
-    DebugLog("Sync objects created\n");
-    return true;
-}
-
-#define PREFERRED_SURFACE_FORMAT VK_FORMAT_B8G8R8A8_SRGB
-#define FALLBACK_SURFACE_FORMAT  VK_FORMAT_R8G8B8A8_SRGB
-#define REQUIRED_COLOR_SPACE     VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
-#define PREFERRED_PRESENT_MODE   VK_PRESENT_MODE_MAILBOX_KHR
-#define FALLBACK_PRESENT_MODE    VK_PRESENT_MODE_FIFO_KHR
-
 internal VkSurfaceFormatKHR ChooseSwapSurfaceFormat(swapchain_support_details *support)
 {
 
@@ -707,5 +643,69 @@ internal bool32 RecreateSwapchain(vulkan_context *context)
     if (!CreateImageViews(context))                       return false;
     if (!CreateDepthResources(context))                   return false;
 
+    return true;
+}
+
+internal bool32 CreateCommandPool(vulkan_context *context)
+{
+    VkCommandPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    poolInfo.queueFamilyIndex = context->graphicsFamilyIndex;
+
+    if (vkCreateCommandPool(context->device, &poolInfo, nullptr, &context->commandPool) != VK_SUCCESS)
+    {
+        DebugLog("Fail to create command pool\n");
+        return false;
+    }
+
+    DebugLog("Command pool created\n");
+    return true;
+}
+
+internal bool32 CreateCommandBuffer(vulkan_context *context)
+{
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.commandPool = context->commandPool;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandBufferCount = 1;
+
+    if (vkAllocateCommandBuffers(context->device, &allocInfo, &context->commandBuffer) != VK_SUCCESS)
+    {
+        DebugLog("Fail to allocate command buffer\n");
+        return false;
+    }
+
+    DebugLog("Command buffer allocated\n");
+    return true;
+}
+
+internal bool32 CreateSyncObjects(vulkan_context *context)
+{
+    VkSemaphoreCreateInfo semInfo{};
+    semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+    VkFenceCreateInfo fenceInfo{};
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+    if (vkCreateSemaphore(context->device, &semInfo, nullptr, &context->imageAvailableSemaphore) != VK_SUCCESS ||
+        vkCreateFence(context->device, &fenceInfo, nullptr, &context->inFlightFence) != VK_SUCCESS)
+    {
+        DebugLog("Fail to create sync objects\n");
+        return false;
+    }
+
+    for (uint32 i = 0; i < context->swapchainImageCount; ++i)
+    {
+        if (vkCreateSemaphore(context->device, &semInfo, nullptr, &context->renderFinishedSemaphores[i]) != VK_SUCCESS)
+        {
+            DebugLog("Fail to create render-finished semaphore\n");
+            return false;
+        }
+    }
+
+    DebugLog("Sync objects created\n");
     return true;
 }

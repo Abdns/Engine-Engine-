@@ -2,35 +2,6 @@
 
 global_variable vulkan_resources GlobalResources;
 
-internal bool32 CreateTextureSampler(vulkan_context *context, vulkan_resources *res, VkFilter filter, VkSamplerAddressMode addressMode)
-{
-    VkSamplerCreateInfo samplerInfo{};
-    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    samplerInfo.magFilter = filter;
-    samplerInfo.minFilter = filter;
-    samplerInfo.addressModeU = addressMode;
-    samplerInfo.addressModeV = addressMode;
-    samplerInfo.addressModeW = addressMode;
-    samplerInfo.anisotropyEnable = VK_FALSE;
-    samplerInfo.maxAnisotropy = 1.0f;
-    samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-    samplerInfo.unnormalizedCoordinates = VK_FALSE;
-    samplerInfo.compareEnable = VK_FALSE;
-    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    samplerInfo.mipLodBias = 0.0f;
-    samplerInfo.minLod = 0.0f;
-    samplerInfo.maxLod = 0.0f;
-
-    if (vkCreateSampler(context->device, &samplerInfo, nullptr, &res->Sampler) != VK_SUCCESS)
-    {
-        DebugLog("Fail to create texture sampler\n");
-        return false;
-    }
-
-    return true;
-}
-
 internal void UpdateImageDescriptorInSet(vulkan_context *context, VkDescriptorSet set, uint32 binding, uint32 arrayElement, VkImageView view)
 {
     VkDescriptorImageInfo imageInfo{};
@@ -96,6 +67,35 @@ internal bool32 AllocateDescriptorSet(vulkan_context *context, VkDescriptorPool 
     if (vkAllocateDescriptorSets(context->device, &allocInfo, outSet) != VK_SUCCESS)
     {
         DebugLog("Fail to allocate descriptor set\n");
+        return false;
+    }
+
+    return true;
+}
+
+internal bool32 CreateTextureSampler(vulkan_context *context, vulkan_resources *res, VkFilter filter, VkSamplerAddressMode addressMode)
+{
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = filter;
+    samplerInfo.minFilter = filter;
+    samplerInfo.addressModeU = addressMode;
+    samplerInfo.addressModeV = addressMode;
+    samplerInfo.addressModeW = addressMode;
+    samplerInfo.anisotropyEnable = VK_FALSE;
+    samplerInfo.maxAnisotropy = 1.0f;
+    samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+    samplerInfo.compareEnable = VK_FALSE;
+    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerInfo.mipLodBias = 0.0f;
+    samplerInfo.minLod = 0.0f;
+    samplerInfo.maxLod = 0.0f;
+
+    if (vkCreateSampler(context->device, &samplerInfo, nullptr, &res->Sampler) != VK_SUCCESS)
+    {
+        DebugLog("Fail to create texture sampler\n");
         return false;
     }
 
