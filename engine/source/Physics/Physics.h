@@ -28,6 +28,16 @@ struct raycast_hit
     Vector3 Point;
 };
 
+internal collider MakeCollider(uint32 Handle, Matrix4 Transform, collision_mesh Mesh)
+{
+    collider Result;
+    Result.Handle    = Handle;
+    Result.Transform = Transform;
+    Result.Mesh      = Mesh;
+
+    return Result;
+}
+
 inline Vector3 CollisionMeshVertex(collision_mesh *Mesh, uint32 Index)
 {
     return *(Vector3 *)((uint8 *)Mesh->Vertices + (uint64)Index * Mesh->VertexStride);

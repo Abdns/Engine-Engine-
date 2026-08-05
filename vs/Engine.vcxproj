@@ -54,6 +54,7 @@
     <ClInclude Include="..\engine\source\Platform\win32\src\Win32Window.cpp" />
     <ClInclude Include="..\engine\source\Game\include\Game.h" />
     <ClInclude Include="..\engine\source\Game\include\GameState.h" />
+    <ClInclude Include="..\engine\source\Game\include\UI.h" />
     <ClInclude Include="..\engine\source\Game\include\Camera.h" />
     <ClInclude Include="..\engine\source\Game\include\Entity.h" />
     <ClInclude Include="..\engine\source\Game\include\Material.h" />
@@ -79,6 +80,10 @@
     <None Include="..\engine\source\Graphics\Vulkan\shaders\skybox.frag.hlsl" />
     <None Include="..\engine\source\Graphics\Vulkan\shaders\post.vert.hlsl" />
     <None Include="..\engine\source\Graphics\Vulkan\shaders\post.frag.hlsl" />
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\UI.vert.hlsl" />
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\UI.frag.hlsl" />
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\uirect.vert.hlsl" />
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\uirect.frag.hlsl" />
     <None Include="..\engine\assets\models\TestShapes.gltf" />
     <None Include="..\engine\assets\models\TestShapes.bin" />
     <None Include="..\engine\assets\models\TestTexture.tga" />

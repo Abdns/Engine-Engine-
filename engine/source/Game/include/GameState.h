@@ -8,6 +8,7 @@
 #include "Material.h"
 #include "DataLake.h"
 #include "Physics.h"
+#include "UI.h"
 
 struct game_state
 {
@@ -20,11 +21,18 @@ struct game_state
 
     uint32 SkyHandle;
 
+    uint32 SpawnMeshHandles[2];
+    uint32 SpawnMaterialHandles[3];
+
     camera Camera;
 
     collider *Colliders;
     uint32    ColliderCapacity;
     uint32    SelectedEntityID;
+
+    ui_context UI;
+    real32     SpinSpeed;
+    bool32     SpinPaused;
 };
 
 #endif

@@ -1,6 +1,16 @@
 #include "Game.h"
 #include "Entity.cpp"
 
+enum ui_id
+{
+    UI_ID_PAUSE = 1,
+    UI_ID_SPEED,
+    UI_ID_SPAWN,
+    UI_ID_CLEAR,
+};
+
+#define ENTITY_SPIN Vector3(0.7f, 1.0f, 0.0f)
+
 internal void GameOutputSound(game_state* GameState, game_sound_output_buffer* SoundBuffer)
 {
     int ToneHz = 256;
@@ -53,6 +63,70 @@ internal void LoadAssetPack(char* name, game_memory *Memory, game_state* GameSta
     Memory->PlatformFreeFileMemory(PackFile.Data);
 }
 
+internal collision_mesh LakeCollisionMesh(data_lake *Lake, uint32 Slot)
+{
+    collision_mesh Mesh = {};
+    Mesh.Vertices     = LakeMeshVertices(Lake, Slot);
+    Mesh.VertexStride = sizeof(enga_vertex);
+    Mesh.Indices      = LakeMeshIndices(Lake, Slot);
+    Mesh.IndexCount   = Lake->MeshIndexCount[Slot];
+    Mesh.BoundsMin    = Lake->MeshBoundsMin[Slot];
+    Mesh.BoundsMax    = Lake->MeshBoundsMax[Slot];
+
+    return Mesh;
+}
+
+internal uint32 BuildEntityColliders(entities *Entities, data_lake *Lake, collider *Colliders, uint32 MaxColliders)
+{
+    uint32 Count = 0;
+
+    for (uint32 EntityIndex = 0; EntityIndex < Entities->Count && Count < MaxColliders; ++EntityIndex)
+    {
+        uint32 MeshHandle = Entities->MeshHandle[EntityIndex];
+        if (!MeshHandle || MeshHandle > Lake->MeshCount)
+        {
+            continue;
+        }
+
+        Colliders[Count++] = MakeCollider(Entities->ID[EntityIndex], EntityTransform(Entities, EntityIndex), LakeCollisionMesh(Lake, MeshHandle - 1));
+    }
+
+    return Count;
+}
+
+internal void PushEntitiesToRender(entities *Entities, render_commands *Commands, uint32 SelectedID)
+{
+    for (uint32 EntityIndex = 0; EntityIndex < Entities->Count; ++EntityIndex)
+    {
+        Vector4 Tint = Entities->Tint[EntityIndex];
+        if (SelectedID && Entities->ID[EntityIndex] == SelectedID)
+        {
+            Tint = Vector4(1.0f, 0.85f, 0.2f, Tint.W);
+        }
+
+        PushRenderMesh(Commands, EntityTransform(Entities, EntityIndex), Tint, Entities->MeshHandle[EntityIndex], Entities->MaterialHandle[EntityIndex]);
+    }
+}
+
+internal uint32 SpawnEntity(game_state *GameState)
+{
+    entities *Entities = &GameState->Entities;
+
+    uint32 Index  = Entities->Count;
+    real32 Angle  = (real32)Index * 2.39996f;
+    real32 Radius = 0.9f * SquareRoot((real32)Index + 1.0f);
+
+    Vector3 Position = Vector3(Cos(Angle) * Radius, 0.0f, Sin(Angle) * Radius);
+
+    uint32 MeshHandle     = GameState->SpawnMeshHandles[Index % ArrayCount(GameState->SpawnMeshHandles)];
+    uint32 MaterialHandle = GameState->SpawnMaterialHandles[Index % ArrayCount(GameState->SpawnMaterialHandles)];
+
+    uint32 EntityID = AddEntity(Entities, Position, MeshHandle, MaterialHandle);
+    SetEntityAngularVelocity(Entities, EntityID, ENTITY_SPIN);
+
+    return EntityID;
+}
+
 extern "C" __declspec(dllexport)
 GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 {
@@ -76,45 +150,68 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         data_lake* Lake = &GameState->Lake;
         PushLakeToRender(Lake, RenderCommands);
 
-        uint32    MeshCubeHandle = LakeGetMeshHandle(Lake, "cube");
-        uint32    MeshSphereHandle = LakeGetMeshHandle(Lake, "sphere");
         uint32    TexTestHandle = LakeGetTextureHandle(Lake, "test");
 
         GameState->SkyHandle = LakeGetCubemapHandle(Lake, "sky");
 
+        GameState->SpawnMeshHandles[0] = LakeGetMeshHandle(Lake, "cube");
+        GameState->SpawnMeshHandles[1] = LakeGetMeshHandle(Lake, "sphere");
+
         materials* Materials = &GameState->Materials;
-        uint32 MatPlain = AddMaterial(Materials, UnlitMaterial(Vector4(1.0f, 1.0f, 1.0f, 1.0f), TexTestHandle));
-        uint32 MatPink  = AddMaterial(Materials, UnlitMaterial(Vector4(1.0f, 0.5f, 0.5f, 1.0f), TexTestHandle));
-        uint32 MatGreen = AddMaterial(Materials, UnlitMaterial(Vector4(0.5f, 1.0f, 0.5f, 1.0f), TexTestHandle));
+        GameState->SpawnMaterialHandles[0] = AddMaterial(Materials, UnlitMaterial(Vector4(1.0f, 1.0f, 1.0f, 1.0f), TexTestHandle));
+        GameState->SpawnMaterialHandles[1] = AddMaterial(Materials, UnlitMaterial(Vector4(1.0f, 0.5f, 0.5f, 1.0f), TexTestHandle));
+        GameState->SpawnMaterialHandles[2] = AddMaterial(Materials, UnlitMaterial(Vector4(0.5f, 1.0f, 0.5f, 1.0f), TexTestHandle));
         PushMaterialsToRender(Materials, RenderCommands);
 
-        Vector3 TumbleSpin = Vector3(0.7f, 1.0f, 0.0f);
-
-        uint32 CubeA = AddEntity(Entities, Vector3(-1.5f, 0.0f, 0.0f), MeshCubeHandle, MatPlain);
-        uint32 Sphere = AddEntity(Entities, Vector3(0.0f, 0.0f, -1.5f), MeshSphereHandle, MatPink);
-        uint32 CubeB = AddEntity(Entities, Vector3(1.5f, 0.0f, 0.0f), MeshCubeHandle, MatGreen);
-
-        SetEntityAngularVelocity(Entities, CubeA, TumbleSpin);
-        SetEntityAngularVelocity(Entities, Sphere, TumbleSpin);
-        SetEntityAngularVelocity(Entities, CubeB, TumbleSpin);
+        for (uint32 SpawnIndex = 0; SpawnIndex < 3; ++SpawnIndex)
+        {
+            SpawnEntity(GameState);
+        }
 
         InitCamera(&GameState->Camera, Vector3(0.0f, 0.0f, 4.0f), DegToRad(75.0f));
 
         GameState->SelectedEntityID = 0;
 
+        GameState->UI.Style   = DefaultUIStyle();
+        GameState->SpinSpeed  = 1.0f;
+        GameState->SpinPaused = false;
+
         Memory->IsInitialized = true;
     }
 
-    UpdateEntities(&GameState->Entities, Input->dtForFrame);
+    ui_context *UI = &GameState->UI;
+    BeginUI(UI, Input, RenderCommands);
+
+    entities *Entities = &GameState->Entities;
+
+    if (UIButton(UI, UI_ID_PAUSE, RectMinDim(20.0f, 20.0f, 140.0f, 36.0f)))
+    {
+        GameState->SpinPaused = !GameState->SpinPaused;
+    }
+
+    UISlider(UI, UI_ID_SPEED, RectMinDim(20.0f, 66.0f, 140.0f, 24.0f), &GameState->SpinSpeed);
+
+    if (UIButton(UI, UI_ID_SPAWN, RectMinDim(20.0f, 100.0f, 140.0f, 36.0f)))
+    {
+        GameState->SelectedEntityID = SpawnEntity(GameState);
+    }
+
+    if (UIButton(UI, UI_ID_CLEAR, RectMinDim(20.0f, 146.0f, 140.0f, 36.0f)))
+    {
+        GameState->SelectedEntityID = 0;
+    }
+
+    real32 SpinScale = GameState->SpinPaused ? 0.0f : GameState->SpinSpeed;
+    UpdateEntities(Entities, Input->dtForFrame * SpinScale);
 
     camera* Camera = &GameState->Camera;
     UpdateCamera(Camera, Input);
 
-    bool32 ClickedThisFrame = (Input->MouseButtons[0].EndedDown && Input->MouseButtons[0].HalfTransitionCount);
-    if (ClickedThisFrame && Input->RenderWidth > 0 && Input->RenderHeight > 0)
+    bool32 PickedThisFrame = (UI->MousePressed && !UI->Active);
+    if (PickedThisFrame && Input->RenderWidth > 0 && Input->RenderHeight > 0)
     {
         ray PickRay = CameraRayFromScreen(Camera, (real32)Input->MouseX, (real32)Input->MouseY, (real32)Input->RenderWidth, (real32)Input->RenderHeight);
-        uint32 ColliderCount = BuildEntityColliders(&GameState->Entities, &GameState->Lake, GameState->Colliders, GameState->ColliderCapacity);
+        uint32 ColliderCount = BuildEntityColliders(Entities, &GameState->Lake, GameState->Colliders, GameState->ColliderCapacity);
         GameState->SelectedEntityID = RayCastColliders(PickRay, GameState->Colliders, ColliderCount, 0);
     }
 
@@ -123,7 +220,9 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     PushRenderPipeline(RenderCommands, Pipeline_Skybox);
     PushRenderSkybox(RenderCommands, GameState->SkyHandle);
 
-    PushEntitiesToRender(&GameState->Entities, RenderCommands, GameState->SelectedEntityID);
+    PushEntitiesToRender(Entities, RenderCommands, GameState->SelectedEntityID);
+
+    EndUI(UI);
 }
 
 extern "C" __declspec(dllexport)

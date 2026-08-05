@@ -1,13 +1,10 @@
 #include "Entity.h"
 #include "Memory.h"
-#include "DataLake.h"
-#include "Physics.h"
-#include "RenderCommands.h"
 
 internal void InitEntities(entities* Entities, memory_arena* WorldArena)
 {
     Entities->Count = 0;
-    Entities->MaxCount = 8;
+    Entities->MaxCount = MAX_ENTITIES;
     Entities->NextID = 0;
     Entities->ID = PushArray(WorldArena, Entities->MaxCount, uint32);
     Entities->Position = PushArray(WorldArena, Entities->MaxCount, Vector3);
@@ -45,7 +42,12 @@ internal uint32 FindEntityIndex(entities* Entities, uint32 EntityID)
 
 internal uint32 AddEntity(entities* Entities, Vector3 Position, uint32 MeshHandle, uint32 MaterialHandle)
 {
-    Assert(Entities->Count < Entities->MaxCount);
+    if (Entities->Count >= Entities->MaxCount)
+    {
+        DebugLog("Entity storage is full (%u entities)\n", Entities->MaxCount);
+        return 0;
+    }
+
     uint32 Index = Entities->Count++;
     uint32 EntityID = ++Entities->NextID;
 
@@ -63,6 +65,11 @@ internal uint32 AddEntity(entities* Entities, Vector3 Position, uint32 MeshHandl
 
 internal void SetEntityAngularVelocity(entities* Entities, uint32 EntityID, Vector3 AngularVelocity)
 {
+    if (!EntityID)
+    {
+        return;
+    }
+
     Entities->AngularVelocity[FindEntityIndex(Entities, EntityID)] = AngularVelocity;
 }
 
@@ -77,48 +84,5 @@ internal void UpdateEntities(entities* Entities, real32 dt)
     {
         Entities->Position[EntityIndex] += dt * Entities->Velocity[EntityIndex];
         Entities->Rotation[EntityIndex] += dt * Entities->AngularVelocity[EntityIndex];
-    }
-}
-
-internal uint32 BuildEntityColliders(entities* Entities, data_lake* Lake, collider* Colliders, uint32 MaxColliders)
-{
-    uint32 Count = 0;
-
-    for (uint32 EntityIndex = 0; EntityIndex < Entities->Count && Count < MaxColliders; ++EntityIndex)
-    {
-        uint32 MeshHandle = Entities->MeshHandle[EntityIndex];
-        if (!MeshHandle || MeshHandle > Lake->MeshCount)
-        {
-            continue;
-        }
-
-        uint32 Slot = MeshHandle - 1;
-
-        collider* Current = Colliders + Count++;
-        Current->Handle    = Entities->ID[EntityIndex];
-        Current->Transform = EntityTransform(Entities, EntityIndex);
-
-        Current->Mesh.Vertices     = LakeMeshVertices(Lake, Slot);
-        Current->Mesh.VertexStride = sizeof(enga_vertex);
-        Current->Mesh.Indices      = LakeMeshIndices(Lake, Slot);
-        Current->Mesh.IndexCount   = Lake->MeshIndexCount[Slot];
-        Current->Mesh.BoundsMin    = Lake->MeshBoundsMin[Slot];
-        Current->Mesh.BoundsMax    = Lake->MeshBoundsMax[Slot];
-    }
-
-    return Count;
-}
-
-internal void PushEntitiesToRender(entities* Entities, render_commands* Commands, uint32 SelectedID)
-{
-    for (uint32 EntityIndex = 0; EntityIndex < Entities->Count; ++EntityIndex)
-    {
-        Vector4 Tint = Entities->Tint[EntityIndex];
-        if (SelectedID && Entities->ID[EntityIndex] == SelectedID)
-        {
-            Tint = Vector4(1.0f, 0.85f, 0.2f, Tint.W);
-        }
-
-        PushRenderMesh(Commands, EntityTransform(Entities, EntityIndex), Tint, Entities->MeshHandle[EntityIndex], Entities->MaterialHandle[EntityIndex]);
     }
 }

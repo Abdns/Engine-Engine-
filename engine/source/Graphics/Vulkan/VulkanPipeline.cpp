@@ -236,7 +236,7 @@ internal bool32 BuildPipeline(vulkan_context *context, vulkan_resources *res, re
     pipeline->DefaultState.CullMode   = VK_CULL_MODE_NONE;
     pipeline->DefaultState.DepthTest  = desc->DepthTest;
     pipeline->DefaultState.DepthWrite = desc->DepthWrite;
-    pipeline->DefaultState.AlphaBlend = VK_FALSE;
+    pipeline->DefaultState.AlphaBlend = desc->Blend;
 
     if (desc->OwnSet && !CreatePipelineSet(context, res, &pipeline->Set))
     {

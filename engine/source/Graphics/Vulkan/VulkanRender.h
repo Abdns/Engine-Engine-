@@ -96,6 +96,7 @@ enum pass_id
 {
     Pass_Scene = 0,
     Pass_Post,
+    Pass_UI,
     Pass_Count,
 };
 
@@ -154,6 +155,7 @@ struct pipeline_desc
 
     VkBool32 DepthTest;
     VkBool32 DepthWrite;
+    VkBool32 Blend;
     bool32   OwnSet;
 };
 

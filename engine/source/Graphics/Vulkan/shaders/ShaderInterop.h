@@ -51,6 +51,7 @@ struct draw_push_constants
 {
     float4x4 Model;
     float4   Tint;
+    float4   Rect;
     uint     MaterialIndex;
     uint     CubemapIndex;
 };

@@ -122,6 +122,9 @@
     <ClInclude Include="..\engine\source\Game\include\GameState.h">
       <Filter>engine\source\Game\include</Filter>
     </ClInclude>
+    <ClInclude Include="..\engine\source\Game\include\UI.h">
+      <Filter>engine\source\Game\include</Filter>
+    </ClInclude>
     <ClInclude Include="..\engine\source\Game\include\Camera.h">
       <Filter>engine\source\Game\include</Filter>
     </ClInclude>
@@ -191,6 +194,18 @@
       <Filter>engine\source\Graphics\Vulkan\shaders</Filter>
     </None>
     <None Include="..\engine\source\Graphics\Vulkan\shaders\post.frag.hlsl">
+      <Filter>engine\source\Graphics\Vulkan\shaders</Filter>
+    </None>
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\UI.vert.hlsl">
+      <Filter>engine\source\Graphics\Vulkan\shaders</Filter>
+    </None>
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\UI.frag.hlsl">
+      <Filter>engine\source\Graphics\Vulkan\shaders</Filter>
+    </None>
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\uirect.vert.hlsl">
+      <Filter>engine\source\Graphics\Vulkan\shaders</Filter>
+    </None>
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\uirect.frag.hlsl">
       <Filter>engine\source\Graphics\Vulkan\shaders</Filter>
     </None>
     <None Include="..\engine\assets\models\TestShapes.gltf">

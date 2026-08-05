@@ -9,6 +9,7 @@ enum command_type
     Render_Mesh = 0,
     Render_Camera,
     Render_Skybox,
+    Render_Rect,
     Set_Pipeline,
     Load_Mesh,
     Load_Texture,
@@ -40,6 +41,8 @@ enum pipeline_type
     Pipeline_Unlit = 0,
     Pipeline_Skybox,
     Pipeline_Post,
+    Pipeline_UI,
+    Pipeline_UIRect,
     Pipeline_Count,
 
     Pipeline_MeshCount = Pipeline_Skybox,
@@ -58,6 +61,14 @@ struct command_render_skybox
 {
     command_type   Type;
     uint32 CubemapHandle;
+};
+
+struct command_render_rect
+{
+    command_type Type;
+    Vector2      Min;
+    Vector2      Max;
+    Vector4      Color;
 };
 
 struct command_load_mesh
@@ -124,6 +135,7 @@ inline uint32 CommandSize(command_type Type)
     {
         case Render_Mesh:        return (uint32)sizeof(command_render_mesh);
         case Render_Skybox:      return (uint32)sizeof(command_render_skybox);
+        case Render_Rect:        return (uint32)sizeof(command_render_rect);
         case Render_Camera:      return (uint32)sizeof(command_render_camera);
         case Load_Mesh:          return (uint32)sizeof(command_load_mesh);
         case Load_Texture:       return (uint32)sizeof(command_load_texture);
@@ -270,6 +282,17 @@ inline void PushLoadMaterial(render_commands *Commands, uint32 MaterialHandle, p
         cmd->TextureHandle  = TextureHandle;
 
         Commands->LoadCount++;
+    }
+}
+
+inline void PushRenderRect(render_commands *Commands, Vector2 Min, Vector2 Max, Vector4 Color)
+{
+    command_render_rect *cmd = (command_render_rect *)PushRenderCommand(Commands, Render_Rect);
+    if (cmd)
+    {
+        cmd->Min   = Min;
+        cmd->Max   = Max;
+        cmd->Color = Color;
     }
 }
 

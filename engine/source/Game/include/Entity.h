@@ -4,6 +4,8 @@
 #include "Types.h"
 #include "EngineMath.h"
 
+#define MAX_ENTITIES 64
+
 struct entities
 {
     uint32 Count;
