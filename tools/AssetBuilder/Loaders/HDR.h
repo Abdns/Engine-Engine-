@@ -3,6 +3,7 @@
 
 #include "Types.h"
 #include "Memory.h"
+#include "Half.h"
 
 struct loaded_hdr
 {
@@ -11,29 +12,6 @@ struct loaded_hdr
     uint32  Height;
     uint64  ByteSize;
 };
-
-internal uint16 FloatToHalf(real32 Value)
-{
-    union { real32 F; uint32 U; } In;
-    In.F = Value;
-
-    uint32 Bits = In.U;
-    uint32 Sign = (Bits >> 16) & 0x8000;
-    int32  Exp  = (int32)((Bits >> 23) & 0xFF) - 127 + 15;
-    uint32 Mant = Bits & 0x7FFFFF;
-
-    if (Exp <= 0)
-    {
-        return (uint16)Sign;
-    }
-
-    if (Exp >= 31)
-    {
-        return (uint16)(Sign | 0x7BFF);
-    }
-
-    return (uint16)(Sign | ((uint32)Exp << 10) | (Mant >> 13));
-}
 
 internal void RGBEToHalf(uint8 *RGBE, uint16 *Out)
 {
@@ -129,8 +107,8 @@ internal loaded_hdr ParseHDR(memory_arena *Arena, void *FileData, uint32 FileSiz
         return Result;
     }
 
-    uint16 *Pixels = PushArray(Arena, (memory_index)Width * Height * 4, uint16);
-    uint8  *Scan   = PushArray(Arena, (memory_index)Width * 4, uint8);
+    uint16 *Pixels = PushArray(Arena, (memory_size)Width * Height * 4, uint16);
+    uint8  *Scan   = PushArray(Arena, (memory_size)Width * 4, uint8);
 
     for (uint32 Y = 0; Y < Height; ++Y)
     {
@@ -195,7 +173,7 @@ internal loaded_hdr ParseHDR(memory_arena *Arena, void *FileData, uint32 FileSiz
             }
         }
 
-        uint16 *Row = Pixels + (memory_index)Y * Width * 4;
+        uint16 *Row = Pixels + (memory_size)Y * Width * 4;
         for (uint32 X = 0; X < Width; ++X)
         {
             RGBEToHalf(Scan + X * 4, Row + X * 4);

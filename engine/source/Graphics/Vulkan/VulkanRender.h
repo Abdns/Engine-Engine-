@@ -23,8 +23,8 @@
 
 struct vulkan_shader
 {
-    platform_file_raw vert;
-    platform_file_raw frag;
+    file_contents vert;
+    file_contents frag;
 };
 
 struct gpu_buffer

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <Filter Include="engine">
@@ -34,7 +34,7 @@
     <Filter Include="engine\source\Graphics\Vulkan\shaders">
       <UniqueIdentifier>{a1000000-0000-0000-0000-000000000005}</UniqueIdentifier>
     </Filter>
-    <Filter Include="engine\source\Helpers">
+    <Filter Include="shared">
       <UniqueIdentifier>{a1000000-0000-0000-0000-000000000006}</UniqueIdentifier>
     </Filter>
     <Filter Include="engine\source\Platform">
@@ -46,13 +46,13 @@
     <Filter Include="engine\source\Platform\win32\src">
       <UniqueIdentifier>{a1000000-0000-0000-0000-000000000009}</UniqueIdentifier>
     </Filter>
-    <Filter Include="engine\assets">
+    <Filter Include="assets">
       <UniqueIdentifier>{a1000000-0000-0000-0000-0000000000b0}</UniqueIdentifier>
     </Filter>
-    <Filter Include="engine\assets\models">
+    <Filter Include="assets\models">
       <UniqueIdentifier>{a1000000-0000-0000-0000-0000000000b1}</UniqueIdentifier>
     </Filter>
-    <Filter Include="engine\assets\images">
+    <Filter Include="assets\images">
       <UniqueIdentifier>{a1000000-0000-0000-0000-0000000000b2}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
@@ -65,9 +65,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\engine\source\Game\src\Entity.cpp">
-      <Filter>engine\source\Game\src</Filter>
-    </ClInclude>
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanRenderer.cpp">
       <Filter>engine\source\Graphics\Vulkan</Filter>
     </ClInclude>
@@ -149,8 +146,8 @@
     <ClInclude Include="..\engine\source\Graphics\Vulkan\shaders\ShaderInterop.h">
       <Filter>engine\source\Graphics\Vulkan\shaders</Filter>
     </ClInclude>
-    <ClInclude Include="..\engine\source\Assets\EngaFormat.h">
-      <Filter>engine\source\Assets</Filter>
+    <ClInclude Include="..\shared\EngaFormat.h">
+      <Filter>shared</Filter>
     </ClInclude>
     <ClInclude Include="..\engine\source\Assets\AssetPack.h">
       <Filter>engine\source\Assets</Filter>
@@ -161,20 +158,26 @@
     <ClInclude Include="..\engine\source\Physics\Physics.h">
       <Filter>engine\source\Physics</Filter>
     </ClInclude>
-    <ClInclude Include="..\engine\source\Helpers\EngineMath.h">
-      <Filter>engine\source\Helpers</Filter>
+    <ClInclude Include="..\shared\EngineMath.h">
+      <Filter>shared</Filter>
     </ClInclude>
-    <ClInclude Include="..\engine\source\Helpers\Intrinsics.h">
-      <Filter>engine\source\Helpers</Filter>
+    <ClInclude Include="..\shared\FileIO.h">
+      <Filter>shared</Filter>
     </ClInclude>
-    <ClInclude Include="..\engine\source\Helpers\Memory.h">
-      <Filter>engine\source\Helpers</Filter>
+    <ClInclude Include="..\shared\Win32FileIO.h">
+      <Filter>shared</Filter>
     </ClInclude>
-    <ClInclude Include="..\engine\source\Helpers\Strings.h">
-      <Filter>engine\source\Helpers</Filter>
+    <ClInclude Include="..\shared\Intrinsics.h">
+      <Filter>shared</Filter>
     </ClInclude>
-    <ClInclude Include="..\engine\source\Helpers\Types.h">
-      <Filter>engine\source\Helpers</Filter>
+    <ClInclude Include="..\shared\Memory.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\Strings.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\Types.h">
+      <Filter>shared</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -208,20 +211,20 @@
     <None Include="..\engine\source\Graphics\Vulkan\shaders\uirect.frag.hlsl">
       <Filter>engine\source\Graphics\Vulkan\shaders</Filter>
     </None>
-    <None Include="..\engine\assets\models\TestShapes.gltf">
-      <Filter>engine\assets\models</Filter>
+    <None Include="..\assets\models\TestShapes.gltf">
+      <Filter>assets\models</Filter>
     </None>
-    <None Include="..\engine\assets\models\TestShapes.bin">
-      <Filter>engine\assets\models</Filter>
+    <None Include="..\assets\models\TestShapes.bin">
+      <Filter>assets\models</Filter>
     </None>
-    <None Include="..\engine\assets\models\TestTexture.tga">
-      <Filter>engine\assets\models</Filter>
+    <None Include="..\assets\models\TestTexture.tga">
+      <Filter>assets\models</Filter>
     </None>
-    <None Include="..\engine\assets\images\TestImage.tga">
-      <Filter>engine\assets\images</Filter>
+    <None Include="..\assets\images\TestImage.tga">
+      <Filter>assets\images</Filter>
     </None>
-    <None Include="..\engine\assets\images\sky.hdr">
-      <Filter>engine\assets\images</Filter>
+    <None Include="..\assets\images\sky.hdr">
+      <Filter>assets\images</Filter>
     </None>
     <None Include="..\build.bat" />
   </ItemGroup>

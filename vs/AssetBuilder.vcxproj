@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -23,7 +23,7 @@
     <NMakeCleanCommandLine>if exist "$(ProjectDir)..\build" rd /s /q "$(ProjectDir)..\build"</NMakeCleanCommandLine>
     <NMakeOutput>$(ProjectDir)..\build\AssetBuilder.exe</NMakeOutput>
     <NMakePreprocessorDefinitions>ENGINE_INTERNAL=1;ENGINE_SLOW=1;ENGINE_WIN32=1;UNICODE;_UNICODE;_DEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
-    <NMakeIncludeSearchPath>$(ProjectDir)..\engine\tools\AssetBuilder;$(ProjectDir)..\engine\source\Helpers;$(ProjectDir)..\engine\source\Assets;$(VC_IncludePath);$(WindowsSDK_IncludePath);$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+    <NMakeIncludeSearchPath>$(ProjectDir)..\tools\AssetBuilder;$(ProjectDir)..\shared;$(ProjectDir)..\engine\source\Assets;$(VC_IncludePath);$(WindowsSDK_IncludePath);$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
     <LocalDebuggerCommand>$(ProjectDir)..\build\AssetBuilder.exe</LocalDebuggerCommand>
     <LocalDebuggerWorkingDirectory>$(ProjectDir)..\build</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
@@ -31,14 +31,21 @@
   <ItemDefinitionGroup>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\engine\tools\AssetBuilder\AssetBuilder.cpp" />
+    <ClCompile Include="..\tools\AssetBuilder\AssetBuilder.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\engine\tools\AssetBuilder\Loaders\TGA.h" />
-    <ClInclude Include="..\engine\tools\AssetBuilder\Loaders\GLTF.h" />
-    <ClInclude Include="..\engine\tools\AssetBuilder\Loaders\HDR.h" />
-    <ClInclude Include="..\engine\tools\AssetBuilder\Loaders\Cubemap.h" />
-    <ClInclude Include="..\engine\source\Assets\EngaFormat.h" />
+    <ClInclude Include="..\tools\AssetBuilder\Loaders\TGA.h" />
+    <ClInclude Include="..\tools\AssetBuilder\Loaders\GLTF.h" />
+    <ClInclude Include="..\tools\AssetBuilder\Loaders\HDR.h" />
+    <ClInclude Include="..\tools\AssetBuilder\Loaders\Cubemap.h" />
+    <ClInclude Include="..\shared\EngaFormat.h" />
+    <ClInclude Include="..\shared\FileIO.h" />
+    <ClInclude Include="..\shared\Half.h" />
+    <ClInclude Include="..\shared\Json.h" />
+    <ClInclude Include="..\shared\Memory.h" />
+    <ClInclude Include="..\shared\Strings.h" />
+    <ClInclude Include="..\shared\Types.h" />
+    <ClInclude Include="..\shared\Win32FileIO.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

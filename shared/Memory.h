@@ -4,17 +4,17 @@
 #include "Types.h"
 
 #define DEFAULT_ALIGNMENT 4
-typedef uint64 memory_index;
+typedef uint64 memory_size;
 
 struct memory_arena
 {
     uint8 *Base;
-    memory_index Size;
-    memory_index Used;
+    memory_size Size;
+    memory_size Used;
     int32 TempCount;
 };
 
-internal void InitializeArena(memory_arena *Arena, memory_index Size, void *Base)
+internal void InitializeArena(memory_arena *Arena, memory_size Size, void *Base)
 {
     Arena->Size = Size;
     Arena->Base = (uint8 *)Base;
@@ -22,11 +22,11 @@ internal void InitializeArena(memory_arena *Arena, memory_index Size, void *Base
     Arena->TempCount = 0;
 }
 
-internal memory_index GetAlignmentOffset(memory_arena *Arena, memory_index Alignment)
+internal memory_size GetAlignmentOffset(memory_arena *Arena, memory_size Alignment)
 {
-    memory_index AlignmentOffset = 0;
-    memory_index ResultPointer = (memory_index)Arena->Base + Arena->Used;
-    memory_index AlignmentMask = Alignment - 1;
+    memory_size AlignmentOffset = 0;
+    memory_size ResultPointer = (memory_size)Arena->Base + Arena->Used;
+    memory_size AlignmentMask = Alignment - 1;
     if (ResultPointer & AlignmentMask)
     {
         AlignmentOffset = Alignment - (ResultPointer & AlignmentMask);
@@ -35,10 +35,10 @@ internal memory_index GetAlignmentOffset(memory_arena *Arena, memory_index Align
     return AlignmentOffset;
 }
 
-internal void *PushSize_(memory_arena *Arena, memory_index SizeInit, memory_index Alignment = DEFAULT_ALIGNMENT)
+internal void *PushSize_(memory_arena *Arena, memory_size SizeInit, memory_size Alignment = DEFAULT_ALIGNMENT)
 {
-    memory_index AlignmentOffset = GetAlignmentOffset(Arena, Alignment);
-    memory_index Size = SizeInit + AlignmentOffset;
+    memory_size AlignmentOffset = GetAlignmentOffset(Arena, Alignment);
+    memory_size Size = SizeInit + AlignmentOffset;
 
     Assert((Arena->Used + Size) <= Arena->Size);
 
@@ -61,7 +61,7 @@ internal void ResetArena(memory_arena *Arena)
     Arena->Used = 0;
 }
 
-internal void SubArena(memory_arena *Result, memory_arena *Parent, memory_index Size, memory_index Alignment = 16)
+internal void SubArena(memory_arena *Result, memory_arena *Parent, memory_size Size, memory_size Alignment = 16)
 {
     Result->Size = Size;
     Result->Base = (uint8 *)PushSize_(Parent, Size, Alignment);
@@ -72,7 +72,7 @@ internal void SubArena(memory_arena *Result, memory_arena *Parent, memory_index 
 struct temporary_memory
 {
     memory_arena *Arena;
-    memory_index Used;
+    memory_size Used;
 };
 
 internal temporary_memory BeginTemporaryMemory(memory_arena *Arena)
@@ -81,6 +81,7 @@ internal temporary_memory BeginTemporaryMemory(memory_arena *Arena)
     Result.Arena = Arena;
     Result.Used = Arena->Used;
     ++Arena->TempCount;
+
     return Result;
 }
 
@@ -98,7 +99,7 @@ internal void CheckArena(memory_arena *Arena)
     Assert(Arena->TempCount == 0);
 }
 
-internal void ZeroSize(memory_index Size, void *Ptr)
+internal void ZeroSize(memory_size Size, void *Ptr)
 {
     uint8 *Byte = (uint8 *)Ptr;
     while (Size--)
@@ -110,7 +111,7 @@ internal void ZeroSize(memory_index Size, void *Ptr)
 #define ZeroStruct(Instance)      ZeroSize(sizeof(Instance), &(Instance))
 #define ZeroArray(Count, Pointer) ZeroSize((Count) * sizeof((Pointer)[0]), Pointer)
 
-internal void CopySize(memory_index Size, void *SourceInit, void *DestInit)
+internal void CopySize(memory_size Size, void *SourceInit, void *DestInit)
 {
     uint64 *Source64 = (uint64 *)SourceInit;
     uint64 *Dest64   = (uint64 *)DestInit;

@@ -72,7 +72,7 @@ internal loaded_bitmap ParseTGA(memory_arena *Arena, void *FileData, uint32 File
 
     if (IsUncompressed)
     {
-        if (Src + (memory_index)PixelCount * BytesPerPixel > End)
+        if (Src + (memory_size)PixelCount * BytesPerPixel > End)
         {
             DebugLog("TGA: pixel data truncated\n");
             return Result;
@@ -133,7 +133,7 @@ internal loaded_bitmap ParseTGA(memory_arena *Arena, void *FileData, uint32 File
             }
             else
             {
-                if (Src + (memory_index)Count * BytesPerPixel > End)
+                if (Src + (memory_size)Count * BytesPerPixel > End)
                 {
                     DebugLog("TGA: RAW packet truncated\n");
                     return Result;

@@ -161,7 +161,7 @@ internal void DestroyBuffer(vulkan_context *context, gpu_buffer *buffer)
 internal void BufferWrite(gpu_buffer *buffer, uint32 first, const void *data, uint32 count)
 {
     uint8 *destination = (uint8 *)buffer->Mapped + (VkDeviceSize)first * buffer->Stride;
-    CopySize((memory_index)count * buffer->Stride, (void *)data, destination);
+    CopySize((memory_size)count * buffer->Stride, (void *)data, destination);
 }
 
 internal VkImageCreateInfo TextureImageInfo(uint32 width, uint32 height, VkFormat format, uint32 layers)

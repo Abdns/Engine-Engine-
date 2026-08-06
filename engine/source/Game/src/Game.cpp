@@ -1,5 +1,4 @@
 #include "Game.h"
-#include "Entity.cpp"
 
 enum ui_id
 {
@@ -58,7 +57,7 @@ internal void LoadAssetPack(char* name, game_memory *Memory, game_state* GameSta
 {
     LakeInit(&GameState->Lake, &GameState->WorldArena);
 
-    platform_file_raw PackFile = Memory->PlatformReadEntireFile(name);
+    file_contents PackFile = Memory->PlatformReadEntireFile(name);
     LakeLoadPack(&GameState->Lake, PackFile.Data, PackFile.Size);
     Memory->PlatformFreeFileMemory(PackFile.Data);
 }
@@ -76,43 +75,46 @@ internal collision_mesh LakeCollisionMesh(data_lake *Lake, uint32 Slot)
     return Mesh;
 }
 
-internal uint32 BuildEntityColliders(entities *Entities, data_lake *Lake, collider *Colliders, uint32 MaxColliders)
+internal uint32 BuildEntityColliders(data_lake *Lake, collider *Colliders, uint32 MaxColliders)
 {
     uint32 Count = 0;
 
-    for (uint32 EntityIndex = 0; EntityIndex < Entities->Count && Count < MaxColliders; ++EntityIndex)
+    for (uint32 EntityIndex = 0; EntityIndex < Lake->EntityCount && Count < MaxColliders; ++EntityIndex)
     {
-        uint32 MeshHandle = Entities->MeshHandle[EntityIndex];
-        if (!MeshHandle || MeshHandle > Lake->MeshCount)
+        entity Entity   = EntityFromIndex(Lake, EntityIndex);
+        uint32 MeshSlot = EntityMeshSlot(Lake, Entity);
+        if (MeshSlot == LAKE_INVALID_SLOT)
         {
             continue;
         }
 
-        Colliders[Count++] = MakeCollider(Entities->ID[EntityIndex], EntityTransform(Entities, EntityIndex), LakeCollisionMesh(Lake, MeshHandle - 1));
+        Colliders[Count++] = MakeCollider(Entity.ID, EntityTransform(Lake, Entity.Index), LakeCollisionMesh(Lake, MeshSlot));
     }
 
     return Count;
 }
 
-internal void PushEntitiesToRender(entities *Entities, render_commands *Commands, uint32 SelectedID)
+internal void PushEntitiesToRender(data_lake *Lake, render_commands *Commands, uint32 SelectedID)
 {
-    for (uint32 EntityIndex = 0; EntityIndex < Entities->Count; ++EntityIndex)
+    for (uint32 EntityIndex = 0; EntityIndex < Lake->EntityCount; ++EntityIndex)
     {
-        Vector4 Tint = Entities->Tint[EntityIndex];
-        if (SelectedID && Entities->ID[EntityIndex] == SelectedID)
+        entity Entity = EntityFromIndex(Lake, EntityIndex);
+
+        Vector4 Tint = Lake->EntityTint[Entity.Index];
+        if (SelectedID && Entity.ID == SelectedID)
         {
             Tint = Vector4(1.0f, 0.85f, 0.2f, Tint.W);
         }
 
-        PushRenderMesh(Commands, EntityTransform(Entities, EntityIndex), Tint, Entities->MeshHandle[EntityIndex], Entities->MaterialHandle[EntityIndex]);
+        PushRenderMesh(Commands, EntityTransform(Lake, Entity.Index), Tint, Entity.MeshHandle, Entity.MaterialHandle);
     }
 }
 
 internal uint32 SpawnEntity(game_state *GameState)
 {
-    entities *Entities = &GameState->Entities;
+    data_lake *Lake = &GameState->Lake;
 
-    uint32 Index  = Entities->Count;
+    uint32 Index  = Lake->EntityCount;
     real32 Angle  = (real32)Index * 2.39996f;
     real32 Radius = 0.9f * SquareRoot((real32)Index + 1.0f);
 
@@ -121,8 +123,8 @@ internal uint32 SpawnEntity(game_state *GameState)
     uint32 MeshHandle     = GameState->SpawnMeshHandles[Index % ArrayCount(GameState->SpawnMeshHandles)];
     uint32 MaterialHandle = GameState->SpawnMaterialHandles[Index % ArrayCount(GameState->SpawnMaterialHandles)];
 
-    uint32 EntityID = AddEntity(Entities, Position, MeshHandle, MaterialHandle);
-    SetEntityAngularVelocity(Entities, EntityID, ENTITY_SPIN);
+    uint32 EntityID = AddEntity(Lake, Position, MeshHandle, MaterialHandle);
+    SetEntityAngularVelocity(Lake, EntityID, ENTITY_SPIN);
 
     return EntityID;
 }
@@ -133,6 +135,8 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     Assert(sizeof(game_state) <= Memory->PermanentStorageSize);
 
     game_state* GameState = (game_state*)Memory->PermanentStorage;
+    data_lake* Lake = &GameState->Lake;
+
     if (!Memory->IsInitialized)
     {
         GameState->tSine = 0.0f;
@@ -140,15 +144,11 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         InitializeArena(&GameState->WorldArena, Memory->PermanentStorageSize - sizeof(game_state), (uint8*)Memory->PermanentStorage + sizeof(game_state));
         memory_arena* WorldArena = &GameState->WorldArena;
 
-        entities* Entities = &GameState->Entities;
-        InitEntities(Entities, WorldArena);
-
-        GameState->ColliderCapacity = Entities->MaxCount;
-        GameState->Colliders = PushArray(WorldArena, GameState->ColliderCapacity, collider);
-
         LoadAssetPack("assets.enga", Memory, GameState);
-        data_lake* Lake = &GameState->Lake;
         PushLakeToRender(Lake, RenderCommands);
+
+        GameState->ColliderCapacity = Lake->EntityCapacity;
+        GameState->Colliders = PushArray(WorldArena, GameState->ColliderCapacity, collider);
 
         uint32    TexTestHandle = LakeGetTextureHandle(Lake, "test");
 
@@ -182,8 +182,6 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     ui_context *UI = &GameState->UI;
     BeginUI(UI, Input, RenderCommands);
 
-    entities *Entities = &GameState->Entities;
-
     if (UIButton(UI, UI_ID_PAUSE, RectMinDim(20.0f, 20.0f, 140.0f, 36.0f)))
     {
         GameState->SpinPaused = !GameState->SpinPaused;
@@ -202,7 +200,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     }
 
     real32 SpinScale = GameState->SpinPaused ? 0.0f : GameState->SpinSpeed;
-    UpdateEntities(Entities, Input->dtForFrame * SpinScale);
+    UpdateEntities(Lake, Input->dtForFrame * SpinScale);
 
     camera* Camera = &GameState->Camera;
     UpdateCamera(Camera, Input);
@@ -211,7 +209,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     if (PickedThisFrame && Input->RenderWidth > 0 && Input->RenderHeight > 0)
     {
         ray PickRay = CameraRayFromScreen(Camera, (real32)Input->MouseX, (real32)Input->MouseY, (real32)Input->RenderWidth, (real32)Input->RenderHeight);
-        uint32 ColliderCount = BuildEntityColliders(Entities, &GameState->Lake, GameState->Colliders, GameState->ColliderCapacity);
+        uint32 ColliderCount = BuildEntityColliders(Lake, GameState->Colliders, GameState->ColliderCapacity);
         GameState->SelectedEntityID = RayCastColliders(PickRay, GameState->Colliders, ColliderCount, 0);
     }
 
@@ -220,7 +218,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     PushRenderPipeline(RenderCommands, Pipeline_Skybox);
     PushRenderSkybox(RenderCommands, GameState->SkyHandle);
 
-    PushEntitiesToRender(Entities, RenderCommands, GameState->SelectedEntityID);
+    PushEntitiesToRender(Lake, RenderCommands, GameState->SelectedEntityID);
 
     EndUI(UI);
 }

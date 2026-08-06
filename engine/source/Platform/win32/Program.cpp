@@ -4,6 +4,7 @@
 #include <Wingdi.h>
 #include "Types.h"
 #include "Memory.h"
+#include "Win32FileIO.h"
 #include "PlatformAPI.h"
 #include "Vulkan.h"
 

@@ -3,47 +3,12 @@
 #include "Types.h"
 #include "Memory.h"
 #include "Strings.h"
+#include "Win32FileIO.h"
 #include "EngaFormat.h"
 #include "Loaders/GLTF.h"
 #include "Loaders/TGA.h"
 #include "Loaders/HDR.h"
 #include "Loaders/Cubemap.h"
-
-struct file_contents
-{
-    void  *Data;
-    uint32 Size;
-};
-
-internal file_contents ReadEntireFile(const char *Path)
-{
-    file_contents Result = {};
-
-    HANDLE File = CreateFileA(Path, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
-    if (File == INVALID_HANDLE_VALUE)
-    {
-        return Result;
-    }
-
-    LARGE_INTEGER FileSize;
-    if (GetFileSizeEx(File, &FileSize))
-    {
-        uint32 Size32 = SafeTruncateUInt64((uint64)FileSize.QuadPart);
-        Result.Data = VirtualAlloc(0, Size32, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-        DWORD BytesRead = 0;
-        if (Result.Data && ReadFile(File, Result.Data, Size32, &BytesRead, 0) && BytesRead == Size32)
-        {
-            Result.Size = Size32;
-        }
-        else
-        {
-            Result.Data = 0;
-        }
-    }
-
-    CloseHandle(File);
-    return Result;
-}
 
 #define MAX_PACK_ASSETS 64
 
@@ -89,7 +54,7 @@ internal void AddImage(pack_state *Pack, const char *Name, void *Pixels, uint64 
 
 internal bool32 AddSkyCubemap(pack_state *Pack, memory_arena *Arena, const char *Name, const char *Path, uint32 FaceSize)
 {
-    file_contents File = ReadEntireFile(Path);
+    file_contents File = Win32ReadEntireFile(Path);
     if (!File.Data)
     {
         DebugLog("AssetBuilder: cannot open '%s'\n", Path);
@@ -137,12 +102,12 @@ internal file_contents ReadSiblingFile(const char *BasePath, const char *Uri)
     Path[At] = 0;
     AppendString(Path, (uint32)ArrayCount(Path), At, Uri);
 
-    return ReadEntireFile(Path);
+    return Win32ReadEntireFile(Path);
 }
 
 internal bool32 AddGLTF(pack_state *Pack, memory_arena *Arena, const char *Path)
 {
-    file_contents File = ReadEntireFile(Path);
+    file_contents File = Win32ReadEntireFile(Path);
     if (!File.Data)
     {
         DebugLog("AssetBuilder: cannot open '%s'\n", Path);
@@ -263,12 +228,12 @@ int main(int ArgCount, char **Args)
 
     pack_state Pack = {};
 
-    if (!AddGLTF(&Pack, &Arena, "..\\engine\\assets\\models\\TestShapes.gltf"))
+    if (!AddGLTF(&Pack, &Arena, "..\\assets\\models\\TestShapes.gltf"))
     {
         return 1;
     }
 
-    if (!AddSkyCubemap(&Pack, &Arena, "sky", "..\\engine\\assets\\images\\sky.hdr", 512))
+    if (!AddSkyCubemap(&Pack, &Arena, "sky", "..\\assets\\images\\sky.hdr", 512))
     {
         return 1;
     }

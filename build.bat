@@ -33,8 +33,8 @@ set CommonCompilerFlags=-MTd^
  -D_UNICODE^
  -FC^
  -Z7^
+ -I..\shared^
  -I..\engine\source^
- -I..\engine\source\Helpers^
  -I..\engine\source\Assets^
  -I..\engine\source\Physics^
  -I..\engine\source\Game\include^
@@ -50,7 +50,7 @@ set CommonLinkerFlags=-incremental:no^
  -LIBPATH:"%VULKAN_SDK%\Lib"
 
 cl %CommonCompilerFlags%^
- ..\engine\tools\AssetBuilder\AssetBuilder.cpp^
+ ..\tools\AssetBuilder\AssetBuilder.cpp^
  -FeAssetBuilder.exe^
  /link %CommonLinkerFlags%
 if errorlevel 1 goto :failed

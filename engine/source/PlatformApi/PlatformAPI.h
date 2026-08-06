@@ -3,15 +3,10 @@
 
 #include "Types.h"
 #include "Strings.h"
+#include "FileIO.h"
 #include "RenderCommands.h"
 
-struct platform_file_raw
-{
-    uint32 Size;
-    void  *Data;
-};
-
-#define PLATFORM_READ_ENTIRE_FILE(name)  platform_file_raw name(const char *Filename)
+#define PLATFORM_READ_ENTIRE_FILE(name)  file_contents name(const char *Filename)
 typedef PLATFORM_READ_ENTIRE_FILE(platform_read_entire_file);
 
 #define PLATFORM_FREE_FILE_MEMORY(name)  void name(void *Memory)
