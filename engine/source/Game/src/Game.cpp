@@ -1,13 +1,5 @@
 #include "Game.h"
 
-enum ui_id
-{
-    UI_ID_PAUSE = 1,
-    UI_ID_SPEED,
-    UI_ID_SPAWN,
-    UI_ID_CLEAR,
-};
-
 #define ENTITY_SPIN Vector3(0.7f, 1.0f, 0.0f)
 
 internal void GameOutputSound(game_state* GameState, game_sound_output_buffer* SoundBuffer)
@@ -79,16 +71,21 @@ internal uint32 BuildEntityColliders(data_lake *Lake, collider *Colliders, uint3
 {
     uint32 Count = 0;
 
-    for (uint32 EntityIndex = 0; EntityIndex < Lake->EntityCount && Count < MaxColliders; ++EntityIndex)
+    for (uint32 Index = 0; Index < Lake->EntityCount && Count < MaxColliders; ++Index)
     {
-        entity Entity   = EntityFromIndex(Lake, EntityIndex);
-        uint32 MeshSlot = EntityMeshSlot(Lake, Entity);
-        if (MeshSlot == LAKE_INVALID_SLOT)
+        entity *Entity = Lake->Entities + Index;
+        if (Entity->Type != Entity_Mesh)
         {
             continue;
         }
 
-        Colliders[Count++] = MakeCollider(Entity.ID, EntityTransform(Lake, Entity.Index), LakeCollisionMesh(Lake, MeshSlot));
+        uint32 MeshHandle = Entity->MeshHandle;
+        if (!MeshHandle || MeshHandle > Lake->MeshCount)
+        {
+            continue;
+        }
+
+        Colliders[Count++] = MakeCollider(Entity->ID, EntityTransform(Lake, Entity), LakeCollisionMesh(Lake, MeshHandle - 1));
     }
 
     return Count;
@@ -96,25 +93,94 @@ internal uint32 BuildEntityColliders(data_lake *Lake, collider *Colliders, uint3
 
 internal void PushEntitiesToRender(data_lake *Lake, render_commands *Commands, uint32 SelectedID)
 {
-    for (uint32 EntityIndex = 0; EntityIndex < Lake->EntityCount; ++EntityIndex)
+    for (uint32 Index = 0; Index < Lake->EntityCount; ++Index)
     {
-        entity Entity = EntityFromIndex(Lake, EntityIndex);
+        entity *Entity = Lake->Entities + Index;
+        if (Entity->Type != Entity_Mesh)
+        {
+            continue;
+        }
 
-        Vector4 Tint = Lake->EntityTint[Entity.Index];
-        if (SelectedID && Entity.ID == SelectedID)
+        Vector4 Tint = Lake->Transforms.Tint[Entity->Slot];
+        if (SelectedID && Entity->ID == SelectedID)
         {
             Tint = Vector4(1.0f, 0.85f, 0.2f, Tint.W);
         }
 
-        PushRenderMesh(Commands, EntityTransform(Lake, Entity.Index), Tint, Entity.MeshHandle, Entity.MaterialHandle);
+        PushRenderMesh(Commands, EntityTransform(Lake, Entity), Tint, Entity->MeshHandle, Entity->MaterialHandle);
     }
+}
+
+internal uint32 AddUIButton(data_lake *Lake, const char *Name, rect2 Rect)
+{
+    entity *Entity = AddWidgetEntity(Lake, Name, Entity_UIButton, Rect.Min, Rect.Max, 0.0f);
+
+    return Entity ? Entity->ID : 0;
+}
+
+internal uint32 AddUISlider(data_lake *Lake, const char *Name, rect2 Rect, real32 Value)
+{
+    entity *Entity = AddWidgetEntity(Lake, Name, Entity_UISlider, Rect.Min, Rect.Max, Value);
+
+    return Entity ? Entity->ID : 0;
+}
+
+internal rect2 EntityRect(data_lake *Lake, entity *Entity)
+{
+    Assert(Entity->Type == Entity_UIButton || Entity->Type == Entity_UISlider || Entity->Type == Entity_UIList);
+
+    rect2 Result;
+    Result.Min = Lake->Widgets.RectMin[Entity->Slot];
+    Result.Max = Lake->Widgets.RectMax[Entity->Slot];
+
+    return Result;
+}
+
+internal bool32 UIEntityButton(ui_context *UI, data_lake *Lake, uint32 Handle)
+{
+    return UIButton(UI, Handle, EntityRect(Lake, GetEntity(Lake, Handle)));
+}
+
+internal bool32 UIEntitySlider(ui_context *UI, data_lake *Lake, uint32 Handle)
+{
+    entity *Entity = GetEntity(Lake, Handle);
+
+    return UISlider(UI, Handle, EntityRect(Lake, Entity), Lake->Widgets.Value + Entity->Slot);
+}
+
+internal uint32 AddUIList(data_lake *Lake, const char *Name, rect2 Rect)
+{
+    entity *Entity = AddWidgetEntity(Lake, Name, Entity_UIList, Rect.Min, Rect.Max, 0.0f);
+
+    return Entity ? Entity->ID : 0;
+}
+
+internal uint32 UIEntityList(ui_context *UI, data_lake *Lake, uint32 Handle, uint32 *EntityIDs, uint32 Count, uint32 SelectedID)
+{
+    const char *Names[MAX_ENTITIES];
+    int32 SelectedIndex = -1;
+
+    for (uint32 Index = 0; Index < Count; ++Index)
+    {
+        Names[Index] = EntityName(Lake, GetEntity(Lake, EntityIDs[Index]));
+        if (SelectedID && EntityIDs[Index] == SelectedID)
+        {
+            SelectedIndex = (int32)Index;
+        }
+    }
+
+    entity *List = GetEntity(Lake, Handle);
+
+    int32 Clicked = UIList(UI, Handle, EntityRect(Lake, List), Names, Count, 5, SelectedIndex, Lake->Widgets.Value + List->Slot);
+
+    return (Clicked >= 0) ? EntityIDs[Clicked] : 0;
 }
 
 internal uint32 SpawnEntity(game_state *GameState)
 {
     data_lake *Lake = &GameState->Lake;
 
-    uint32 Index  = Lake->EntityCount;
+    uint32 Index  = Lake->Transforms.Count;
     real32 Angle  = (real32)Index * 2.39996f;
     real32 Radius = 0.9f * SquareRoot((real32)Index + 1.0f);
 
@@ -123,10 +189,15 @@ internal uint32 SpawnEntity(game_state *GameState)
     uint32 MeshHandle     = GameState->SpawnMeshHandles[Index % ArrayCount(GameState->SpawnMeshHandles)];
     uint32 MaterialHandle = GameState->SpawnMaterialHandles[Index % ArrayCount(GameState->SpawnMaterialHandles)];
 
-    uint32 EntityID = AddEntity(Lake, Position, MeshHandle, MaterialHandle);
-    SetEntityAngularVelocity(Lake, EntityID, ENTITY_SPIN);
+    entity *Entity = AddMeshEntity(Lake, 0, Position, MeshHandle, MaterialHandle);
+    if (!Entity)
+    {
+        return 0;
+    }
 
-    return EntityID;
+    Lake->Transforms.AngularVelocity[Entity->Slot] = ENTITY_SPIN;
+
+    return Entity->ID;
 }
 
 extern "C" __declspec(dllexport)
@@ -146,6 +217,8 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         LoadAssetPack("assets.enga", Memory, GameState);
         PushLakeToRender(Lake, RenderCommands);
+
+        InitEntities(Lake, WorldArena);
 
         GameState->ColliderCapacity = Lake->EntityCapacity;
         GameState->Colliders = PushArray(WorldArena, GameState->ColliderCapacity, collider);
@@ -173,8 +246,13 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         GameState->SelectedEntityID = 0;
 
         GameState->UI.Style   = DefaultUIStyle();
-        GameState->SpinSpeed  = 1.0f;
         GameState->SpinPaused = false;
+
+        GameState->PauseButton = AddUIButton(Lake, "pause", RectMinDim(20.0f, 20.0f, 140.0f, 36.0f));
+        GameState->SpeedSlider = AddUISlider(Lake, "speed", RectMinDim(20.0f, 66.0f, 140.0f, 24.0f), 1.0f);
+        GameState->SpawnButton = AddUIButton(Lake, "spawn", RectMinDim(20.0f, 100.0f, 140.0f, 36.0f));
+        GameState->ClearButton = AddUIButton(Lake, "clear", RectMinDim(20.0f, 146.0f, 140.0f, 36.0f));
+        GameState->EntityList  = AddUIList(Lake, "list", RectMinDim(20.0f, 192.0f, 140.0f, 120.0f));
 
         Memory->IsInitialized = true;
     }
@@ -182,24 +260,41 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     ui_context *UI = &GameState->UI;
     BeginUI(UI, Input, RenderCommands);
 
-    if (UIButton(UI, UI_ID_PAUSE, RectMinDim(20.0f, 20.0f, 140.0f, 36.0f)))
+    if (UIEntityButton(UI, Lake, GameState->PauseButton))
     {
         GameState->SpinPaused = !GameState->SpinPaused;
     }
 
-    UISlider(UI, UI_ID_SPEED, RectMinDim(20.0f, 66.0f, 140.0f, 24.0f), &GameState->SpinSpeed);
+    UIEntitySlider(UI, Lake, GameState->SpeedSlider);
 
-    if (UIButton(UI, UI_ID_SPAWN, RectMinDim(20.0f, 100.0f, 140.0f, 36.0f)))
+    if (UIEntityButton(UI, Lake, GameState->SpawnButton))
     {
         GameState->SelectedEntityID = SpawnEntity(GameState);
     }
 
-    if (UIButton(UI, UI_ID_CLEAR, RectMinDim(20.0f, 146.0f, 140.0f, 36.0f)))
+    if (UIEntityButton(UI, Lake, GameState->ClearButton))
     {
         GameState->SelectedEntityID = 0;
     }
 
-    real32 SpinScale = GameState->SpinPaused ? 0.0f : GameState->SpinSpeed;
+    uint32 MeshIDs[MAX_ENTITIES];
+    uint32 MeshCount = 0;
+    for (uint32 Index = 0; Index < Lake->EntityCount; ++Index)
+    {
+        entity *Entity = Lake->Entities + Index;
+        if (Entity->Type == Entity_Mesh)
+        {
+            MeshIDs[MeshCount++] = Entity->ID;
+        }
+    }
+
+    uint32 ClickedID = UIEntityList(UI, Lake, GameState->EntityList, MeshIDs, MeshCount, GameState->SelectedEntityID);
+    if (ClickedID)
+    {
+        GameState->SelectedEntityID = ClickedID;
+    }
+
+    real32 SpinScale = GameState->SpinPaused ? 0.0f : EntityValue(Lake, GameState->SpeedSlider);
     UpdateEntities(Lake, Input->dtForFrame * SpinScale);
 
     camera* Camera = &GameState->Camera;

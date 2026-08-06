@@ -30,8 +30,13 @@ struct game_state
     uint32    SelectedEntityID;
 
     ui_context UI;
-    real32     SpinSpeed;
     bool32     SpinPaused;
+
+    uint32 PauseButton;
+    uint32 SpeedSlider;
+    uint32 SpawnButton;
+    uint32 ClearButton;
+    uint32 EntityList;
 };
 
 #endif

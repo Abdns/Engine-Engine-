@@ -11,11 +11,29 @@
 #define LAKE_MAX_MESHES      256
 #define LAKE_MAX_TEXTURES    16
 #define LAKE_MAX_CUBEMAPS    4
-#define LAKE_MAX_ENTITIES    64
 #define LAKE_MAX_VERTICES    (1u << 20)
 #define LAKE_MAX_INDICES     (1u << 21)
 #define LAKE_MAX_PIXEL_BYTES Megabytes(48)
-#define LAKE_INVALID_SLOT    0xFFFFFFFF
+
+struct entity;
+
+struct transform_pool
+{
+    Vector3 *Position;
+    Vector3 *Velocity;
+    Vector3 *Rotation;
+    Vector3 *AngularVelocity;
+    Vector4 *Tint;
+    uint32   Count;
+};
+
+struct widget_pool
+{
+    Vector2 *RectMin;
+    Vector2 *RectMax;
+    real32  *Value;
+    uint32   Count;
+};
 
 struct data_lake
 {
@@ -50,16 +68,13 @@ struct data_lake
     uint32 *CubemapFormat;
     uint32  CubemapCount, CubemapCapacity;
 
-    uint32  *EntityID;
-    Vector3 *EntityPosition;
-    Vector3 *EntityVelocity;
-    Vector3 *EntityRotation;
-    Vector3 *EntityAngularVelocity;
-    Vector4 *EntityTint;
-    uint32  *EntityMeshHandle;
-    uint32  *EntityMaterialHandle;
-    uint32   EntityCount, EntityCapacity;
-    uint32   EntityNextID;
+    entity *Entities;
+    char   *EntityNames;
+    uint32  EntityCount, EntityCapacity;
+    uint32  EntityNextID;
+
+    transform_pool Transforms;
+    widget_pool    Widgets;
 };
 
 internal void LakeInit(data_lake *Lake, memory_arena *Arena)
@@ -72,7 +87,6 @@ internal void LakeInit(data_lake *Lake, memory_arena *Arena)
     Lake->MeshCapacity      = LAKE_MAX_MESHES;
     Lake->TextureCapacity   = LAKE_MAX_TEXTURES;
     Lake->CubemapCapacity   = LAKE_MAX_CUBEMAPS;
-    Lake->EntityCapacity    = LAKE_MAX_ENTITIES;
 
     Lake->Vertices = PushArray(Arena, Lake->VertexCapacity, enga_vertex);
     Lake->Indices  = PushArray(Arena, Lake->IndexCapacity, uint32);
@@ -97,15 +111,6 @@ internal void LakeInit(data_lake *Lake, memory_arena *Arena)
     Lake->CubemapFirstByte = PushArray(Arena, Lake->CubemapCapacity, uint64);
     Lake->CubemapFaceSize  = PushArray(Arena, Lake->CubemapCapacity, uint32);
     Lake->CubemapFormat    = PushArray(Arena, Lake->CubemapCapacity, uint32);
-
-    Lake->EntityID              = PushArray(Arena, Lake->EntityCapacity, uint32);
-    Lake->EntityPosition        = PushArray(Arena, Lake->EntityCapacity, Vector3);
-    Lake->EntityVelocity        = PushArray(Arena, Lake->EntityCapacity, Vector3);
-    Lake->EntityRotation        = PushArray(Arena, Lake->EntityCapacity, Vector3);
-    Lake->EntityAngularVelocity = PushArray(Arena, Lake->EntityCapacity, Vector3);
-    Lake->EntityTint            = PushArray(Arena, Lake->EntityCapacity, Vector4);
-    Lake->EntityMeshHandle      = PushArray(Arena, Lake->EntityCapacity, uint32);
-    Lake->EntityMaterialHandle  = PushArray(Arena, Lake->EntityCapacity, uint32);
 }
 
 inline Vector3 EngaVertexPosition(enga_vertex *Vertex)

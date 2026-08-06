@@ -108,8 +108,10 @@ internal void Win32ProcessKeyboardMessage(game_button_state* NewState, bool32 Is
     }
 }
 
-void Win32ProcessPendingMessages(win32_state* State, game_controller_input* KeyboardController)
+void Win32ProcessPendingMessages(win32_state* State, game_input* Input)
 {
+    game_controller_input* KeyboardController = &Input->Controllers[0];
+
     MSG Message;
     while (PeekMessage(&Message, 0, 0, 0, PM_REMOVE))
     {
@@ -118,6 +120,11 @@ void Win32ProcessPendingMessages(win32_state* State, game_controller_input* Keyb
             case WM_QUIT:
             {
                 isRunning = false;
+            } break;
+
+            case WM_MOUSEWHEEL:
+            {
+                Input->MouseZ += GET_WHEEL_DELTA_WPARAM(Message.wParam) / WHEEL_DELTA;
             } break;
 
             case WM_SYSKEYDOWN:
