@@ -71,11 +71,14 @@ internal loaded_cubemap EquirectToCubemap(memory_arena *Arena, loaded_hdr *Sourc
         return Result;
     }
 
-    uint16 *Pixels = PushArray(Arena, (memory_size)FaceSize * FaceSize * 6 * 4, uint16);
+    uint32 FacesCount = 6;
+    uint32 ChannelsPerPixel = 4;
 
-    for (uint32 Face = 0; Face < 6; ++Face)
+    uint16 *Pixels = PushArray(Arena, (memory_size)FaceSize * FaceSize * FacesCount * ChannelsPerPixel, uint16);
+
+    for (uint32 Face = 0; Face < FacesCount; ++Face)
     {
-        uint16 *FacePixels = Pixels + (memory_size)Face * FaceSize * FaceSize * 4;
+        uint16 *FacePixels = Pixels + (memory_size)Face * FaceSize * FaceSize * ChannelsPerPixel;
 
         for (uint32 Y = 0; Y < FaceSize; ++Y)
         {
@@ -110,7 +113,7 @@ internal loaded_cubemap EquirectToCubemap(memory_arena *Arena, loaded_hdr *Sourc
 
     Result.Pixels   = Pixels;
     Result.FaceSize = FaceSize;
-    Result.ByteSize = (uint64)FaceSize * FaceSize * 6 * 4 * sizeof(uint16);
+    Result.ByteSize = (uint64)FaceSize * FaceSize * FacesCount * ChannelsPerPixel * sizeof(uint16);
 
     return Result;
 }
