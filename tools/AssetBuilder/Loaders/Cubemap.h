@@ -66,10 +66,7 @@ internal loaded_cubemap EquirectToCubemap(memory_arena *Arena, loaded_hdr *Sourc
 {
     loaded_cubemap Result = {};
 
-    if (!Source->Pixels || !FaceSize)
-    {
-        return Result;
-    }
+    Assert(Source->Pixels && FaceSize);
 
     uint32 FacesCount = 6;
     uint32 ChannelsPerPixel = 4;

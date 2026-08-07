@@ -101,22 +101,14 @@ internal loaded_hdr ParseHDR(memory_arena *Arena, void *FileData, uint32 FileSiz
         while (Line[i] >= '0' && Line[i] <= '9') Width = Width * 10 + (uint32)(Line[i++] - '0');
     }
 
-    if (!Width || !Height)
-    {
-        DebugLog("HDR: bad resolution '%s'\n", Line);
-        return Result;
-    }
+    Assert(Width && Height);
 
     uint16 *Pixels = PushArray(Arena, (memory_size)Width * Height * 4, uint16);
     uint8  *Scan   = PushArray(Arena, (memory_size)Width * 4, uint8);
 
     for (uint32 Y = 0; Y < Height; ++Y)
     {
-        if (At + 4 > FileSize)
-        {
-            DebugLog("HDR: truncated at row %u\n", Y);
-            return Result;
-        }
+        Assert(At + 4 <= FileSize);
 
         bool32 NewRLE = (Data[At] == 2 && Data[At + 1] == 2 &&
                          (((uint32)Data[At + 2] << 8) | Data[At + 3]) == Width && Width >= 8 && Width < 0x8000);
@@ -130,11 +122,7 @@ internal loaded_hdr ParseHDR(memory_arena *Arena, void *FileData, uint32 FileSiz
                 uint32 X = 0;
                 while (X < Width)
                 {
-                    if (At >= FileSize)
-                    {
-                        DebugLog("HDR: truncated RLE at row %u\n", Y);
-                        return Result;
-                    }
+                    Assert(At < FileSize);
 
                     uint8 Count = Data[At++];
                     if (Count > 128)
@@ -159,11 +147,7 @@ internal loaded_hdr ParseHDR(memory_arena *Arena, void *FileData, uint32 FileSiz
         {
             for (uint32 X = 0; X < Width; ++X)
             {
-                if (At + 4 > FileSize)
-                {
-                    DebugLog("HDR: truncated flat row %u\n", Y);
-                    return Result;
-                }
+                Assert(At + 4 <= FileSize);
 
                 Scan[X * 4 + 0] = Data[At + 0];
                 Scan[X * 4 + 1] = Data[At + 1];

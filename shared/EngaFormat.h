@@ -4,7 +4,7 @@
 #include "Types.h"
 
 #define ENGA_MAGIC   (((uint32)'E') | ((uint32)'N' << 8) | ((uint32)'G' << 16) | ((uint32)'A' << 24))
-#define ENGA_VERSION 4
+#define ENGA_VERSION 5
 
 #define ENGA_MAX_ASSET_NAME 32
 
@@ -51,14 +51,15 @@ inline uint32 AssetImageFormatBytes(asset_image_format Format)
 
 struct asset_image_info
 {
+    uint32 Format;
+    bool32 IsSRGB;
+    bool32 IsAtlas;
     uint32 Width;
     uint32 Height;
-    uint32 SRGB;
-    uint32 Format;
     uint32 Layers;
 };
 
-struct asset_entry
+struct asset_descriptor
 {
     uint32 Type;
     char   Name[ENGA_MAX_ASSET_NAME];

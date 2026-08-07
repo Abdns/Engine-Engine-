@@ -89,11 +89,7 @@ internal char *JsonParseString(json_parser *P)
         P->At++;
     }
 
-    if (P->At >= P->End)
-    {
-        P->Error = true;
-        return 0;
-    }
+    Assert(P->At < P->End);
 
     char *OnePastLast = P->At;
     P->At++;
@@ -196,11 +192,8 @@ internal bool32 JsonMatch(json_parser *P, const char *Word)
     char *At = P->At;
     while (*Word)
     {
-        if (At >= P->End || *At != *Word)
-        {
-            P->Error = true;
-            return false;
-        }
+        Assert(At < P->End && *At == *Word);
+
         At++;
         Word++;
     }
@@ -269,7 +262,7 @@ internal json_value *JsonParseObject(json_parser *P)
             return Result;
         }
 
-        P->Error = true;
+        Assert(!"malformed JSON object");
         return Result;
     }
 }
@@ -309,7 +302,7 @@ internal json_value *JsonParseArray(json_parser *P)
             return Result;
         }
 
-        P->Error = true;
+        Assert(!"malformed JSON array");
         return Result;
     }
 }
@@ -317,11 +310,7 @@ internal json_value *JsonParseArray(json_parser *P)
 internal json_value *JsonParseValue(json_parser *P)
 {
     JsonSkipWhitespace(P);
-    if (P->At >= P->End)
-    {
-        P->Error = true;
-        return 0;
-    }
+    Assert(P->At < P->End);
 
     char C = *P->At;
     if (C == '{')
@@ -364,7 +353,7 @@ internal json_value *JsonParseValue(json_parser *P)
         return Result;
     }
 
-    P->Error = true;
+    Assert(!"unexpected character in JSON");
     return 0;
 }
 

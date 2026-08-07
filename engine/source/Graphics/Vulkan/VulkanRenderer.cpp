@@ -108,15 +108,15 @@ internal void InitVulkan(HINSTANCE hinstance, HWND hwnd)
     }
     DebugLog("Vulkan instance created\n");
 
-    if (!CreateSurface(context, hinstance, hwnd))      return;
+    CreateSurface(context, hinstance, hwnd);
     if (!SelectDevice(context))                        { DebugLog("No suitable GPU found\n"); return; }
     if (!CreateLogicalDevice(context))                 return;
     if (!CreateSwapchain(context, hwnd))               return;
     if (!CreateImageViews(context))                    return;
     if (!CreateDepthResources(context))                return;
-    if (!CreateCommandPool(context))                   return;
-    if (!CreateCommandBuffer(context))                 return;
-    if (!CreateSyncObjects(context))                   return;
+    CreateCommandPool(context);
+    CreateCommandBuffer(context);
+    CreateSyncObjects(context);
 
     GlobalResources.VertexBuffer = CreateBuffer(context, "Vertex", VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, (uint32)sizeof(vertex),  MAX_VERTICES);
     GlobalResources.IndexBuffer  = CreateBuffer(context, "Index",  VK_BUFFER_USAGE_INDEX_BUFFER_BIT,   (uint32)sizeof(uint32),  MAX_INDICES);
@@ -127,17 +127,14 @@ internal void InitVulkan(HINSTANCE hinstance, HWND hwnd)
         return;
     }
 
-    if (!CreateGlobalResources(context, &GlobalResources)) return;
+    CreateGlobalResources(context, &GlobalResources);
     if (!CreateFramePasses(context))                   return;
 
     for (uint32 i = 0; i < Pipeline_Count; ++i)
     {
         pipeline_desc *desc = &PipelineDescs[i];
 
-        if (!BuildPipeline(context, &GlobalResources, &Pipelines[i], desc, Passes[desc->Pass].Handle))
-        {
-            return;
-        }
+        BuildPipeline(context, &GlobalResources, &Pipelines[i], desc, Passes[desc->Pass].Handle);
     }
 
     WritePipelineResources(context);

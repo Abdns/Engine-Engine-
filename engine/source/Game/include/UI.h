@@ -143,7 +143,9 @@ internal bool32 UISlider(ui_context *UI, uint32 ID, rect2 Rect, real32 *Value)
     UIWidgetInput(UI, ID, Rect);
 
     real32 Width = Rect.Max.X - Rect.Min.X;
-    if (UI->Active == ID && Width > 0.0f)
+    Assert(Width > 0.0f);
+
+    if (UI->Active == ID)
     {
         real32 T = Clamp(0.0f, (UI->MousePosition.X - Rect.Min.X) / Width, 1.0f);
         if (T != *Value)

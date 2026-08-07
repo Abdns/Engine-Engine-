@@ -61,10 +61,7 @@ internal real32 Win32ProcessXInputStickValue(SHORT Value, SHORT DeadZoneThreshol
 void Win32ProcessXInput(game_input* NewInput, game_input* OldInput)
 {
     DWORD MaxControllerCount = XUSER_MAX_COUNT;
-    if (MaxControllerCount > (ArrayCount(NewInput->Controllers) - 1))
-    {
-        MaxControllerCount = ArrayCount(NewInput->Controllers) - 1;
-    }
+    Assert(MaxControllerCount <= (ArrayCount(NewInput->Controllers) - 1));
 
     for (DWORD ControllerIndex = 0; ControllerIndex < MaxControllerCount; ++ControllerIndex)
     {

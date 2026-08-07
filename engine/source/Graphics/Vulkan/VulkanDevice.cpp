@@ -39,10 +39,7 @@ internal uint32 GetExtensions(VkExtensionProperties *props, uint32 maxCount)
     uint32 extensionCount = 0;
     vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
 
-    if (extensionCount > maxCount)
-    {
-        extensionCount = maxCount;
-    }
+    Assert(extensionCount <= maxCount);
 
     vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, props);
 
@@ -122,7 +119,7 @@ internal VkInstanceCreateInfo GetInstanceInfo(VkApplicationInfo *appInfo, const 
     return createInfo;
 }
 
-internal bool32 CreateSurface(vulkan_context *context, HINSTANCE hinstance, HWND hwnd)
+internal void CreateSurface(vulkan_context *context, HINSTANCE hinstance, HWND hwnd)
 {
     VkWin32SurfaceCreateInfoKHR surfaceInfo{};
     surfaceInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
@@ -130,14 +127,9 @@ internal bool32 CreateSurface(vulkan_context *context, HINSTANCE hinstance, HWND
     surfaceInfo.hwnd = hwnd;
 
     VkResult result = vkCreateWin32SurfaceKHR(context->instance, &surfaceInfo, nullptr, &context->surface);
-    if (result != VK_SUCCESS)
-    {
-        DebugLog("Fail to create window surface\n");
-        return false;
-    }
+    Assert(result == VK_SUCCESS);
 
     DebugLog("Window surface created\n");
-    return true;
 }
 
 internal uint32 GetDevices(const VkInstance *instance, VkPhysicalDevice *devices, uint32 maxCount)
@@ -180,10 +172,7 @@ internal queue_family_indices SelectQueueFamilyIndices(VkPhysicalDevice device, 
 
     uint32 familyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(device, &familyCount, nullptr);
-    if (!familyCount)
-    {
-        return result;
-    }
+    Assert(familyCount);
 
     if (familyCount > MAX_FAMILY_COUNT)
     {
@@ -267,10 +256,7 @@ internal swapchain_support_details GetQuerySwapchainSupportDetails(VkPhysicalDev
 
     uint32 formatCount = 0;
     vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr);
-    if (formatCount > MAX_SURFACE_FORMATS)
-    {
-        formatCount = MAX_SURFACE_FORMATS;
-    }
+    Assert(formatCount <= MAX_SURFACE_FORMATS);
     details.formatCount = formatCount;
     if (formatCount)
     {
@@ -334,10 +320,7 @@ internal bool32 SelectDevice(vulkan_context *context)
 
 internal VkQueue CreateQueue(VkDevice device, uint32 queueFamilyIndex)
 {
-    if (device == VK_NULL_HANDLE)
-    {
-        return VK_NULL_HANDLE;
-    }
+    Assert(device != VK_NULL_HANDLE);
 
     VkQueue queue;
     vkGetDeviceQueue(device, queueFamilyIndex, 0, &queue);
@@ -566,10 +549,7 @@ internal bool32 CreateSwapchain(vulkan_context *context, HWND hwnd)
 
     uint32 count = 0;
     vkGetSwapchainImagesKHR(context->device, context->swapchain, &count, nullptr);
-    if (count > MAX_SWAPCHAIN_IMAGES)
-    {
-        count = MAX_SWAPCHAIN_IMAGES;
-    }
+    Assert(count <= MAX_SWAPCHAIN_IMAGES);
     context->swapchainImageCount = count;
     vkGetSwapchainImagesKHR(context->device, context->swapchain, &count, context->swapchainImages);
 
@@ -646,24 +626,20 @@ internal bool32 RecreateSwapchain(vulkan_context *context)
     return true;
 }
 
-internal bool32 CreateCommandPool(vulkan_context *context)
+internal void CreateCommandPool(vulkan_context *context)
 {
     VkCommandPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     poolInfo.queueFamilyIndex = context->graphicsFamilyIndex;
 
-    if (vkCreateCommandPool(context->device, &poolInfo, nullptr, &context->commandPool) != VK_SUCCESS)
-    {
-        DebugLog("Fail to create command pool\n");
-        return false;
-    }
+    VkResult result = vkCreateCommandPool(context->device, &poolInfo, nullptr, &context->commandPool);
+    Assert(result == VK_SUCCESS);
 
     DebugLog("Command pool created\n");
-    return true;
 }
 
-internal bool32 CreateCommandBuffer(vulkan_context *context)
+internal void CreateCommandBuffer(vulkan_context *context)
 {
     VkCommandBufferAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -671,17 +647,13 @@ internal bool32 CreateCommandBuffer(vulkan_context *context)
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     allocInfo.commandBufferCount = 1;
 
-    if (vkAllocateCommandBuffers(context->device, &allocInfo, &context->commandBuffer) != VK_SUCCESS)
-    {
-        DebugLog("Fail to allocate command buffer\n");
-        return false;
-    }
+    VkResult result = vkAllocateCommandBuffers(context->device, &allocInfo, &context->commandBuffer);
+    Assert(result == VK_SUCCESS);
 
     DebugLog("Command buffer allocated\n");
-    return true;
 }
 
-internal bool32 CreateSyncObjects(vulkan_context *context)
+internal void CreateSyncObjects(vulkan_context *context)
 {
     VkSemaphoreCreateInfo semInfo{};
     semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -690,22 +662,17 @@ internal bool32 CreateSyncObjects(vulkan_context *context)
     fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-    if (vkCreateSemaphore(context->device, &semInfo, nullptr, &context->imageAvailableSemaphore) != VK_SUCCESS ||
-        vkCreateFence(context->device, &fenceInfo, nullptr, &context->inFlightFence) != VK_SUCCESS)
-    {
-        DebugLog("Fail to create sync objects\n");
-        return false;
-    }
+    VkResult semaphoreResult = vkCreateSemaphore(context->device, &semInfo, nullptr, &context->imageAvailableSemaphore);
+    Assert(semaphoreResult == VK_SUCCESS);
+
+    VkResult fenceResult = vkCreateFence(context->device, &fenceInfo, nullptr, &context->inFlightFence);
+    Assert(fenceResult == VK_SUCCESS);
 
     for (uint32 i = 0; i < context->swapchainImageCount; ++i)
     {
-        if (vkCreateSemaphore(context->device, &semInfo, nullptr, &context->renderFinishedSemaphores[i]) != VK_SUCCESS)
-        {
-            DebugLog("Fail to create render-finished semaphore\n");
-            return false;
-        }
+        VkResult result = vkCreateSemaphore(context->device, &semInfo, nullptr, &context->renderFinishedSemaphores[i]);
+        Assert(result == VK_SUCCESS);
     }
 
     DebugLog("Sync objects created\n");
-    return true;
 }

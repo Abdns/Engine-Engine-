@@ -8,7 +8,7 @@ struct asset_pack
 {
     uint8       *Data;
     uint32       Size;
-    asset_entry *Entries;
+    asset_descriptor *Entries;
     uint32       Count;
 };
 
@@ -23,7 +23,7 @@ internal asset_pack AssetPackFromMemory(void *Data, uint32 Size)
     }
 
     asset_file_header *Header = (asset_file_header *)Data;
-    if (Header->Magic != ENGA_MAGIC || Header->Version != ENGA_VERSION || Header->AssetTableOffset + Header->AssetCount * sizeof(asset_entry) > Size)
+    if (Header->Magic != ENGA_MAGIC || Header->Version != ENGA_VERSION || Header->AssetTableOffset + Header->AssetCount * sizeof(asset_descriptor) > Size)
     {
         DebugLog("Asset pack is corrupt\n");
         return Result;
@@ -31,13 +31,13 @@ internal asset_pack AssetPackFromMemory(void *Data, uint32 Size)
 
     Result.Data    = (uint8 *)Data;
     Result.Size    = Size;
-    Result.Entries = (asset_entry *)((uint8 *)Data + Header->AssetTableOffset);
+    Result.Entries = (asset_descriptor *)((uint8 *)Data + Header->AssetTableOffset);
     Result.Count   = Header->AssetCount;
 
     return Result;
 }
 
-internal void *AssetData(asset_pack *Pack, asset_entry *Entry)
+internal void *AssetData(asset_pack *Pack, asset_descriptor *Entry)
 {
     if (Entry->Offset + Entry->Size > Pack->Size)
     {

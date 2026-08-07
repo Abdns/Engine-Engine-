@@ -12,74 +12,87 @@
 
 #define MAX_PACK_ASSETS 64
 
-struct pack_state
+struct asset_table
 {
-    asset_entry Entries[MAX_PACK_ASSETS];
+    asset_descriptor Entries[MAX_PACK_ASSETS];
     void       *Data[MAX_PACK_ASSETS];
     uint32      Count;
 };
 
-internal asset_entry *AddAsset(pack_state *Pack, asset_type Type, const char *Name, void *Data, uint64 Size)
+struct image_asset
 {
-    Assert(Pack->Count < MAX_PACK_ASSETS);
+    const char        *Name;
+    void              *Pixels;
+    asset_image_format Format;
+    bool32             IsSRGB;
+    bool32             IsAtlas;
+    uint32             Width;
+    uint32             Height;
+    uint32             Layers;
+};
 
-    asset_entry *Entry = &Pack->Entries[Pack->Count];
+internal asset_descriptor *AddAsset(asset_table *Table, asset_type Type, const char *Name, void *Data, uint64 Size)
+{
+    Assert(Table->Count < MAX_PACK_ASSETS);
+
+    asset_descriptor *Entry = &Table->Entries[Table->Count];
     *Entry = {};
     Entry->Type = (uint32)Type;
     AppendString(Entry->Name, ENGA_MAX_ASSET_NAME, 0, Name);
     Entry->Size = Size;
 
-    Pack->Data[Pack->Count] = Data;
-    Pack->Count++;
+    Table->Data[Table->Count] = Data;
+    Table->Count++;
 
     return Entry;
 }
 
-internal void AddMesh(pack_state *Pack, const char *Name, void *Blob, uint64 BlobSize, uint32 VertexCount, uint32 IndexCount)
+internal void AddMesh(asset_table *Table, const char *Name, void *Blob, uint64 BlobSize, uint32 VertexCount, uint32 IndexCount)
 {
-    asset_entry *Entry = AddAsset(Pack, Asset_Mesh, Name, Blob, BlobSize);
-    Entry->Mesh.VertexCount = VertexCount;
-    Entry->Mesh.IndexCount  = IndexCount;
+    asset_descriptor *Desc = AddAsset(Table, Asset_Mesh, Name, Blob, BlobSize);
+    Desc->Mesh.VertexCount = VertexCount;
+    Desc->Mesh.IndexCount  = IndexCount;
 }
 
-internal void AddImage(pack_state *Pack, const char *Name, void *Pixels, uint64 ByteSize, uint32 Width, uint32 Height, uint32 SRGB, uint32 Format, uint32 Layers)
+internal void AddImage(asset_table *Table, image_asset Image)
 {
-    asset_entry *Entry = AddAsset(Pack, Asset_Image, Name, Pixels, ByteSize);
-    Entry->Image.Width  = Width;
-    Entry->Image.Height = Height;
-    Entry->Image.SRGB   = SRGB;
-    Entry->Image.Format = Format;
-    Entry->Image.Layers = Layers;
+    Assert(Image.Name);
+    Assert(Image.Pixels);
+    Assert(Image.Width && Image.Height && Image.Layers);
+
+    uint64 ByteSize = (uint64)Image.Width * Image.Height * Image.Layers * AssetImageFormatBytes(Image.Format);
+
+    asset_descriptor *Desc = AddAsset(Table, Asset_Image, Image.Name, Image.Pixels, ByteSize);
+    Desc->Image.Format  = (uint32)Image.Format;
+    Desc->Image.IsSRGB  = Image.IsSRGB;
+    Desc->Image.IsAtlas = Image.IsAtlas;
+    Desc->Image.Width   = Image.Width;
+    Desc->Image.Height  = Image.Height;
+    Desc->Image.Layers  = Image.Layers;
 }
 
-internal bool32 AddSkyCubemap(pack_state *Pack, memory_arena *Arena, const char *Name, const char *Path, uint32 FaceSize)
+internal void AddSkyCubemap(asset_table *Table, memory_arena *Arena, const char *Name, const char *Path, uint32 FaceSize)
 {
     file_contents File = Win32ReadEntireFile(Path);
-    if (!File.Data)
-    {
-        DebugLog("AssetBuilder: cannot open '%s'\n", Path);
-        return false;
-    }
+    Assert(File.Data);
 
     loaded_hdr Equirect = ParseHDR(Arena, File.Data, File.Size);
-    if (!Equirect.Pixels)
-    {
-        DebugLog("AssetBuilder: cannot parse '%s'\n", Path);
-        return false;
-    }
+    Assert(Equirect.Pixels);
 
     loaded_cubemap Cube = EquirectToCubemap(Arena, &Equirect, FaceSize);
-    if (!Cube.Pixels)
-    {
-        DebugLog("AssetBuilder: cannot convert '%s' to a cubemap\n", Path);
-        return false;
-    }
+    Assert(Cube.Pixels);
 
-    AddImage(Pack, Name, Cube.Pixels, Cube.ByteSize, Cube.FaceSize, Cube.FaceSize, 0, ImageFormat_RGBA16F, 6);
+    image_asset Cubemap = {};
+    Cubemap.Name   = Name;
+    Cubemap.Pixels = Cube.Pixels;
+    Cubemap.Format = ImageFormat_RGBA16F;
+    Cubemap.Width  = Cube.FaceSize;
+    Cubemap.Height = Cube.FaceSize;
+    Cubemap.Layers = 6;
+    AddImage(Table, Cubemap);
 
     DebugLog("AssetBuilder: '%s' %ux%u equirect -> %u^2 x6 cubemap RGBA16F (%llu bytes)\n",
              Name, Equirect.Width, Equirect.Height, Cube.FaceSize, Cube.ByteSize);
-    return true;
 }
 
 internal file_contents ReadSiblingFile(const char *BasePath, const char *Uri)
@@ -105,117 +118,101 @@ internal file_contents ReadSiblingFile(const char *BasePath, const char *Uri)
     return Win32ReadEntireFile(Path);
 }
 
-internal bool32 AddGLTF(pack_state *Pack, memory_arena *Arena, const char *Path)
+internal void AddGLTF(asset_table *Table, memory_arena *Arena, const char *Path)
 {
     file_contents File = Win32ReadEntireFile(Path);
-    if (!File.Data)
-    {
-        DebugLog("AssetBuilder: cannot open '%s'\n", Path);
-        return false;
-    }
+    Assert(File.Data);
 
     gltf_file Gltf = ParseGLTF(Arena, File.Data, File.Size);
-    if (!Gltf.Root)
-    {
-        DebugLog("AssetBuilder: cannot parse '%s'\n", Path);
-        return false;
-    }
+    Assert(Gltf.Root);
 
     if (!Gltf.Bin)
     {
         char *Uri = JsonCString(JsonGet(JsonAt(JsonGet(Gltf.Root, "buffers"), 0), "uri"));
-        if (Uri)
-        {
-            file_contents Bin = ReadSiblingFile(Path, Uri);
-            Gltf.Bin     = (uint8 *)Bin.Data;
-            Gltf.BinSize = Bin.Size;
-        }
-    }
+        Assert(Uri);
 
-    if (!Gltf.Bin)
-    {
-        DebugLog("AssetBuilder: '%s' has no binary buffer\n", Path);
-        return false;
+        file_contents Bin = ReadSiblingFile(Path, Uri);
+        Assert(Bin.Data);
+
+        Gltf.Bin     = (uint8 *)Bin.Data;
+        Gltf.BinSize = Bin.Size;
     }
 
     json_value *Meshes = JsonGet(Gltf.Root, "meshes");
     for (json_member *Member = Meshes ? Meshes->First : 0; Member; Member = Member->Next)
     {
         json_value *Mesh = Member->Value;
+
         char *Name = JsonCString(JsonGet(Mesh, "name"));
+        Assert(Name);
 
         gltf_geometry Geometry = GLTFMeshGeometry(Arena, &Gltf, Mesh);
-        if (!Name || !Geometry.Blob)
-        {
-            DebugLog("AssetBuilder: mesh '%s' in '%s' skipped\n", Name ? Name : "?", Path);
-            continue;
-        }
+        Assert(Geometry.Blob);
 
-        AddMesh(Pack, Name, Geometry.Blob, Geometry.BlobSize, Geometry.VertexCount, Geometry.IndexCount);
+        AddMesh(Table, Name, Geometry.Blob, Geometry.BlobSize, Geometry.VertexCount, Geometry.IndexCount);
     }
 
     json_value *Images = JsonGet(Gltf.Root, "images");
     for (json_member *Member = Images ? Images->First : 0; Member; Member = Member->Next)
     {
         json_value *Image = Member->Value;
+
         char *Name = JsonCString(JsonGet(Image, "name"));
         char *Uri  = JsonCString(JsonGet(Image, "uri"));
+        Assert(Name);
+        Assert(Uri);
 
-        loaded_bitmap Bitmap = {};
-        if (Uri)
-        {
-            file_contents ImageFile = ReadSiblingFile(Path, Uri);
-            if (ImageFile.Data)
-            {
-                Bitmap = ParseTGA(Arena, ImageFile.Data, ImageFile.Size);
-            }
-        }
+        file_contents ImageFile = ReadSiblingFile(Path, Uri);
+        Assert(ImageFile.Data);
 
-        if (!Name || !Bitmap.Pixels)
-        {
-            DebugLog("AssetBuilder: image '%s' in '%s' skipped\n", Name ? Name : "?", Path);
-            continue;
-        }
+        loaded_bitmap Bitmap = ParseTGA(Arena, ImageFile.Data, ImageFile.Size);
+        Assert(Bitmap.Pixels);
 
-        AddImage(Pack, Name, Bitmap.Pixels, (uint64)Bitmap.Width * Bitmap.Height * 4, Bitmap.Width, Bitmap.Height, 1, ImageFormat_RGBA8, 1);
+        image_asset Texture = {};
+        Texture.Name   = Name;
+        Texture.Pixels = Bitmap.Pixels;
+        Texture.Format = ImageFormat_RGBA8;
+        Texture.IsSRGB = true;
+        Texture.Width  = Bitmap.Width;
+        Texture.Height = Bitmap.Height;
+        Texture.Layers = 1;
+        AddImage(Table, Texture);
     }
-
-    return true;
 }
 
-internal bool32 WritePack(pack_state *Pack, const char *Path)
+internal void WriteTable(asset_table *Table, const char *Path)
 {
     asset_file_header Header = {};
     Header.Magic            = ENGA_MAGIC;
     Header.Version          = ENGA_VERSION;
-    Header.AssetCount       = Pack->Count;
+    Header.AssetCount       = Table->Count;
     Header.AssetTableOffset = (uint32)sizeof(asset_file_header);
 
-    uint64 DataOffset = sizeof(asset_file_header) + (uint64)Pack->Count * sizeof(asset_entry);
-    for (uint32 i = 0; i < Pack->Count; ++i)
+    uint64 DataOffset = sizeof(asset_file_header) + (uint64)Table->Count * sizeof(asset_descriptor);
+    for (uint32 i = 0; i < Table->Count; ++i)
     {
-        Pack->Entries[i].Offset = DataOffset;
-        DataOffset += Pack->Entries[i].Size;
+        Table->Entries[i].Offset = DataOffset;
+        DataOffset += Table->Entries[i].Size;
     }
 
     HANDLE File = CreateFileA(Path, GENERIC_WRITE, 0, 0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
-    if (File == INVALID_HANDLE_VALUE)
-    {
-        DebugLog("AssetBuilder: cannot create '%s'\n", Path);
-        return false;
-    }
+    Assert(File != INVALID_HANDLE_VALUE);
 
-    bool32 Ok = true;
     DWORD Written = 0;
-    Ok = Ok && WriteFile(File, &Header, (DWORD)sizeof(Header), &Written, 0);
-    Ok = Ok && WriteFile(File, Pack->Entries, (DWORD)(Pack->Count * sizeof(asset_entry)), &Written, 0);
-    for (uint32 i = 0; Ok && i < Pack->Count; ++i)
+
+    BOOL Ok = WriteFile(File, &Header, (DWORD)sizeof(Header), &Written, 0);
+    Assert(Ok);
+
+    Ok = WriteFile(File, Table->Entries, (DWORD)(Table->Count * sizeof(asset_descriptor)), &Written, 0);
+    Assert(Ok);
+
+    for (uint32 i = 0; i < Table->Count; ++i)
     {
-        Ok = Ok && WriteFile(File, Pack->Data[i], (DWORD)Pack->Entries[i].Size, &Written, 0);
+        Ok = WriteFile(File, Table->Data[i], (DWORD)Table->Entries[i].Size, &Written, 0);
+        Assert(Ok);
     }
 
     CloseHandle(File);
-    return Ok;
 }
 
 int main(int ArgCount, char **Args)
@@ -223,26 +220,19 @@ int main(int ArgCount, char **Args)
     const char *OutPath = (ArgCount > 1) ? Args[1] : "assets.enga";
 
     uint32 ArenaSize = (uint32)Megabytes(64);
+    void  *ArenaMemory = VirtualAlloc(0, ArenaSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    Assert(ArenaMemory);
+
     memory_arena Arena;
-    InitializeArena(&Arena, ArenaSize, VirtualAlloc(0, ArenaSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE));
+    InitializeArena(&Arena, ArenaSize, ArenaMemory);
 
-    pack_state Pack = {};
+    asset_table Table = {};
 
-    if (!AddGLTF(&Pack, &Arena, "..\\assets\\models\\TestShapes.gltf"))
-    {
-        return 1;
-    }
+    AddGLTF(&Table, &Arena, "..\\assets\\models\\TestShapes.gltf");
+    AddSkyCubemap(&Table, &Arena, "sky", "..\\assets\\images\\sky.hdr", 512);
+    WriteTable(&Table, OutPath);
 
-    if (!AddSkyCubemap(&Pack, &Arena, "sky", "..\\assets\\images\\sky.hdr", 512))
-    {
-        return 1;
-    }
+    DebugLog("AssetBuilder: '%s' written (%u assets)\n", OutPath, Table.Count);
 
-    if (!WritePack(&Pack, OutPath))
-    {
-        return 1;
-    }
-
-    DebugLog("AssetBuilder: '%s' written (%u assets)\n", OutPath, Pack.Count);
     return 0;
 }

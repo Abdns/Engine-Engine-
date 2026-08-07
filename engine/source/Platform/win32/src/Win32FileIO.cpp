@@ -2,21 +2,17 @@
 
 DEBUG_PLATFORM_WRITE_ENTIRE_FILE(DEBUGPlatformWriteEntireFile)
 {
-    bool32 Result = false;
-
     HANDLE FileHandle = CreateFileA(Filename, GENERIC_WRITE, 0, 0,
                                     CREATE_ALWAYS, 0, 0);
-    if (FileHandle != INVALID_HANDLE_VALUE)
-    {
-        DWORD BytesWritten;
-        if (WriteFile(FileHandle, Memory, MemorySize, &BytesWritten, 0))
-        {
-            Result = (BytesWritten == MemorySize);
-        }
-        CloseHandle(FileHandle);
-    }
+    Assert(FileHandle != INVALID_HANDLE_VALUE);
 
-    return Result;
+    DWORD BytesWritten = 0;
+    bool32 Wrote = WriteFile(FileHandle, Memory, MemorySize, &BytesWritten, 0);
+    Assert(Wrote && BytesWritten == MemorySize);
+
+    CloseHandle(FileHandle);
+
+    return true;
 }
 
 #endif

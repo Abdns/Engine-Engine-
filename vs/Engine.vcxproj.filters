@@ -55,6 +55,9 @@
     <Filter Include="assets\images">
       <UniqueIdentifier>{a1000000-0000-0000-0000-0000000000b2}</UniqueIdentifier>
     </Filter>
+    <Filter Include="assets\fonts">
+      <UniqueIdentifier>{a1000000-0000-0000-0000-0000000000b3}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\engine\source\Game\src\Game.cpp">
@@ -220,11 +223,14 @@
     <None Include="..\assets\models\TestTexture.tga">
       <Filter>assets\models</Filter>
     </None>
-    <None Include="..\assets\images\TestImage.tga">
-      <Filter>assets\images</Filter>
-    </None>
     <None Include="..\assets\images\sky.hdr">
       <Filter>assets\images</Filter>
+    </None>
+    <None Include="..\assets\fonts\Consolas24.tga">
+      <Filter>assets\fonts</Filter>
+    </None>
+    <None Include="..\assets\fonts\Consolas24.json">
+      <Filter>assets\fonts</Filter>
     </None>
     <None Include="..\build.bat" />
   </ItemGroup>

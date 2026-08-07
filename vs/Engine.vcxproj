@@ -88,8 +88,9 @@
     <None Include="..\assets\models\TestShapes.gltf" />
     <None Include="..\assets\models\TestShapes.bin" />
     <None Include="..\assets\models\TestTexture.tga" />
-    <None Include="..\assets\images\TestImage.tga" />
     <None Include="..\assets\images\sky.hdr" />
+    <None Include="..\assets\fonts\Consolas24.tga" />
+    <None Include="..\assets\fonts\Consolas24.json" />
     <None Include="..\build.bat" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

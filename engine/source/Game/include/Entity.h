@@ -73,10 +73,7 @@ internal entity *GetEntity(data_lake *Lake, uint32 EntityID)
 
 internal entity *GetEntityByName(data_lake *Lake, const char *Name)
 {
-    if (!Name || !Name[0])
-    {
-        return 0;
-    }
+    Assert(Name && Name[0]);
 
     for (uint32 Index = 0; Index < Lake->EntityCount; ++Index)
     {
@@ -86,9 +83,9 @@ internal entity *GetEntityByName(data_lake *Lake, const char *Name)
         }
     }
 
-    DebugLog("Entity '%s' not found\n", Name);
+    Assert(!"Entity not found");
 
-    return 0;
+    return Lake->Entities;
 }
 
 internal Matrix4 EntityTransform(data_lake *Lake, entity *Entity)

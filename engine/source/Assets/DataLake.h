@@ -189,7 +189,7 @@ internal uint32 LakeAddMesh(data_lake *Lake, const char *Name, enga_vertex *Vert
     return Handle;
 }
 
-internal uint32 LakeAddTexture(data_lake *Lake, const char *Name, void *Pixels, uint32 Width, uint32 Height, uint32 SRGB, asset_image_format Format)
+internal uint32 LakeAddTexture(data_lake *Lake, const char *Name, void *Pixels, uint32 Width, uint32 Height, bool32 SRGB, asset_image_format Format)
 {
     uint32 Handle = {};
 
@@ -263,7 +263,7 @@ internal void LakeLoadPack(data_lake *Lake, void *PackData, uint32 PackSize)
 
     for (uint32 Index = 0; Index < Pack.Count; ++Index)
     {
-        asset_entry *Entry = Pack.Entries + Index;
+        asset_descriptor *Entry = Pack.Entries + Index;
         void *Data = AssetData(&Pack, Entry);
         if (!Data)
         {
@@ -286,7 +286,7 @@ internal void LakeLoadPack(data_lake *Lake, void *PackData, uint32 PackSize)
             }
             else
             {
-                LakeAddTexture(Lake, Entry->Name, Data, Entry->Image.Width, Entry->Image.Height, Entry->Image.SRGB, Format);
+                LakeAddTexture(Lake, Entry->Name, Data, Entry->Image.Width, Entry->Image.Height, Entry->Image.IsSRGB, Format);
             }
         }
     }

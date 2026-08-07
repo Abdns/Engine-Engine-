@@ -23,19 +23,11 @@ internal gltf_file ParseGLTF(memory_arena *Arena, void *Data, uint32 Size)
 {
     gltf_file Result = {};
 
-    if (!Data || !Size)
-    {
-        DebugLog("GLTF: empty file\n");
-        return Result;
-    }
+    Assert(Data && Size);
 
     uint32 ErrorOffset = 0;
     Result.Root = JsonParse(Arena, Data, Size, &ErrorOffset);
-    if (!Result.Root)
-    {
-        DebugLog("GLTF: JSON parse error at byte %u\n", ErrorOffset);
-        return Result;
-    }
+    Assert(Result.Root);
 
     Result.Accessors   = JsonGet(Result.Root, "accessors");
     Result.BufferViews = JsonGet(Result.Root, "bufferViews");
@@ -58,10 +50,7 @@ internal uint32 GLTFComponentSize(uint32 ComponentType)
 internal uint8 *GLTFViewData(gltf_file *File, uint32 ViewIndex, uint32 *OutSize, uint32 *OutStride)
 {
     json_value *View = JsonAt(File->BufferViews, ViewIndex);
-    if (!View)
-    {
-        return 0;
-    }
+    Assert(View);
 
     if (JsonU32(JsonGet(View, "buffer"), 0) != 0)
     {
@@ -71,11 +60,7 @@ internal uint8 *GLTFViewData(gltf_file *File, uint32 ViewIndex, uint32 *OutSize,
 
     uint32 Offset = JsonU32(JsonGet(View, "byteOffset"), 0);
     uint32 Length = JsonU32(JsonGet(View, "byteLength"), 0);
-    if (Offset > File->BinSize || Length > File->BinSize - Offset)
-    {
-        DebugLog("GLTF: bufferView %u runs past the binary chunk\n", ViewIndex);
-        return 0;
-    }
+    Assert(Offset <= File->BinSize && Length <= File->BinSize - Offset);
 
     *OutSize   = Length;
     *OutStride = JsonU32(JsonGet(View, "byteStride"), 0);
@@ -94,11 +79,7 @@ internal uint8 *GLTFAccessorData(gltf_file *File, json_value *AccessorIndex, uin
     }
 
     json_value *Accessor = JsonAt(File->Accessors, JsonU32(AccessorIndex, 0));
-    if (!Accessor)
-    {
-        DebugLog("GLTF: accessor %u does not exist\n", JsonU32(AccessorIndex, 0));
-        return 0;
-    }
+    Assert(Accessor);
 
     json_value *ViewIndex = JsonGet(Accessor, "bufferView");
     if (!ViewIndex)
@@ -124,26 +105,14 @@ internal uint8 *GLTFAccessorData(gltf_file *File, json_value *AccessorIndex, uin
     }
 
     uint32 Stride = ViewStride ? ViewStride : ElementSize;
-    if (Stride < ElementSize)
-    {
-        DebugLog("GLTF: byteStride %u is smaller than the %u byte element\n", ViewStride, ElementSize);
-        return 0;
-    }
+    Assert(Stride >= ElementSize);
 
     uint32 Offset = JsonU32(JsonGet(Accessor, "byteOffset"), 0);
     uint32 Count  = JsonU32(JsonGet(Accessor, "count"), 0);
-    if (!Count || Offset > ViewSize)
-    {
-        DebugLog("GLTF: accessor has no elements or starts past its bufferView\n");
-        return 0;
-    }
+    Assert(Count && Offset <= ViewSize);
 
     uint64 Span = (uint64)(Count - 1) * Stride + ElementSize;
-    if (Span > (uint64)(ViewSize - Offset))
-    {
-        DebugLog("GLTF: accessor spans %llu bytes but only %u remain in the bufferView\n", Span, ViewSize - Offset);
-        return 0;
-    }
+    Assert(Span <= (uint64)(ViewSize - Offset));
 
     *OutCount         = Count;
     *OutComponentType = ComponentType;
@@ -172,11 +141,7 @@ internal gltf_geometry GLTFMeshGeometry(memory_arena *Arena, gltf_file *File, js
     uint32 PosType   = 0;
     uint32 PosStride = 0;
     uint8 *Pos = GLTFAccessorData(File, JsonGet(Attributes, "POSITION"), 3, &PosCount, &PosType, &PosStride);
-    if (!Pos || PosType != GLTF_FLOAT || !PosCount)
-    {
-        DebugLog("GLTF: mesh has no float POSITION\n");
-        return Result;
-    }
+    Assert(Pos && PosType == GLTF_FLOAT && PosCount);
 
     uint32 UVCount  = 0;
     uint32 UVType   = 0;
@@ -200,11 +165,7 @@ internal gltf_geometry GLTFMeshGeometry(memory_arena *Arena, gltf_file *File, js
         return Result;
     }
 
-    if (SourceIndices && IndexType != GLTF_USHORT && IndexType != GLTF_UINT)
-    {
-        DebugLog("GLTF: unsupported index type %u\n", IndexType);
-        return Result;
-    }
+    Assert(!SourceIndices || IndexType == GLTF_USHORT || IndexType == GLTF_UINT);
 
     uint32 VertexCount = PosCount;
     uint32 IndexCount  = SourceIndices ? SourceIndexCount : PosCount;
@@ -247,10 +208,7 @@ internal gltf_geometry GLTFMeshGeometry(memory_arena *Arena, gltf_file *File, js
             uint8 *SrcIndex = SourceIndices + (memory_size)i * IndexStride;
             Src = (IndexType == GLTF_USHORT) ? *(uint16 *)SrcIndex : *(uint32 *)SrcIndex;
         }
-        if (Src >= VertexCount)
-        {
-            Src = 0;
-        }
+        Assert(Src < VertexCount);
 
         OutIndx[i] = Src;
     }

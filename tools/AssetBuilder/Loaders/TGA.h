@@ -15,11 +15,7 @@ internal loaded_bitmap ParseTGA(memory_arena *Arena, void *FileData, uint32 File
 {
     loaded_bitmap Result = {};
 
-    if (!FileData || FileSize < 18)
-    {
-        DebugLog("TGA: file too small\n");
-        return Result;
-    }
+    Assert(FileData && FileSize >= 18);
 
     uint8 *Bytes = (uint8 *)FileData;
 
@@ -36,17 +32,8 @@ internal loaded_bitmap ParseTGA(memory_arena *Arena, void *FileData, uint32 File
     bool32 IsUncompressed = (ImageType == 2);
     bool32 IsRLE          = (ImageType == 10);
 
-    if ((!IsUncompressed && !IsRLE) || (PixelDepth != 24 && PixelDepth != 32))
-    {
-        DebugLog("TGA: unsupported (type %u, depth %u), need true-color 24/32\n", ImageType, PixelDepth);
-        return Result;
-    }
-
-    if (Width == 0 || Height == 0)
-    {
-        DebugLog("TGA: zero dimensions\n");
-        return Result;
-    }
+    Assert((IsUncompressed || IsRLE) && (PixelDepth == 24 || PixelDepth == 32));
+    Assert(Width && Height);
 
     uint32 ColorMapBytes = 0;
     if (ColorMapType == 1)
@@ -55,11 +42,7 @@ internal loaded_bitmap ParseTGA(memory_arena *Arena, void *FileData, uint32 File
     }
 
     uint32 Offset = 18u + IdLength + ColorMapBytes;
-    if (Offset > FileSize)
-    {
-        DebugLog("TGA: header exceeds file\n");
-        return Result;
-    }
+    Assert(Offset <= FileSize);
 
     uint32 PixelCount    = Width * Height;
     uint32 BytesPerPixel = (uint32)PixelDepth / 8u;
@@ -72,11 +55,7 @@ internal loaded_bitmap ParseTGA(memory_arena *Arena, void *FileData, uint32 File
 
     if (IsUncompressed)
     {
-        if (Src + (memory_size)PixelCount * BytesPerPixel > End)
-        {
-            DebugLog("TGA: pixel data truncated\n");
-            return Result;
-        }
+        Assert(Src + (memory_size)PixelCount * BytesPerPixel <= End);
 
         for (uint32 i = 0; i < PixelCount; ++i)
         {
@@ -93,11 +72,7 @@ internal loaded_bitmap ParseTGA(memory_arena *Arena, void *FileData, uint32 File
         uint32 i = 0;
         while (i < PixelCount)
         {
-            if (Src >= End)
-            {
-                DebugLog("TGA: RLE stream truncated\n");
-                return Result;
-            }
+            Assert(Src < End);
 
             uint8  Packet    = *Src++;
             uint32 Count     = (uint32)(Packet & 0x7F) + 1;
@@ -110,11 +85,7 @@ internal loaded_bitmap ParseTGA(memory_arena *Arena, void *FileData, uint32 File
 
             if (RunLength)
             {
-                if (Src + BytesPerPixel > End)
-                {
-                    DebugLog("TGA: RLE run truncated\n");
-                    return Result;
-                }
+                Assert(Src + BytesPerPixel <= End);
 
                 uint8 B = Src[0];
                 uint8 G = Src[1];
@@ -133,11 +104,7 @@ internal loaded_bitmap ParseTGA(memory_arena *Arena, void *FileData, uint32 File
             }
             else
             {
-                if (Src + (memory_size)Count * BytesPerPixel > End)
-                {
-                    DebugLog("TGA: RAW packet truncated\n");
-                    return Result;
-                }
+                Assert(Src + (memory_size)Count * BytesPerPixel <= End);
 
                 for (uint32 c = 0; c < Count; ++c, ++i)
                 {
