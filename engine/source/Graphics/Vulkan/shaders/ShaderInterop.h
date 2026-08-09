@@ -51,8 +51,11 @@ struct draw_push_constants
 {
     float4x4 Model;
     float4   Tint;
+    float4   Rect;
+    float4   UVRect;
     uint     MaterialIndex;
     uint     CubemapIndex;
+    uint     TextureSlot;
 };
 
 #ifdef __cplusplus

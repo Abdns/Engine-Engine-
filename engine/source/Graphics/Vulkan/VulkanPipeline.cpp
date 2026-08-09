@@ -19,14 +19,9 @@ internal vulkan_shader LoadShader(const char *name)
     shader.vert = Win32ReadEntireFile(vertPath);
     shader.frag = Win32ReadEntireFile(fragPath);
 
-    if (shader.vert.Data && shader.frag.Data)
-    {
-        DebugLog("Shader '%s' loaded (vert %u, frag %u bytes)\n",name, shader.vert.Size, shader.frag.Size);
-    }
-    else
-    {
-        DebugLog("Shader '%s' not found in CompiledShaders\n", name);
-    }
+    Assert(shader.vert.Data && shader.frag.Data);
+
+    DebugLog("Shader '%s' loaded (vert %u, frag %u bytes)\n",name, shader.vert.Size, shader.frag.Size);
 
     return shader;
 }
@@ -46,16 +41,13 @@ internal VkShaderModule CreateShaderModule(VkDevice device, void *code, uint32 c
     createInfo.pCode = (const uint32_t *)code;
 
     VkShaderModule module = VK_NULL_HANDLE;
-    if (vkCreateShaderModule(device, &createInfo, nullptr, &module) != VK_SUCCESS)
-    {
-        DebugLog("Fail to create shader module\n");
+    VkResult result = vkCreateShaderModule(device, &createInfo, nullptr, &module);
+    Assert(result == VK_SUCCESS);
 
-        return VK_NULL_HANDLE;
-    }
     return module;
 }
 
-internal bool32 CreatePipelineLayout(vulkan_context *context, render_pipeline *pipeline, VkDescriptorSetLayout globalSetLayout, VkDescriptorSetLayout pipelineSetLayout)
+internal void CreatePipelineLayout(vulkan_context *context, render_pipeline *pipeline, VkDescriptorSetLayout globalSetLayout, VkDescriptorSetLayout pipelineSetLayout)
 {
     VkPushConstantRange pushRange{};
     pushRange.stageFlags = PIPELINE_PUSH_STAGES;
@@ -71,34 +63,16 @@ internal bool32 CreatePipelineLayout(vulkan_context *context, render_pipeline *p
     layoutInfo.pushConstantRangeCount = 1;
     layoutInfo.pPushConstantRanges = &pushRange;
 
-    if (vkCreatePipelineLayout(context->device, &layoutInfo, nullptr, &pipeline->Layout) != VK_SUCCESS)
-    {
-        DebugLog("Fail to create pipeline layout\n");
-        return false;
-    }
-
-    return true;
+    VkResult result = vkCreatePipelineLayout(context->device, &layoutInfo, nullptr, &pipeline->Layout);
+    Assert(result == VK_SUCCESS);
 }
 
-internal bool32 CreateGraphicsPipeline(vulkan_context *context, render_pipeline *pipeline, VkRenderPass renderPass)
+internal void CreateGraphicsPipeline(vulkan_context *context, render_pipeline *pipeline, VkRenderPass renderPass)
 {
     vulkan_shader shader = LoadShader(pipeline->Desc.ShaderName);
-    if (!shader.vert.Data || !shader.frag.Data)
-    {
-        DebugLog("Fail to load '%s' shader\n", pipeline->Desc.ShaderName);
-        FreeShader(&shader);
-
-        return false;
-    }
 
     VkShaderModule vertModule = CreateShaderModule(context->device, shader.vert.Data, shader.vert.Size);
     VkShaderModule fragModule = CreateShaderModule(context->device, shader.frag.Data, shader.frag.Size);
-    if (vertModule == VK_NULL_HANDLE || fragModule == VK_NULL_HANDLE)
-    {
-        FreeShader(&shader);
-
-        return false;
-    }
 
     VkPipelineShaderStageCreateInfo shaderStages[2] = {};
     shaderStages[0].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -211,13 +185,7 @@ internal bool32 CreateGraphicsPipeline(vulkan_context *context, render_pipeline 
     vkDestroyShaderModule(context->device, vertModule, nullptr);
     FreeShader(&shader);
 
-    if (result != VK_SUCCESS)
-    {
-        DebugLog("Fail to create graphics pipeline\n");
-        return false;
-    }
-
-    return true;
+    Assert(result == VK_SUCCESS);
 }
 
 internal void DestroyRenderPipeline(vulkan_context *context, render_pipeline *pipeline)
@@ -229,27 +197,21 @@ internal void DestroyRenderPipeline(vulkan_context *context, render_pipeline *pi
     *pipeline = {};
 }
 
-internal bool32 BuildPipeline(vulkan_context *context, vulkan_resources *res, render_pipeline *pipeline, pipeline_desc *desc, VkRenderPass renderPass)
+internal void BuildPipeline(vulkan_context *context, vulkan_resources *res, render_pipeline *pipeline, pipeline_desc *desc, VkRenderPass renderPass)
 {
     pipeline->Desc = *desc;
 
     pipeline->DefaultState.CullMode   = VK_CULL_MODE_NONE;
     pipeline->DefaultState.DepthTest  = desc->DepthTest;
     pipeline->DefaultState.DepthWrite = desc->DepthWrite;
-    pipeline->DefaultState.AlphaBlend = VK_FALSE;
+    pipeline->DefaultState.AlphaBlend = desc->Blend;
 
-    if (desc->OwnSet && !CreatePipelineSet(context, res, &pipeline->Set))
+    if (desc->OwnSet)
     {
-        DestroyRenderPipeline(context, pipeline);
-        return false;
+        CreatePipelineSet(context, res, &pipeline->Set);
     }
 
-    if (!CreatePipelineLayout(context, pipeline, res->GlobalSet.Layout, pipeline->Set.Layout) || !CreateGraphicsPipeline(context, pipeline, renderPass))
-    {
-        DestroyRenderPipeline(context, pipeline);
-        return false;
-    }
-
-    return true;
+    CreatePipelineLayout(context, pipeline, res->GlobalSet.Layout, pipeline->Set.Layout);
+    CreateGraphicsPipeline(context, pipeline, renderPass);
 }
  

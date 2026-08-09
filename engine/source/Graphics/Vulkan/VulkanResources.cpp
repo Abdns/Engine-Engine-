@@ -56,7 +56,7 @@ internal void UpdateBufferDescriptorInSet(vulkan_context *context, VkDescriptorS
     vkUpdateDescriptorSets(context->device, 1, &write, 0, nullptr);
 }
 
-internal bool32 AllocateDescriptorSet(vulkan_context *context, VkDescriptorPool pool, VkDescriptorSetLayout layout, VkDescriptorSet *outSet)
+internal void AllocateDescriptorSet(vulkan_context *context, VkDescriptorPool pool, VkDescriptorSetLayout layout, VkDescriptorSet *outSet)
 {
     VkDescriptorSetAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -64,16 +64,11 @@ internal bool32 AllocateDescriptorSet(vulkan_context *context, VkDescriptorPool 
     allocInfo.descriptorSetCount = 1;
     allocInfo.pSetLayouts = &layout;
 
-    if (vkAllocateDescriptorSets(context->device, &allocInfo, outSet) != VK_SUCCESS)
-    {
-        DebugLog("Fail to allocate descriptor set\n");
-        return false;
-    }
-
-    return true;
+    VkResult result = vkAllocateDescriptorSets(context->device, &allocInfo, outSet);
+    Assert(result == VK_SUCCESS);
 }
 
-internal bool32 CreateTextureSampler(vulkan_context *context, vulkan_resources *res, VkFilter filter, VkSamplerAddressMode addressMode)
+internal void CreateTextureSampler(vulkan_context *context, vulkan_resources *res, VkFilter filter, VkSamplerAddressMode addressMode)
 {
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -93,16 +88,11 @@ internal bool32 CreateTextureSampler(vulkan_context *context, vulkan_resources *
     samplerInfo.minLod = 0.0f;
     samplerInfo.maxLod = 0.0f;
 
-    if (vkCreateSampler(context->device, &samplerInfo, nullptr, &res->Sampler) != VK_SUCCESS)
-    {
-        DebugLog("Fail to create texture sampler\n");
-        return false;
-    }
-
-    return true;
+    VkResult result = vkCreateSampler(context->device, &samplerInfo, nullptr, &res->Sampler);
+    Assert(result == VK_SUCCESS);
 }
 
-internal bool32 CreateGlobalResources(vulkan_context *context, vulkan_resources *res)
+internal void CreateGlobalResources(vulkan_context *context, vulkan_resources *res)
 {
     VkDescriptorSetLayoutBinding bindings[6] = {};
     bindings[0].binding         = BINDING_TEXTURES;
@@ -151,11 +141,8 @@ internal bool32 CreateGlobalResources(vulkan_context *context, vulkan_resources 
     layoutInfo.bindingCount = (uint32)ArrayCount(bindings);
     layoutInfo.pBindings    = bindings;
 
-    if (vkCreateDescriptorSetLayout(context->device, &layoutInfo, nullptr, &res->GlobalSet.Layout) != VK_SUCCESS)
-    {
-        DebugLog("Fail to create global descriptor set layout\n");
-        return false;
-    }
+    VkResult result = vkCreateDescriptorSetLayout(context->device, &layoutInfo, nullptr, &res->GlobalSet.Layout);
+    Assert(result == VK_SUCCESS);
 
     VkDescriptorPoolSize poolSizes[4] = {};
     poolSizes[0].type            = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
@@ -174,42 +161,25 @@ internal bool32 CreateGlobalResources(vulkan_context *context, vulkan_resources 
     poolInfo.pPoolSizes = poolSizes;
     poolInfo.maxSets = 1 + Pipeline_Count;
 
-    if (vkCreateDescriptorPool(context->device, &poolInfo, nullptr, &res->DescriptorPool) != VK_SUCCESS)
-    {
-        DebugLog("Fail to create shared descriptor pool\n");
-        return false;
-    }
+    result = vkCreateDescriptorPool(context->device, &poolInfo, nullptr, &res->DescriptorPool);
+    Assert(result == VK_SUCCESS);
 
-    if (!AllocateDescriptorSet(context, res->DescriptorPool, res->GlobalSet.Layout, &res->GlobalSet.Handle))
-    {
-        return false;
-    }
+    AllocateDescriptorSet(context, res->DescriptorPool, res->GlobalSet.Layout, &res->GlobalSet.Handle);
 
-    if (!CreateTextureSampler(context, res, VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT))
-    {
-        return false;
-    }
+    CreateTextureSampler(context, res, VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
     UpdateSamplerDescriptorInSet(context, res->GlobalSet.Handle, BINDING_SAMPLER, res->Sampler);
 
     UpdateBufferDescriptorInSet(context, res->GlobalSet.Handle, BINDING_VERTICES, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, res->VertexBuffer.Buffer, (VkDeviceSize)res->VertexBuffer.Capacity * res->VertexBuffer.Stride);
 
     res->CameraBuffer = CreateBuffer(context, "Camera", VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, (uint32)sizeof(camera_uniforms), 1);
-    if (res->CameraBuffer.Buffer == VK_NULL_HANDLE)
-    {
-        return false;
-    }
+    Assert(res->CameraBuffer.Buffer != VK_NULL_HANDLE);
 
     UpdateBufferDescriptorInSet(context, res->GlobalSet.Handle, BINDING_CAMERA, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, res->CameraBuffer.Buffer, res->CameraBuffer.Stride);
 
     res->MaterialBuffer = CreateBuffer(context, "Material", VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, (uint32)sizeof(gpu_material), MAX_MATERIALS);
-    if (res->MaterialBuffer.Buffer == VK_NULL_HANDLE)
-    {
-        return false;
-    }
+    Assert(res->MaterialBuffer.Buffer != VK_NULL_HANDLE);
 
     UpdateBufferDescriptorInSet(context, res->GlobalSet.Handle, BINDING_MATERIALS, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, res->MaterialBuffer.Buffer, (VkDeviceSize)res->MaterialBuffer.Capacity * res->MaterialBuffer.Stride);
-
-    return true;
 }
 
 internal void DestroyGlobalResources(vulkan_context *context, vulkan_resources *res)
@@ -226,7 +196,7 @@ internal void DestroyGlobalResources(vulkan_context *context, vulkan_resources *
     res->GlobalSet      = {};
 }
 
-internal bool32 CreatePipelineSet(vulkan_context *context, vulkan_resources *res, descriptor_set *set)
+internal void CreatePipelineSet(vulkan_context *context, vulkan_resources *res, descriptor_set *set)
 {
     VkDescriptorSetLayoutBinding binding = {};
     binding.binding         = BINDING_PIPELINE_IMAGE;
@@ -239,13 +209,10 @@ internal bool32 CreatePipelineSet(vulkan_context *context, vulkan_resources *res
     layoutInfo.bindingCount = 1;
     layoutInfo.pBindings    = &binding;
 
-    if (vkCreateDescriptorSetLayout(context->device, &layoutInfo, nullptr, &set->Layout) != VK_SUCCESS)
-    {
-        DebugLog("Fail to create pipeline descriptor set layout\n");
-        return false;
-    }
+    VkResult result = vkCreateDescriptorSetLayout(context->device, &layoutInfo, nullptr, &set->Layout);
+    Assert(result == VK_SUCCESS);
 
-    return AllocateDescriptorSet(context, res->DescriptorPool, set->Layout, &set->Handle);
+    AllocateDescriptorSet(context, res->DescriptorPool, set->Layout, &set->Handle);
 }
 
 internal void DestroyPipelineSet(vulkan_context *context, descriptor_set *set)
@@ -280,33 +247,20 @@ internal gpu_mesh *ResolveMesh(vulkan_resources *res, uint32 MeshHandle)
     return res->Meshes + (MeshHandle - 1);
 }
 
-internal bool32 WriteMesh(uint32 MeshHandle, void *Vertices, uint32 VertexCount, uint32 *Indices, uint32 IndexCount)
+internal void WriteMesh(uint32 MeshHandle, void *Vertices, uint32 VertexCount, uint32 *Indices, uint32 IndexCount)
 {
     vulkan_resources *res = &GlobalResources;
 
     gpu_mesh *mesh = ResolveMesh(res, MeshHandle);
-    if (!mesh)
-    {
-        DebugLog("Mesh id %u out of range (max %d)\n", MeshHandle, MAX_MESHES);
-        return false;
-    }
-
-    if (mesh->IndexCount)
-    {
-        DebugLog("Mesh id %u already taken\n", MeshHandle);
-        return false;
-    }
+    Assert(mesh);
+    Assert(!mesh->IndexCount);
 
     gpu_buffer *vertexBuffer = &res->VertexBuffer;
     gpu_buffer *indexBuffer  = &res->IndexBuffer;
 
-    if (!VertexCount || !IndexCount ||
-        VertexCount > vertexBuffer->Capacity - vertexBuffer->Used ||
-        IndexCount  > indexBuffer->Capacity  - indexBuffer->Used)
-    {
-        DebugLog("Geometry buffers out of space for mesh id %u (%u vertices, %u indices)\n", MeshHandle, VertexCount, IndexCount);
-        return false;
-    }
+    Assert(VertexCount && IndexCount);
+    Assert(VertexCount <= vertexBuffer->Capacity - vertexBuffer->Used);
+    Assert(IndexCount  <= indexBuffer->Capacity  - indexBuffer->Used);
 
     BufferWrite(vertexBuffer, vertexBuffer->Used, Vertices, VertexCount);
     BufferWrite(indexBuffer,  indexBuffer->Used,  Indices,  IndexCount);
@@ -318,29 +272,19 @@ internal bool32 WriteMesh(uint32 MeshHandle, void *Vertices, uint32 VertexCount,
 
     vertexBuffer->Used += VertexCount;
     indexBuffer->Used  += IndexCount;
-
-    return true;
 }
 
-internal bool32 WriteTexture(uint32 TextureHandle, void *Pixels, uint32 Width, uint32 Height, uint32 SRGB, texture_format TextureFormat)
+internal void WriteTexture(uint32 TextureHandle, void *Pixels, uint32 Width, uint32 Height, uint32 SRGB, texture_format TextureFormat)
 {
     vulkan_context   *context = &GlobalVulkan;
     vulkan_resources *res     = &GlobalResources;
 
-    if (!TextureHandle || TextureHandle > MAX_TEXTURES)
-    {
-        DebugLog("Texture id %u out of range (max %d)\n", TextureHandle, MAX_TEXTURES);
-        return false;
-    }
+    Assert(TextureHandle && TextureHandle <= MAX_TEXTURES);
 
     uint32 slot = TextureHandle - 1;
 
     gpu_texture *texture = &res->Textures[slot];
-    if (texture->Image != VK_NULL_HANDLE)
-    {
-        DebugLog("Texture id %u already taken\n", TextureHandle);
-        return false;
-    }
+    Assert(texture->Image == VK_NULL_HANDLE);
 
     VkFormat format = (TextureFormat == TextureFormat_RGBA16F) ? VK_FORMAT_R16G16B16A16_SFLOAT : (SRGB ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM);
 
@@ -348,16 +292,12 @@ internal bool32 WriteTexture(uint32 TextureHandle, void *Pixels, uint32 Width, u
 
     VkBuffer       staging       = VK_NULL_HANDLE;
     VkDeviceMemory stagingMemory = VK_NULL_HANDLE;
-    if (!CreateStagingBuffer(context, imageSize, Pixels, &staging, &stagingMemory))
-    {
-        return false;
-    }
 
-    if (!ArenaPushImage(context, &res->ImageArena, Width, Height, format, 1, &texture->Image))
-    {
-        FreeBuffer(context, &staging, &stagingMemory);
-        return false;
-    }
+    bool32 stagingOk = CreateStagingBuffer(context, imageSize, Pixels, &staging, &stagingMemory);
+    Assert(stagingOk);
+
+    bool32 imageOk = ArenaPushImage(context, &res->ImageArena, Width, Height, format, 1, &texture->Image);
+    Assert(imageOk);
 
     TransitionImageLayout(context, texture->Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1);
     CopyBufferToImage(context, staging, texture->Image, Width, Height, 1);
@@ -368,29 +308,19 @@ internal bool32 WriteTexture(uint32 TextureHandle, void *Pixels, uint32 Width, u
     texture->View = CreateColorImageView(context->device, texture->Image, format);
 
     UpdateImageDescriptorInSet(context, res->GlobalSet.Handle, BINDING_TEXTURES, slot, texture->View);
-
-    return true;
 }
 
-internal bool32 WriteCubemap(uint32 CubemapHandle, void *Pixels, uint32 FaceSize, texture_format TextureFormat)
+internal void WriteCubemap(uint32 CubemapHandle, void *Pixels, uint32 FaceSize, texture_format TextureFormat)
 {
     vulkan_context   *context = &GlobalVulkan;
     vulkan_resources *res     = &GlobalResources;
 
-    if (!CubemapHandle || CubemapHandle > MAX_CUBEMAPS)
-    {
-        DebugLog("Cubemap id %u out of range (max %d)\n", CubemapHandle, MAX_CUBEMAPS);
-        return false;
-    }
+    Assert(CubemapHandle && CubemapHandle <= MAX_CUBEMAPS);
 
     uint32 slot = CubemapHandle - 1;
 
     gpu_texture *cube = &res->Cubemaps[slot];
-    if (cube->Image != VK_NULL_HANDLE)
-    {
-        DebugLog("Cubemap id %u already taken\n", CubemapHandle);
-        return false;
-    }
+    Assert(cube->Image == VK_NULL_HANDLE);
 
     VkFormat format = (TextureFormat == TextureFormat_RGBA16F) ? VK_FORMAT_R16G16B16A16_SFLOAT : VK_FORMAT_R8G8B8A8_UNORM;
 
@@ -398,16 +328,12 @@ internal bool32 WriteCubemap(uint32 CubemapHandle, void *Pixels, uint32 FaceSize
 
     VkBuffer       staging       = VK_NULL_HANDLE;
     VkDeviceMemory stagingMemory = VK_NULL_HANDLE;
-    if (!CreateStagingBuffer(context, imageSize, Pixels, &staging, &stagingMemory))
-    {
-        return false;
-    }
 
-    if (!ArenaPushImage(context, &res->ImageArena, FaceSize, FaceSize, format, 6, &cube->Image))
-    {
-        FreeBuffer(context, &staging, &stagingMemory);
-        return false;
-    }
+    bool32 stagingOk = CreateStagingBuffer(context, imageSize, Pixels, &staging, &stagingMemory);
+    Assert(stagingOk);
+
+    bool32 imageOk = ArenaPushImage(context, &res->ImageArena, FaceSize, FaceSize, format, 6, &cube->Image);
+    Assert(imageOk);
 
     TransitionImageLayout(context, cube->Image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 6);
     CopyBufferToImage(context, staging, cube->Image, FaceSize, FaceSize, 6);
@@ -418,26 +344,15 @@ internal bool32 WriteCubemap(uint32 CubemapHandle, void *Pixels, uint32 FaceSize
     cube->View = CreateCubeImageView(context->device, cube->Image, format);
 
     UpdateImageDescriptorInSet(context, res->GlobalSet.Handle, BINDING_CUBEMAPS, slot, cube->View);
-
-    return true;
 }
 
-internal bool32 WriteMaterial(command_load_material *Description)
+internal void WriteMaterial(command_load_material *Description)
 {
     vulkan_resources *res = &GlobalResources;
 
     uint32 MaterialHandle = Description->MaterialHandle;
-    if (!MaterialHandle || MaterialHandle > MAX_MATERIALS)
-    {
-        DebugLog("Material id %u out of range (max %d)\n", MaterialHandle, MAX_MATERIALS);
-        return false;
-    }
-
-    if (Description->Pipeline >= Pipeline_MeshCount)
-    {
-        DebugLog("Material %u references pipeline %d, which does not draw meshes\n", MaterialHandle, Description->Pipeline);
-        return false;
-    }
+    Assert(MaterialHandle && MaterialHandle <= MAX_MATERIALS);
+    Assert(Description->Pipeline < Pipeline_MeshCount);
 
     uint32 textureSlot = 0;
     if (Description->TextureHandle && Description->TextureHandle <= MAX_TEXTURES && res->Textures[Description->TextureHandle - 1].View)
@@ -461,8 +376,6 @@ internal bool32 WriteMaterial(command_load_material *Description)
     gpu_material *materials = (gpu_material *)res->MaterialBuffer.Mapped;
     materials[slot].BaseColor    = Description->BaseColor;
     materials[slot].TextureIndex = textureSlot;
-
-    return true;
 }
 
 internal void ProcessLoadCommands(vulkan_context *context, render_commands *commands)

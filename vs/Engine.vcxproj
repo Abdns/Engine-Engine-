@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -23,7 +23,7 @@
     <NMakeCleanCommandLine>if exist "$(ProjectDir)..\build" rd /s /q "$(ProjectDir)..\build"</NMakeCleanCommandLine>
     <NMakeOutput>$(ProjectDir)..\build\Engine.exe</NMakeOutput>
     <NMakePreprocessorDefinitions>ENGINE_INTERNAL=1;ENGINE_SLOW=1;ENGINE_WIN32=1;VK_USE_PLATFORM_WIN32_KHR;UNICODE;_UNICODE;_DEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
-    <NMakeIncludeSearchPath>$(ProjectDir)..\engine\source;$(ProjectDir)..\engine\source\Helpers;$(ProjectDir)..\engine\source\Game\include;$(ProjectDir)..\engine\source\Game\src;$(ProjectDir)..\engine\source\PlatformApi;$(ProjectDir)..\engine\source\Assets;$(ProjectDir)..\engine\source\Physics;$(ProjectDir)..\engine\source\Platform\win32\include;$(ProjectDir)..\engine\source\Platform\win32\src;$(ProjectDir)..\engine\source\Graphics\Vulkan;$(VULKAN_SDK)\Include;$(VC_IncludePath);$(WindowsSDK_IncludePath);$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+    <NMakeIncludeSearchPath>$(ProjectDir)..\engine\source;$(ProjectDir)..\shared;$(ProjectDir)..\engine\source\Game\include;$(ProjectDir)..\engine\source\Game\src;$(ProjectDir)..\engine\source\PlatformApi;$(ProjectDir)..\engine\source\Assets;$(ProjectDir)..\engine\source\Physics;$(ProjectDir)..\engine\source\Platform\win32\include;$(ProjectDir)..\engine\source\Platform\win32\src;$(ProjectDir)..\engine\source\Graphics\Vulkan;$(VULKAN_SDK)\Include;$(VC_IncludePath);$(WindowsSDK_IncludePath);$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
     <LocalDebuggerCommand>$(ProjectDir)..\build\Engine.exe</LocalDebuggerCommand>
     <LocalDebuggerWorkingDirectory>$(ProjectDir)..\build</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
@@ -35,7 +35,6 @@
     <ClCompile Include="..\engine\source\Platform\win32\Program.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\engine\source\Game\src\Entity.cpp" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanRenderer.cpp" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanCore.cpp" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanDevice.cpp" />
@@ -54,23 +53,26 @@
     <ClInclude Include="..\engine\source\Platform\win32\src\Win32Window.cpp" />
     <ClInclude Include="..\engine\source\Game\include\Game.h" />
     <ClInclude Include="..\engine\source\Game\include\GameState.h" />
+    <ClInclude Include="..\engine\source\Game\include\UI.h" />
     <ClInclude Include="..\engine\source\Game\include\Camera.h" />
     <ClInclude Include="..\engine\source\Game\include\Entity.h" />
     <ClInclude Include="..\engine\source\Game\include\Material.h" />
     <ClInclude Include="..\engine\source\PlatformApi\PlatformAPI.h" />
     <ClInclude Include="..\engine\source\PlatformApi\RenderCommands.h" />
-    <ClInclude Include="..\engine\source\Assets\EngaFormat.h" />
+    <ClInclude Include="..\shared\EngaFormat.h" />
     <ClInclude Include="..\engine\source\Assets\AssetPack.h" />
     <ClInclude Include="..\engine\source\Assets\DataLake.h" />
     <ClInclude Include="..\engine\source\Physics\Physics.h" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\Vulkan.h" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanRender.h" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\shaders\ShaderInterop.h" />
-    <ClInclude Include="..\engine\source\Helpers\EngineMath.h" />
-    <ClInclude Include="..\engine\source\Helpers\Intrinsics.h" />
-    <ClInclude Include="..\engine\source\Helpers\Memory.h" />
-    <ClInclude Include="..\engine\source\Helpers\Strings.h" />
-    <ClInclude Include="..\engine\source\Helpers\Types.h" />
+    <ClInclude Include="..\shared\EngineMath.h" />
+    <ClInclude Include="..\shared\FileIO.h" />
+    <ClInclude Include="..\shared\Intrinsics.h" />
+    <ClInclude Include="..\shared\Memory.h" />
+    <ClInclude Include="..\shared\Strings.h" />
+    <ClInclude Include="..\shared\Types.h" />
+    <ClInclude Include="..\shared\Win32FileIO.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\engine\source\Graphics\Vulkan\shaders\unlit.vert.hlsl" />
@@ -79,11 +81,11 @@
     <None Include="..\engine\source\Graphics\Vulkan\shaders\skybox.frag.hlsl" />
     <None Include="..\engine\source\Graphics\Vulkan\shaders\post.vert.hlsl" />
     <None Include="..\engine\source\Graphics\Vulkan\shaders\post.frag.hlsl" />
-    <None Include="..\engine\assets\models\TestShapes.gltf" />
-    <None Include="..\engine\assets\models\TestShapes.bin" />
-    <None Include="..\engine\assets\models\TestTexture.tga" />
-    <None Include="..\engine\assets\images\TestImage.tga" />
-    <None Include="..\engine\assets\images\sky.hdr" />
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\UI.vert.hlsl" />
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\UI.frag.hlsl" />
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\uirect.vert.hlsl" />
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\uirect.frag.hlsl" />
+    <None Include="..\EngaAsset\assets.enga" />
     <None Include="..\build.bat" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

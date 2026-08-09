@@ -161,7 +161,7 @@ internal void DestroyBuffer(vulkan_context *context, gpu_buffer *buffer)
 internal void BufferWrite(gpu_buffer *buffer, uint32 first, const void *data, uint32 count)
 {
     uint8 *destination = (uint8 *)buffer->Mapped + (VkDeviceSize)first * buffer->Stride;
-    CopySize((memory_index)count * buffer->Stride, (void *)data, destination);
+    CopySize((memory_size)count * buffer->Stride, (void *)data, destination);
 }
 
 internal VkImageCreateInfo TextureImageInfo(uint32 width, uint32 height, VkFormat format, uint32 layers)
@@ -196,22 +196,15 @@ internal gpu_memory_arena CreateImageArena(vulkan_context *context)
     VkImageCreateInfo probeInfo = TextureImageInfo(1, 1, VK_FORMAT_R8G8B8A8_UNORM, 1);
 
     VkImage probe = VK_NULL_HANDLE;
-    if (vkCreateImage(context->device, &probeInfo, nullptr, &probe) != VK_SUCCESS)
-    {
-        DebugLog("Fail to probe image memory requirements\n");
-        return arena;
-    }
+    VkResult probeResult = vkCreateImage(context->device, &probeInfo, nullptr, &probe);
+    Assert(probeResult == VK_SUCCESS);
 
     VkMemoryRequirements memReq;
     vkGetImageMemoryRequirements(context->device, probe, &memReq);
     vkDestroyImage(context->device, probe, nullptr);
 
     uint32 memoryType = FindMemoryType(context->physicalDevice, memReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    if (memoryType == INVALID_MEMORY_TYPE)
-    {
-        DebugLog("Fail to find device-local memory for the image arena\n");
-        return arena;
-    }
+    Assert(memoryType != INVALID_MEMORY_TYPE);
 
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -298,11 +291,7 @@ internal bool32 CreateStandaloneImage(vulkan_context *context, uint32 width, uin
     vkGetImageMemoryRequirements(context->device, *outImage, &memReq);
 
     uint32 memoryType = FindMemoryType(context->physicalDevice, memReq.memoryTypeBits, memoryProperties);
-    if (memoryType == INVALID_MEMORY_TYPE)
-    {
-        DebugLog("Fail to find suitable memory type for image\n");
-        return false;
-    }
+    Assert(memoryType != INVALID_MEMORY_TYPE);
 
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;

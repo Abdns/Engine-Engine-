@@ -1,0 +1,107 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="tools">
+      <UniqueIdentifier>{b1000000-0000-0000-0000-000000000002}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="tools\AssetBuilder">
+      <UniqueIdentifier>{b1000000-0000-0000-0000-000000000003}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="tools\AssetBuilder\Loaders">
+      <UniqueIdentifier>{b1000000-0000-0000-0000-000000000004}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="shared">
+      <UniqueIdentifier>{b1000000-0000-0000-0000-000000000007}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="assets">
+      <UniqueIdentifier>{b1000000-0000-0000-0000-000000000010}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="assets\models">
+      <UniqueIdentifier>{b1000000-0000-0000-0000-000000000011}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="assets\images">
+      <UniqueIdentifier>{b1000000-0000-0000-0000-000000000012}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="assets\fonts">
+      <UniqueIdentifier>{b1000000-0000-0000-0000-000000000013}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="EngaAsset">
+      <UniqueIdentifier>{b1000000-0000-0000-0000-000000000014}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="third_party">
+      <UniqueIdentifier>{b1000000-0000-0000-0000-000000000015}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\tools\AssetBuilder\AssetBuilder.cpp">
+      <Filter>tools\AssetBuilder</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\tools\AssetBuilder\Loaders\TGA.h">
+      <Filter>tools\AssetBuilder\Loaders</Filter>
+    </ClInclude>
+    <ClInclude Include="..\tools\AssetBuilder\Loaders\GLTF.h">
+      <Filter>tools\AssetBuilder\Loaders</Filter>
+    </ClInclude>
+    <ClInclude Include="..\tools\AssetBuilder\Loaders\HDR.h">
+      <Filter>tools\AssetBuilder\Loaders</Filter>
+    </ClInclude>
+    <ClInclude Include="..\tools\AssetBuilder\Loaders\Cubemap.h">
+      <Filter>tools\AssetBuilder\Loaders</Filter>
+    </ClInclude>
+    <ClInclude Include="..\tools\AssetBuilder\Loaders\Font.h">
+      <Filter>tools\AssetBuilder\Loaders</Filter>
+    </ClInclude>
+    <ClInclude Include="..\tools\AssetBuilder\Loaders\Json.h">
+      <Filter>tools\AssetBuilder\Loaders</Filter>
+    </ClInclude>
+    <ClInclude Include="..\third_party\stb_truetype.h">
+      <Filter>third_party</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\EngaFormat.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\FileIO.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\Half.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\Memory.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\Strings.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\Types.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\shared\Win32FileIO.h">
+      <Filter>shared</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\assets\models\TestShapes.gltf">
+      <Filter>assets\models</Filter>
+    </None>
+    <None Include="..\assets\models\TestShapes.bin">
+      <Filter>assets\models</Filter>
+    </None>
+    <None Include="..\assets\models\TestTexture.tga">
+      <Filter>assets\models</Filter>
+    </None>
+    <None Include="..\assets\images\sky.hdr">
+      <Filter>assets\images</Filter>
+    </None>
+    <None Include="..\assets\fonts\DejaVuSansMono.ttf">
+      <Filter>assets\fonts</Filter>
+    </None>
+    <None Include="..\assets\fonts\DejaVuSansMono.LICENSE.txt">
+      <Filter>assets\fonts</Filter>
+    </None>
+    <None Include="..\EngaAsset\assets.enga">
+      <Filter>EngaAsset</Filter>
+    </None>
+  </ItemGroup>
+</Project>

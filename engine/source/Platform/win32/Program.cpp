@@ -4,6 +4,7 @@
 #include <Wingdi.h>
 #include "Types.h"
 #include "Memory.h"
+#include "Win32FileIO.h"
 #include "PlatformAPI.h"
 #include "Vulkan.h"
 
@@ -81,10 +82,7 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
     Win32ResizeDIB(&GlobalBackBuffer, 960, 540);
 
     HWND Window = Win32CreateMainWindow(Instance, L"MyEngine", L"Window", 960, 540);
-    if (!Window)
-    {
-        return 0;
-    }
+    Assert(Window);
 
     HDC DeviceContext = GetDC(Window);
 

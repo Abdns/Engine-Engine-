@@ -61,10 +61,7 @@ internal real32 Win32ProcessXInputStickValue(SHORT Value, SHORT DeadZoneThreshol
 void Win32ProcessXInput(game_input* NewInput, game_input* OldInput)
 {
     DWORD MaxControllerCount = XUSER_MAX_COUNT;
-    if (MaxControllerCount > (ArrayCount(NewInput->Controllers) - 1))
-    {
-        MaxControllerCount = ArrayCount(NewInput->Controllers) - 1;
-    }
+    Assert(MaxControllerCount <= (ArrayCount(NewInput->Controllers) - 1));
 
     for (DWORD ControllerIndex = 0; ControllerIndex < MaxControllerCount; ++ControllerIndex)
     {
@@ -146,7 +143,6 @@ void Win32PrimeMouseInput(HWND Window, game_input* NewInput, game_input* OldInpu
 void Win32ProcessMouseInput(HWND Window, game_input* NewInput, game_input* OldInput)
 {
     Win32GetMousePosition(Window, &NewInput->MouseX, &NewInput->MouseY);
-    NewInput->MouseZ = 0;
 
     NewInput->LastMouseX = OldInput->MouseX;
     NewInput->LastMouseY = OldInput->MouseY;
@@ -172,7 +168,8 @@ void Win32ProcessInput(game_input* NewInput, game_input* OldInput,
                       win32_state* State, HWND Window)
 {
     Win32PrepareKeyboardInput(NewInput, OldInput);
-    Win32ProcessPendingMessages(State, &NewInput->Controllers[0]);
+    NewInput->MouseZ = 0;
+    Win32ProcessPendingMessages(State, NewInput);
     Win32ProcessMouseInput(Window, NewInput, OldInput);
     Win32ProcessXInput(NewInput, OldInput);
 }

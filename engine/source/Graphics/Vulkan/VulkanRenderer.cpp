@@ -8,14 +8,17 @@
 #include "VulkanFrame.cpp"
 
 global_variable render_target   SceneTarget;
+global_variable render_target   PostTarget;
 global_variable render_pass     Passes[Pass_Count];
 global_variable render_pipeline Pipelines[Pipeline_Count];
 
 global_variable pipeline_desc PipelineDescs[] =
 {
-    { "unlit",  Pass_Scene, VK_TRUE,  VK_TRUE,  false },
-    { "skybox", Pass_Scene, VK_FALSE, VK_FALSE, false },
-    { "post",   Pass_Post,  VK_FALSE, VK_FALSE, true  },
+    { "unlit",  Pass_Scene, VK_TRUE,  VK_TRUE,  VK_FALSE, false },
+    { "skybox", Pass_Scene, VK_FALSE, VK_FALSE, VK_FALSE, false },
+    { "post",   Pass_Post,  VK_FALSE, VK_FALSE, VK_FALSE, true  },
+    { "UI",     Pass_UI,    VK_FALSE, VK_FALSE, VK_FALSE, true  },
+    { "uirect", Pass_UI,    VK_FALSE, VK_FALSE, VK_TRUE,  false },
 };
 
 static_assert(ArrayCount(PipelineDescs) == Pipeline_Count, "PipelineDescs must describe every pipeline_type");
@@ -23,15 +26,17 @@ static_assert(ArrayCount(PipelineDescs) == Pipeline_Count, "PipelineDescs must d
 internal bool32 CreateFramePasses(vulkan_context *context)
 {
     SceneTarget = CreateRenderTarget(context, VK_FORMAT_R16G16B16A16_SFLOAT);
-    if (SceneTarget.View == VK_NULL_HANDLE)
+    PostTarget  = CreateRenderTarget(context, VK_FORMAT_R16G16B16A16_SFLOAT);
+    if (SceneTarget.View == VK_NULL_HANDLE || PostTarget.View == VK_NULL_HANDLE)
     {
         return false;
     }
 
     Passes[Pass_Scene] = CreateScenePass(context, SceneTarget.View, context->depthImageView);
-    Passes[Pass_Post]  = CreatePostPass(context, context->swapchainImageViews, context->swapchainImageCount);
+    Passes[Pass_Post]  = CreatePostPass(context, PostTarget.View);
+    Passes[Pass_UI]    = CreateUIPass(context, context->swapchainImageViews, context->swapchainImageCount);
 
-    if (Passes[Pass_Scene].Handle == VK_NULL_HANDLE || Passes[Pass_Post].Handle == VK_NULL_HANDLE)
+    if (Passes[Pass_Scene].Handle == VK_NULL_HANDLE || Passes[Pass_Post].Handle == VK_NULL_HANDLE || Passes[Pass_UI].Handle == VK_NULL_HANDLE)
     {
         return false;
     }
@@ -44,7 +49,9 @@ internal void DestroyFramePasses(vulkan_context *context)
 {
     DestroyPass(context, &Passes[Pass_Scene]);
     DestroyPass(context, &Passes[Pass_Post]);
+    DestroyPass(context, &Passes[Pass_UI]);
     DestroyRenderTarget(context, &SceneTarget);
+    DestroyRenderTarget(context, &PostTarget);
 }
 
 internal void WritePipelineResources(vulkan_context *context)
@@ -52,6 +59,11 @@ internal void WritePipelineResources(vulkan_context *context)
     if (Pipelines[Pipeline_Post].Set.Handle != VK_NULL_HANDLE)
     {
         UpdateImageDescriptorInSet(context, Pipelines[Pipeline_Post].Set.Handle, BINDING_PIPELINE_IMAGE, 0, SceneTarget.View);
+    }
+
+    if (Pipelines[Pipeline_UI].Set.Handle != VK_NULL_HANDLE)
+    {
+        UpdateImageDescriptorInSet(context, Pipelines[Pipeline_UI].Set.Handle, BINDING_PIPELINE_IMAGE, 0, PostTarget.View);
     }
 }
 
@@ -96,15 +108,15 @@ internal void InitVulkan(HINSTANCE hinstance, HWND hwnd)
     }
     DebugLog("Vulkan instance created\n");
 
-    if (!CreateSurface(context, hinstance, hwnd))      return;
+    CreateSurface(context, hinstance, hwnd);
     if (!SelectDevice(context))                        { DebugLog("No suitable GPU found\n"); return; }
     if (!CreateLogicalDevice(context))                 return;
     if (!CreateSwapchain(context, hwnd))               return;
     if (!CreateImageViews(context))                    return;
     if (!CreateDepthResources(context))                return;
-    if (!CreateCommandPool(context))                   return;
-    if (!CreateCommandBuffer(context))                 return;
-    if (!CreateSyncObjects(context))                   return;
+    CreateCommandPool(context);
+    CreateCommandBuffer(context);
+    CreateSyncObjects(context);
 
     GlobalResources.VertexBuffer = CreateBuffer(context, "Vertex", VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, (uint32)sizeof(vertex),  MAX_VERTICES);
     GlobalResources.IndexBuffer  = CreateBuffer(context, "Index",  VK_BUFFER_USAGE_INDEX_BUFFER_BIT,   (uint32)sizeof(uint32),  MAX_INDICES);
@@ -115,17 +127,14 @@ internal void InitVulkan(HINSTANCE hinstance, HWND hwnd)
         return;
     }
 
-    if (!CreateGlobalResources(context, &GlobalResources)) return;
+    CreateGlobalResources(context, &GlobalResources);
     if (!CreateFramePasses(context))                   return;
 
     for (uint32 i = 0; i < Pipeline_Count; ++i)
     {
         pipeline_desc *desc = &PipelineDescs[i];
 
-        if (!BuildPipeline(context, &GlobalResources, &Pipelines[i], desc, Passes[desc->Pass].Handle))
-        {
-            return;
-        }
+        BuildPipeline(context, &GlobalResources, &Pipelines[i], desc, Passes[desc->Pass].Handle);
     }
 
     WritePipelineResources(context);
@@ -142,7 +151,7 @@ internal void RenderVulkanFrame(render_commands *Commands)
         return;
     }
 
-    if (Passes[Pass_Scene].Handle == VK_NULL_HANDLE || Passes[Pass_Post].Handle == VK_NULL_HANDLE)
+    if (Passes[Pass_Scene].Handle == VK_NULL_HANDLE || Passes[Pass_Post].Handle == VK_NULL_HANDLE || Passes[Pass_UI].Handle == VK_NULL_HANDLE)
     {
         ResizeRenderer(context);
         return;
@@ -168,6 +177,11 @@ internal void RenderVulkanFrame(render_commands *Commands)
 
     BeginPass(Frame.Cmd, &Passes[Pass_Post], context->swapchainExtent, Frame.ImageIndex);
     DrawFullscreen(context, Frame.Cmd, &Pipelines[Pipeline_Post]);
+    EndPass(Frame.Cmd);
+
+    BeginPass(Frame.Cmd, &Passes[Pass_UI], context->swapchainExtent, Frame.ImageIndex);
+    DrawFullscreen(context, Frame.Cmd, &Pipelines[Pipeline_UI]);
+    ExecuteUICommands(context, Frame.Cmd, Pipelines, Commands);
     EndPass(Frame.Cmd);
 
     if (EndFrame(context, &Frame))

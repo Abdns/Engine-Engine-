@@ -244,6 +244,54 @@ internal void ExecuteRenderCommands(vulkan_context *context, VkCommandBuffer cmd
     }
 }
 
+internal void ExecuteUICommands(vulkan_context *context, VkCommandBuffer cmd, render_pipeline *pipelines, render_commands *commands)
+{
+    render_pipeline *pipeline = &pipelines[Pipeline_UIRect];
+    if (pipeline->Handle == VK_NULL_HANDLE)
+    {
+        return;
+    }
+
+    real32 width  = (real32)context->swapchainExtent.width;
+    real32 height = (real32)context->swapchainExtent.height;
+
+    render_state current = {};
+    render_state wanted  = {};
+    bool32 bound = false;
+
+    uint32 offset = 0;
+    for (command_type *cmdBase = NextRenderCommand(commands, &offset); cmdBase; cmdBase = NextRenderCommand(commands, &offset))
+    {
+        if (*cmdBase != Render_Rect)
+        {
+            continue;
+        }
+
+        command_render_rect *rectCmd = (command_render_rect *)cmdBase;
+
+        if (!bound)
+        {
+            BindPipelineState(context, cmd, pipeline, &current, &wanted);
+            bound = true;
+        }
+
+        draw_push_constants pc;
+        pc.Model         = Mat4Identity();
+        pc.Tint          = rectCmd->Color;
+        pc.Rect          = Vector4(rectCmd->Min.X / width  * 2.0f - 1.0f,
+                                   rectCmd->Min.Y / height * 2.0f - 1.0f,
+                                   rectCmd->Max.X / width  * 2.0f - 1.0f,
+                                   rectCmd->Max.Y / height * 2.0f - 1.0f);
+        pc.UVRect        = rectCmd->UV;
+        pc.MaterialIndex = 0;
+        pc.CubemapIndex  = 0;
+        pc.TextureSlot   = rectCmd->TextureSlot;
+        vkCmdPushConstants(cmd, pipeline->Layout, PIPELINE_PUSH_STAGES, 0, (uint32)sizeof(pc), &pc);
+
+        vkCmdDraw(cmd, 6, 1, 0, 0);
+    }
+}
+
 internal void DrawFullscreen(vulkan_context *context, VkCommandBuffer cmd, render_pipeline *pipeline)
 {
     if (pipeline->Handle == VK_NULL_HANDLE)

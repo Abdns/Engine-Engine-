@@ -190,10 +190,25 @@ internal render_pass CreateScenePass(vulkan_context *context, VkImageView target
     return CreatePass(context, &Desc, &target, 1, depthView);
 }
 
-internal render_pass CreatePostPass(vulkan_context *context, VkImageView *swapchainViews, uint32 swapchainViewCount)
+internal render_pass CreatePostPass(vulkan_context *context, VkImageView target)
 {
     pass_desc Desc = {};
     Desc.Name              = "post";
+    Desc.ColorFormat       = VK_FORMAT_R16G16B16A16_SFLOAT;
+    Desc.ColorLoad         = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    Desc.ColorStore        = VK_ATTACHMENT_STORE_OP_STORE;
+    Desc.ColorFinalLayout  = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    Desc.UseDepth          = false;
+    Desc.PerSwapchainImage = false;
+    Desc.Sync              = Sync_WriteThenSample;
+
+    return CreatePass(context, &Desc, &target, 1, VK_NULL_HANDLE);
+}
+
+internal render_pass CreateUIPass(vulkan_context *context, VkImageView *swapchainViews, uint32 swapchainViewCount)
+{
+    pass_desc Desc = {};
+    Desc.Name              = "UI";
     Desc.ColorFormat       = context->swapchainImageFormat;
     Desc.ColorLoad         = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     Desc.ColorStore        = VK_ATTACHMENT_STORE_OP_STORE;

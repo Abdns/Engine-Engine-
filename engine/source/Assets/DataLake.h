@@ -11,9 +11,30 @@
 #define LAKE_MAX_MESHES      256
 #define LAKE_MAX_TEXTURES    16
 #define LAKE_MAX_CUBEMAPS    4
+#define LAKE_MAX_FONTS       4
 #define LAKE_MAX_VERTICES    (1u << 20)
 #define LAKE_MAX_INDICES     (1u << 21)
 #define LAKE_MAX_PIXEL_BYTES Megabytes(48)
+
+struct entity;
+
+struct transform_pool
+{
+    Vector3 *Position;
+    Vector3 *Velocity;
+    Vector3 *Rotation;
+    Vector3 *AngularVelocity;
+    Vector4 *Tint;
+    uint32   Count;
+};
+
+struct widget_pool
+{
+    Vector2 *RectMin;
+    Vector2 *RectMax;
+    real32  *Value;
+    uint32   Count;
+};
 
 struct data_lake
 {
@@ -47,6 +68,21 @@ struct data_lake
     uint32 *CubemapFaceSize;
     uint32 *CubemapFormat;
     uint32  CubemapCount, CubemapCapacity;
+
+    char            *FontNames;
+    asset_font_info *FontInfo;
+    uint32          *FontTextureHandle;
+    uint16          *FontMap;
+    real32          *FontAdvance;
+    uint32           FontCount, FontCapacity;
+
+    entity *Entities;
+    char   *EntityNames;
+    uint32  EntityCount, EntityCapacity;
+    uint32  EntityNextID;
+
+    transform_pool Transforms;
+    widget_pool    Widgets;
 };
 
 internal void LakeInit(data_lake *Lake, memory_arena *Arena)
@@ -59,12 +95,13 @@ internal void LakeInit(data_lake *Lake, memory_arena *Arena)
     Lake->MeshCapacity      = LAKE_MAX_MESHES;
     Lake->TextureCapacity   = LAKE_MAX_TEXTURES;
     Lake->CubemapCapacity   = LAKE_MAX_CUBEMAPS;
+    Lake->FontCapacity      = LAKE_MAX_FONTS;
 
     Lake->Vertices = PushArray(Arena, Lake->VertexCapacity, enga_vertex);
     Lake->Indices  = PushArray(Arena, Lake->IndexCapacity, uint32);
     Lake->Pixels   = (uint8 *)PushSize(Arena, Lake->PixelByteCapacity);
 
-    Lake->MeshNames       = PushArray(Arena, (memory_index)Lake->MeshCapacity * ENGA_MAX_ASSET_NAME, char);
+    Lake->MeshNames       = PushArray(Arena, (memory_size)Lake->MeshCapacity * ENGA_MAX_ASSET_NAME, char);
     Lake->MeshFirstVertex = PushArray(Arena, Lake->MeshCapacity, uint32);
     Lake->MeshVertexCount = PushArray(Arena, Lake->MeshCapacity, uint32);
     Lake->MeshFirstIndex  = PushArray(Arena, Lake->MeshCapacity, uint32);
@@ -72,17 +109,23 @@ internal void LakeInit(data_lake *Lake, memory_arena *Arena)
     Lake->MeshBoundsMin   = PushArray(Arena, Lake->MeshCapacity, Vector3);
     Lake->MeshBoundsMax   = PushArray(Arena, Lake->MeshCapacity, Vector3);
 
-    Lake->TextureNames     = PushArray(Arena, (memory_index)Lake->TextureCapacity * ENGA_MAX_ASSET_NAME, char);
+    Lake->TextureNames     = PushArray(Arena, (memory_size)Lake->TextureCapacity * ENGA_MAX_ASSET_NAME, char);
     Lake->TextureFirstByte = PushArray(Arena, Lake->TextureCapacity, uint64);
     Lake->TextureWidth     = PushArray(Arena, Lake->TextureCapacity, uint32);
     Lake->TextureHeight    = PushArray(Arena, Lake->TextureCapacity, uint32);
     Lake->TextureSRGB      = PushArray(Arena, Lake->TextureCapacity, uint32);
     Lake->TextureFormat    = PushArray(Arena, Lake->TextureCapacity, uint32);
 
-    Lake->CubemapNames     = PushArray(Arena, (memory_index)Lake->CubemapCapacity * ENGA_MAX_ASSET_NAME, char);
+    Lake->CubemapNames     = PushArray(Arena, (memory_size)Lake->CubemapCapacity * ENGA_MAX_ASSET_NAME, char);
     Lake->CubemapFirstByte = PushArray(Arena, Lake->CubemapCapacity, uint64);
     Lake->CubemapFaceSize  = PushArray(Arena, Lake->CubemapCapacity, uint32);
     Lake->CubemapFormat    = PushArray(Arena, Lake->CubemapCapacity, uint32);
+
+    Lake->FontNames         = PushArray(Arena, (memory_size)Lake->FontCapacity * ENGA_MAX_ASSET_NAME, char);
+    Lake->FontInfo          = PushArray(Arena, Lake->FontCapacity, asset_font_info);
+    Lake->FontTextureHandle = PushArray(Arena, Lake->FontCapacity, uint32);
+    Lake->FontMap           = PushArray(Arena, (memory_size)Lake->FontCapacity * ENGA_MAX_CODEPOINT, uint16);
+    Lake->FontAdvance       = PushArray(Arena, (memory_size)Lake->FontCapacity * ENGA_MAX_CODEPOINT, real32);
 }
 
 inline Vector3 EngaVertexPosition(enga_vertex *Vertex)
@@ -110,21 +153,24 @@ internal uint8 *LakeCubemapPixels(data_lake *Lake, uint32 Slot)
     return Lake->Pixels + Lake->CubemapFirstByte[Slot];
 }
 
+internal uint16 *LakeFontMap(data_lake *Lake, uint32 Slot)
+{
+    return Lake->FontMap + (memory_size)Slot * ENGA_MAX_CODEPOINT;
+}
+
+internal real32 *LakeFontAdvance(data_lake *Lake, uint32 Slot)
+{
+    return Lake->FontAdvance + (memory_size)Slot * ENGA_MAX_CODEPOINT;
+}
+
 internal uint32 LakeAddMesh(data_lake *Lake, const char *Name, enga_vertex *Vertices, uint32 VertexCount, uint32 *Indices, uint32 IndexCount)
 {
     uint32 Handle = {};
 
-    if (Lake->MeshCount >= Lake->MeshCapacity)
-    {
-        DebugLog("Lake is full (%u meshes)\n", Lake->MeshCapacity);
-        return Handle;
-    }
-
-    if (!VertexCount || !IndexCount || VertexCount > Lake->VertexCapacity - Lake->VertexUsed || IndexCount > Lake->IndexCapacity - Lake->IndexUsed)
-    {
-        DebugLog("Lake out of geometry space for '%s' (%u vertices, %u indices)\n", Name, VertexCount, IndexCount);
-        return Handle;
-    }
+    Assert(Lake->MeshCount < Lake->MeshCapacity);
+    Assert(VertexCount && IndexCount);
+    Assert(VertexCount <= Lake->VertexCapacity - Lake->VertexUsed);
+    Assert(IndexCount <= Lake->IndexCapacity - Lake->IndexUsed);
 
     uint32 Slot = Lake->MeshCount;
 
@@ -133,8 +179,8 @@ internal uint32 LakeAddMesh(data_lake *Lake, const char *Name, enga_vertex *Vert
     Lake->MeshFirstIndex[Slot]  = Lake->IndexUsed;
     Lake->MeshIndexCount[Slot]  = IndexCount;
 
-    CopySize((memory_index)VertexCount * sizeof(enga_vertex), Vertices, LakeMeshVertices(Lake, Slot));
-    CopySize((memory_index)IndexCount * sizeof(uint32), Indices, LakeMeshIndices(Lake, Slot));
+    CopySize((memory_size)VertexCount * sizeof(enga_vertex), Vertices, LakeMeshVertices(Lake, Slot));
+    CopySize((memory_size)IndexCount * sizeof(uint32), Indices, LakeMeshIndices(Lake, Slot));
 
     Vector3 BoundsMin = Vector3( REAL32_LARGE,  REAL32_LARGE,  REAL32_LARGE);
     Vector3 BoundsMax = Vector3(-REAL32_LARGE, -REAL32_LARGE, -REAL32_LARGE);
@@ -150,7 +196,7 @@ internal uint32 LakeAddMesh(data_lake *Lake, const char *Name, enga_vertex *Vert
     Lake->MeshBoundsMin[Slot] = BoundsMin;
     Lake->MeshBoundsMax[Slot] = BoundsMax;
 
-    AppendString(Lake->MeshNames + (memory_index)Slot * ENGA_MAX_ASSET_NAME, ENGA_MAX_ASSET_NAME, 0, Name);
+    AppendString(Lake->MeshNames + (memory_size)Slot * ENGA_MAX_ASSET_NAME, ENGA_MAX_ASSET_NAME, 0, Name);
 
     Lake->VertexUsed += VertexCount;
     Lake->IndexUsed  += IndexCount;
@@ -161,29 +207,21 @@ internal uint32 LakeAddMesh(data_lake *Lake, const char *Name, enga_vertex *Vert
     return Handle;
 }
 
-internal uint32 LakeAddTexture(data_lake *Lake, const char *Name, void *Pixels, uint32 Width, uint32 Height, uint32 SRGB, asset_image_format Format)
+internal uint32 LakeAddTexture(data_lake *Lake, const char *Name, void *Pixels, uint32 Width, uint32 Height, bool32 SRGB, asset_image_format Format)
 {
     uint32 Handle = {};
 
-    if (Lake->TextureCount >= Lake->TextureCapacity)
-    {
-        DebugLog("Lake is full (%u textures)\n", Lake->TextureCapacity);
-        return Handle;
-    }
+    Assert(Lake->TextureCount < Lake->TextureCapacity);
 
     uint64 ByteSize = (uint64)Width * Height * AssetImageFormatBytes(Format);
-    if (Lake->PixelByteCount + ByteSize > Lake->PixelByteCapacity)
-    {
-        DebugLog("Lake out of pixel space for '%s' (%llu bytes)\n", Name, ByteSize);
-        return Handle;
-    }
+    Assert(Lake->PixelByteCount + ByteSize <= Lake->PixelByteCapacity);
 
     uint32 Slot = Lake->TextureCount;
 
     Lake->TextureFirstByte[Slot] = Lake->PixelByteCount;
     CopySize(ByteSize, Pixels, LakeTexturePixels(Lake, Slot));
 
-    AppendString(Lake->TextureNames + (memory_index)Slot * ENGA_MAX_ASSET_NAME, ENGA_MAX_ASSET_NAME, 0, Name);
+    AppendString(Lake->TextureNames + (memory_size)Slot * ENGA_MAX_ASSET_NAME, ENGA_MAX_ASSET_NAME, 0, Name);
     Lake->TextureWidth[Slot]  = Width;
     Lake->TextureHeight[Slot] = Height;
     Lake->TextureSRGB[Slot]   = SRGB;
@@ -200,25 +238,17 @@ internal uint32 LakeAddCubemap(data_lake *Lake, const char *Name, void *Pixels, 
 {
     uint32 Handle = {};
 
-    if (Lake->CubemapCount >= Lake->CubemapCapacity)
-    {
-        DebugLog("Lake is full (%u cubemaps)\n", Lake->CubemapCapacity);
-        return Handle;
-    }
+    Assert(Lake->CubemapCount < Lake->CubemapCapacity);
 
     uint64 ByteSize = (uint64)FaceSize * FaceSize * 6 * AssetImageFormatBytes(Format);
-    if (Lake->PixelByteCount + ByteSize > Lake->PixelByteCapacity)
-    {
-        DebugLog("Lake out of pixel space for '%s' (%llu bytes)\n", Name, ByteSize);
-        return Handle;
-    }
+    Assert(Lake->PixelByteCount + ByteSize <= Lake->PixelByteCapacity);
 
     uint32 Slot = Lake->CubemapCount;
 
     Lake->CubemapFirstByte[Slot] = Lake->PixelByteCount;
     CopySize(ByteSize, Pixels, LakeCubemapPixels(Lake, Slot));
 
-    AppendString(Lake->CubemapNames + (memory_index)Slot * ENGA_MAX_ASSET_NAME, ENGA_MAX_ASSET_NAME, 0, Name);
+    AppendString(Lake->CubemapNames + (memory_size)Slot * ENGA_MAX_ASSET_NAME, ENGA_MAX_ASSET_NAME, 0, Name);
     Lake->CubemapFaceSize[Slot] = FaceSize;
     Lake->CubemapFormat[Slot]   = (uint32)Format;
     Lake->CubemapCount++;
@@ -229,42 +259,81 @@ internal uint32 LakeAddCubemap(data_lake *Lake, const char *Name, void *Pixels, 
     return Handle;
 }
 
-internal void LakeLoadPack(data_lake *Lake, void *PackData, uint32 PackSize)
+internal uint32 LakeAddFont(data_lake *Lake, const char *Name, asset_font_info *Info, uint16 *Map, real32 *Advances, void *AtlasPixels)
+{
+    uint32 Handle = {};
+
+    Assert(Lake->FontCount < Lake->FontCapacity);
+
+    uint32 TextureHandle = LakeAddTexture(Lake, Name, AtlasPixels, Info->AtlasSize, Info->AtlasSize, false, ImageFormat_RGBA8);
+    Assert(TextureHandle);
+
+    uint32 Slot = Lake->FontCount;
+
+    CopySize(ENGA_MAX_CODEPOINT * sizeof(uint16), Map, LakeFontMap(Lake, Slot));
+    CopySize(ENGA_MAX_CODEPOINT * sizeof(real32), Advances, LakeFontAdvance(Lake, Slot));
+
+    AppendString(Lake->FontNames + (memory_size)Slot * ENGA_MAX_ASSET_NAME, ENGA_MAX_ASSET_NAME, 0, Name);
+    Lake->FontInfo[Slot]          = *Info;
+    Lake->FontTextureHandle[Slot] = TextureHandle;
+
+    Lake->FontCount++;
+
+    Handle = Slot + 1;
+
+    return Handle;
+}
+
+internal void LakeLoadENGA(data_lake *Lake, void *PackData, uint32 PackSize)
 {
     asset_pack Pack = AssetPackFromMemory(PackData, PackSize);
 
     for (uint32 Index = 0; Index < Pack.Count; ++Index)
     {
-        asset_entry *Entry = Pack.Entries + Index;
+        asset_descriptor *Entry = Pack.Entries + Index;
         void *Data = AssetData(&Pack, Entry);
-        if (!Data)
-        {
-            continue;
-        }
+        Assert(Data);
 
-        if (Entry->Type == (uint32)Asset_Mesh)
+        switch ((asset_type)Entry->Type)
         {
-            memory_index VertexBytes = (memory_index)Entry->Mesh.VertexCount * sizeof(enga_vertex);
-
-            LakeAddMesh(Lake, Entry->Name, (enga_vertex *)Data, Entry->Mesh.VertexCount, (uint32 *)((uint8 *)Data + VertexBytes), Entry->Mesh.IndexCount);
-        }
-        else if (Entry->Type == (uint32)Asset_Image)
-        {
-            asset_image_format Format = (asset_image_format)Entry->Image.Format;
-
-            if (Entry->Image.Layers == 6)
+            case Asset_Mesh:
             {
-                LakeAddCubemap(Lake, Entry->Name, Data, Entry->Image.Width, Format);
-            }
-            else
+                memory_size VertexBytes = (memory_size)Entry->Mesh.VertexCount * sizeof(enga_vertex);
+
+                LakeAddMesh(Lake, Entry->Name, (enga_vertex *)Data, Entry->Mesh.VertexCount, (uint32 *)((uint8 *)Data + VertexBytes), Entry->Mesh.IndexCount);
+            } break;
+
+            case Asset_Image:
             {
-                LakeAddTexture(Lake, Entry->Name, Data, Entry->Image.Width, Entry->Image.Height, Entry->Image.SRGB, Format);
-            }
+                asset_image_format Format = (asset_image_format)Entry->Image.Format;
+
+                if (Entry->Image.Layers == 6)
+                {
+                    LakeAddCubemap(Lake, Entry->Name, Data, Entry->Image.Width, Format);
+                }
+                else
+                {
+                    LakeAddTexture(Lake, Entry->Name, Data, Entry->Image.Width, Entry->Image.Height, Entry->Image.IsSRGB, Format);
+                }
+            } break;
+
+            case Asset_Font:
+            {
+                memory_size MapBytes     = ENGA_MAX_CODEPOINT * sizeof(uint16);
+                memory_size AdvanceBytes = ENGA_MAX_CODEPOINT * sizeof(real32);
+
+                LakeAddFont(Lake, Entry->Name, &Entry->Font, (uint16 *)Data, (real32 *)((uint8 *)Data + MapBytes), (uint8 *)Data + MapBytes + AdvanceBytes);
+            } break;
+
+            default:
+            {
+                DebugLog("Lake: asset '%s' of type %u has no loader\n", Entry->Name, Entry->Type);
+            } break;
         }
     }
 
-    DebugLog("Lake loaded %u meshes (%u vertices, %u indices), %u textures, %u cubemaps\n",
-             Lake->MeshCount, Lake->VertexUsed, Lake->IndexUsed, Lake->TextureCount, Lake->CubemapCount);
+    DebugLog("Lake loaded %u meshes (%u vertices, %u indices), %u textures, %u cubemaps, %u fonts\n",
+             Lake->MeshCount, Lake->VertexUsed, Lake->IndexUsed, Lake->TextureCount, Lake->CubemapCount, Lake->FontCount);
 }
 
 internal uint32 LakeGetMeshHandle(data_lake *Lake, const char *Name)
@@ -273,7 +342,7 @@ internal uint32 LakeGetMeshHandle(data_lake *Lake, const char *Name)
 
     for (uint32 Index = 0; Index < Lake->MeshCount; ++Index)
     {
-        if (StringsAreEqual(Lake->MeshNames + (memory_index)Index * ENGA_MAX_ASSET_NAME, Name))
+        if (StringsAreEqual(Lake->MeshNames + (memory_size)Index * ENGA_MAX_ASSET_NAME, Name))
         {
             Handle = Index + 1;
             return Handle;
@@ -291,7 +360,7 @@ internal uint32 LakeGetTextureHandle(data_lake *Lake, const char *Name)
 
     for (uint32 Index = 0; Index < Lake->TextureCount; ++Index)
     {
-        if (StringsAreEqual(Lake->TextureNames + (memory_index)Index * ENGA_MAX_ASSET_NAME, Name))
+        if (StringsAreEqual(Lake->TextureNames + (memory_size)Index * ENGA_MAX_ASSET_NAME, Name))
         {
             Handle = Index + 1;
             return Handle;
@@ -309,7 +378,7 @@ internal uint32 LakeGetCubemapHandle(data_lake *Lake, const char *Name)
 
     for (uint32 Index = 0; Index < Lake->CubemapCount; ++Index)
     {
-        if (StringsAreEqual(Lake->CubemapNames + (memory_index)Index * ENGA_MAX_ASSET_NAME, Name))
+        if (StringsAreEqual(Lake->CubemapNames + (memory_size)Index * ENGA_MAX_ASSET_NAME, Name))
         {
             Handle = Index + 1;
 
@@ -318,6 +387,25 @@ internal uint32 LakeGetCubemapHandle(data_lake *Lake, const char *Name)
     }
 
     DebugLog("Cubemap '%s' not found\n", Name);
+
+    return Handle;
+}
+
+internal uint32 LakeGetFontHandle(data_lake *Lake, const char *Name)
+{
+    uint32 Handle = {};
+
+    for (uint32 Index = 0; Index < Lake->FontCount; ++Index)
+    {
+        if (StringsAreEqual(Lake->FontNames + (memory_size)Index * ENGA_MAX_ASSET_NAME, Name))
+        {
+            Handle = Index + 1;
+
+            return Handle;
+        }
+    }
+
+    DebugLog("Font '%s' not found\n", Name);
 
     return Handle;
 }
