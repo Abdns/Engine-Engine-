@@ -7,23 +7,30 @@
     #define float3   Vector3
     #define float2   Vector2
     #define uint     uint32
+    #define gpu_ptr  uint64
+#else
+    #define gpu_ptr  uint64_t
 #endif
 
-#define SET_GLOBAL       0
-#define SET_PIPELINE     1
+#define SET_GLOBAL 0
 
-#define BINDING_TEXTURES  0
-#define BINDING_SAMPLER   1
-#define BINDING_VERTICES  2
-#define BINDING_CAMERA    3
-#define BINDING_CUBEMAPS  4
-#define BINDING_MATERIALS 5
+#define BINDING_TEXTURES 0
+#define BINDING_SAMPLER  1
+#define BINDING_CUBEMAPS 2
 
-#define BINDING_PIPELINE_IMAGE 0
-
-#define MAX_TEXTURES  16
+#define MAX_TEXTURES  32
 #define MAX_CUBEMAPS  4
 #define MAX_MATERIALS 64
+
+#define TEXTURE_NONE 0xFFFFFFFF
+
+#define TEXTURE_SLOT_SCENE MAX_TEXTURES
+#define TEXTURE_SLOT_POST  (TEXTURE_SLOT_SCENE + 1)
+#define TEXTURE_HEAP_SIZE  (TEXTURE_SLOT_POST + 1)
+
+#define VERTEX_STRIDE    32
+#define MATERIAL_STRIDE  32
+#define RECT_PARAMS_STRIDE 64
 
 struct vertex
 {
@@ -44,19 +51,67 @@ struct camera_uniforms
 struct gpu_material
 {
     float4 BaseColor;
-    uint   TextureIndex;
+    uint   TextureSlot;
+    uint   MaterialPad0;
+    uint   MaterialPad1;
+    uint   MaterialPad2;
 };
 
-struct draw_push_constants
+struct draw_params
 {
     float4x4 Model;
     float4   Tint;
-    float4   Rect;
-    float4   UVRect;
-    uint     MaterialIndex;
-    uint     CubemapIndex;
-    uint     TextureSlot;
+
+    gpu_ptr Camera;
+    gpu_ptr Vertices;
+    gpu_ptr Materials;
+
+    uint MaterialSlot;
+    uint DrawPad0;
 };
+
+struct skybox_params
+{
+    float4 Tint;
+
+    gpu_ptr Camera;
+
+    uint CubemapIndex;
+    uint SkyboxPad0;
+};
+
+struct rect_params
+{
+    float4 Rect;
+    float4 UVRect;
+    float4 Tint;
+
+    uint TextureSlot;
+    uint RectPad0;
+    uint RectPad1;
+    uint RectPad2;
+};
+
+struct image_params
+{
+    uint TextureSlot;
+    uint ImagePad0;
+    uint ImagePad1;
+    uint ImagePad2;
+};
+
+struct push_constants
+{
+    gpu_ptr Params;
+};
+
+#ifndef __cplusplus
+    typedef vk::BufferPointer<camera_uniforms, 16> camera_ptr;
+    typedef vk::BufferPointer<draw_params, 16>       draw_params_ptr;
+    typedef vk::BufferPointer<skybox_params, 16>     skybox_params_ptr;
+    typedef vk::BufferPointer<rect_params, 16>       rect_params_ptr;
+    typedef vk::BufferPointer<image_params, 16>      image_params_ptr;
+#endif
 
 #ifdef __cplusplus
     #undef float4x4
@@ -64,6 +119,7 @@ struct draw_push_constants
     #undef float3
     #undef float2
     #undef uint
+    #undef gpu_ptr
 #endif
 
 #endif

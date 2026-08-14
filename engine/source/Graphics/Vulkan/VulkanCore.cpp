@@ -2,354 +2,19 @@
 
 #define INVALID_MEMORY_TYPE 0xFFFFFFFF
 
-internal uint32 FindMemoryType(VkPhysicalDevice physicalDevice, uint32 typeFilter, VkMemoryPropertyFlags properties)
+internal uint32 FindMemoryType(vulkan_context *context, uint32 typeFilter, VkMemoryPropertyFlags properties)
 {
-    VkPhysicalDeviceMemoryProperties memProps;
-    vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProps);
+    VkPhysicalDeviceMemoryProperties *memProps = &context->MemoryProps;
 
-    for (uint32 i = 0; i < memProps.memoryTypeCount; ++i)
+    for (uint32 i = 0; i < memProps->memoryTypeCount; ++i)
     {
-        if ((typeFilter & (1u << i)) && (memProps.memoryTypes[i].propertyFlags & properties) == properties)
+        if ((typeFilter & (1u << i)) && (memProps->memoryTypes[i].propertyFlags & properties) == properties)
         {
             return i;
         }
     }
 
     return INVALID_MEMORY_TYPE;
-}
-
-internal void FreeBuffer(vulkan_context *context, VkBuffer *buffer, VkDeviceMemory *memory)
-{
-    vkDestroyBuffer(context->device, *buffer, nullptr);
-    vkFreeMemory(context->device, *memory, nullptr);
-
-    *buffer = VK_NULL_HANDLE;
-    *memory = VK_NULL_HANDLE;
-}
-
-internal bool32 AllocateBuffer(vulkan_context *context, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags preferredProperties, VkMemoryPropertyFlags requiredProperties, VkBuffer *outBuffer, VkDeviceMemory *outMemory)
-{
-    *outBuffer = VK_NULL_HANDLE;
-    *outMemory = VK_NULL_HANDLE;
-
-    VkBufferCreateInfo bufferInfo{};
-    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = size;
-    bufferInfo.usage = usage;
-    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    if (vkCreateBuffer(context->device, &bufferInfo, nullptr, outBuffer) != VK_SUCCESS)
-    {
-        DebugLog("Fail to create buffer\n");
-        return false;
-    }
-
-    VkMemoryRequirements memReq;
-    vkGetBufferMemoryRequirements(context->device, *outBuffer, &memReq);
-
-    uint32 memoryType = FindMemoryType(context->physicalDevice, memReq.memoryTypeBits, preferredProperties);
-    if (memoryType == INVALID_MEMORY_TYPE && preferredProperties != requiredProperties)
-    {
-        DebugLog("No device-local host-visible memory, buffer falls back to system memory\n");
-        memoryType = FindMemoryType(context->physicalDevice, memReq.memoryTypeBits, requiredProperties);
-    }
-
-    if (memoryType == INVALID_MEMORY_TYPE)
-    {
-        DebugLog("Fail to find suitable memory type for buffer\n");
-        FreeBuffer(context, outBuffer, outMemory);
-        return false;
-    }
-
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memReq.size;
-    allocInfo.memoryTypeIndex = memoryType;
-
-    if (vkAllocateMemory(context->device, &allocInfo, nullptr, outMemory) != VK_SUCCESS)
-    {
-        DebugLog("Fail to allocate buffer memory\n");
-        FreeBuffer(context, outBuffer, outMemory);
-        return false;
-    }
-
-    if (vkBindBufferMemory(context->device, *outBuffer, *outMemory, 0) != VK_SUCCESS)
-    {
-        DebugLog("Fail to bind buffer memory\n");
-        FreeBuffer(context, outBuffer, outMemory);
-        return false;
-    }
-
-    return true;
-}
-
-internal bool32 CreateStagingBuffer(vulkan_context *context, VkDeviceSize size, void *data, VkBuffer *outBuffer, VkDeviceMemory *outMemory)
-{
-    VkMemoryPropertyFlags properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-
-    if (!AllocateBuffer(context, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, properties, properties, outBuffer, outMemory))
-    {
-        return false;
-    }
-
-    void *mapped = nullptr;
-    if (vkMapMemory(context->device, *outMemory, 0, size, 0, &mapped) != VK_SUCCESS)
-    {
-        DebugLog("Fail to map staging buffer\n");
-        FreeBuffer(context, outBuffer, outMemory);
-        return false;
-    }
-
-    CopySize(size, data, mapped);
-    vkUnmapMemory(context->device, *outMemory);
-
-    return true;
-}
-
-internal bool32 CreateMappedBuffer(vulkan_context *context, VkDeviceSize size, VkBufferUsageFlags usage, VkBuffer *outBuffer, VkDeviceMemory *outMemory, void **outMapped)
-{
-    VkMemoryPropertyFlags preferred = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-    VkMemoryPropertyFlags required  = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-
-    if (!AllocateBuffer(context, size, usage, preferred, required, outBuffer, outMemory))
-    {
-        return false;
-    }
-
-    if (vkMapMemory(context->device, *outMemory, 0, size, 0, outMapped) != VK_SUCCESS)
-    {
-        DebugLog("Fail to map buffer memory\n");
-        FreeBuffer(context, outBuffer, outMemory);
-        return false;
-    }
-
-    return true;
-}
-
-internal gpu_buffer CreateBuffer(vulkan_context *context, const char *name, VkBufferUsageFlags usage, uint32 stride, uint32 capacity)
-{
-    gpu_buffer buffer = {};
-
-    VkDeviceSize size = (VkDeviceSize)capacity * stride;
-
-    if (!CreateMappedBuffer(context, size, usage, &buffer.Buffer, &buffer.Memory, &buffer.Mapped))
-    {
-        DebugLog("Fail to create %s buffer\n", name);
-        return buffer;
-    }
-
-    buffer.Stride   = stride;
-    buffer.Capacity = capacity;
-
-    DebugLog("%s buffer created (%u entries, %llu bytes)\n", name, capacity, (uint64)size);
-
-    return buffer;
-}
-
-internal void DestroyBuffer(vulkan_context *context, gpu_buffer *buffer)
-{
-    if (buffer->Mapped)
-    {
-        vkUnmapMemory(context->device, buffer->Memory);
-    }
-
-    FreeBuffer(context, &buffer->Buffer, &buffer->Memory);
-
-    *buffer = {};
-}
-
-internal void BufferWrite(gpu_buffer *buffer, uint32 first, const void *data, uint32 count)
-{
-    uint8 *destination = (uint8 *)buffer->Mapped + (VkDeviceSize)first * buffer->Stride;
-    CopySize((memory_size)count * buffer->Stride, (void *)data, destination);
-}
-
-internal VkImageCreateInfo TextureImageInfo(uint32 width, uint32 height, VkFormat format, uint32 layers)
-{
-    VkImageCreateInfo imageInfo{};
-    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    imageInfo.imageType = VK_IMAGE_TYPE_2D;
-    imageInfo.extent.width  = width;
-    imageInfo.extent.height = height;
-    imageInfo.extent.depth  = 1;
-    imageInfo.mipLevels = 1;
-    imageInfo.arrayLayers = layers;
-    imageInfo.format = format;
-    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    if (layers == 6)
-    {
-        imageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-    }
-
-    return imageInfo;
-}
-
-internal gpu_memory_arena CreateImageArena(vulkan_context *context)
-{
-    gpu_memory_arena arena = {};
-
-    VkImageCreateInfo probeInfo = TextureImageInfo(1, 1, VK_FORMAT_R8G8B8A8_UNORM, 1);
-
-    VkImage probe = VK_NULL_HANDLE;
-    VkResult probeResult = vkCreateImage(context->device, &probeInfo, nullptr, &probe);
-    Assert(probeResult == VK_SUCCESS);
-
-    VkMemoryRequirements memReq;
-    vkGetImageMemoryRequirements(context->device, probe, &memReq);
-    vkDestroyImage(context->device, probe, nullptr);
-
-    uint32 memoryType = FindMemoryType(context->physicalDevice, memReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    Assert(memoryType != INVALID_MEMORY_TYPE);
-
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = IMAGE_ARENA_SIZE;
-    allocInfo.memoryTypeIndex = memoryType;
-
-    if (vkAllocateMemory(context->device, &allocInfo, nullptr, &arena.Memory) != VK_SUCCESS)
-    {
-        DebugLog("Fail to allocate image arena\n");
-        return arena;
-    }
-
-    arena.Capacity = IMAGE_ARENA_SIZE;
-
-    DebugLog("Image arena created (%llu bytes)\n", (uint64)IMAGE_ARENA_SIZE);
-    return arena;
-}
-
-internal void DestroyImageArena(vulkan_context *context, gpu_memory_arena *arena)
-{
-    vkFreeMemory(context->device, arena->Memory, nullptr);
-    *arena = {};
-}
-
-internal bool32 ArenaPushImage(vulkan_context *context, gpu_memory_arena *arena, uint32 width, uint32 height, VkFormat format, uint32 layers, VkImage *outImage)
-{
-    VkImageCreateInfo imageInfo = TextureImageInfo(width, height, format, layers);
-
-    if (vkCreateImage(context->device, &imageInfo, nullptr, outImage) != VK_SUCCESS)
-    {
-        DebugLog("Fail to create image\n");
-        return false;
-    }
-
-    VkMemoryRequirements memReq;
-    vkGetImageMemoryRequirements(context->device, *outImage, &memReq);
-
-    VkDeviceSize offset = AlignPow2(arena->Used, memReq.alignment);
-
-    if (offset + memReq.size > arena->Capacity)
-    {
-        DebugLog("Image arena out of space (used %llu, requested %llu, capacity %llu)\n", (uint64)arena->Used, (uint64)memReq.size, (uint64)arena->Capacity);
-        vkDestroyImage(context->device, *outImage, nullptr);
-        *outImage = VK_NULL_HANDLE;
-        return false;
-    }
-
-    if (vkBindImageMemory(context->device, *outImage, arena->Memory, offset) != VK_SUCCESS)
-    {
-        DebugLog("Fail to bind image into the arena\n");
-        vkDestroyImage(context->device, *outImage, nullptr);
-        *outImage = VK_NULL_HANDLE;
-        return false;
-    }
-
-    arena->Used = offset + memReq.size;
-    return true;
-}
-
-internal bool32 CreateStandaloneImage(vulkan_context *context, uint32 width, uint32 height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags memoryProperties, VkImage *outImage, VkDeviceMemory *outMemory)
-{
-    VkImageCreateInfo imageInfo{};
-    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    imageInfo.imageType = VK_IMAGE_TYPE_2D;
-    imageInfo.extent.width  = width;
-    imageInfo.extent.height = height;
-    imageInfo.extent.depth  = 1;
-    imageInfo.mipLevels = 1;
-    imageInfo.arrayLayers = 1;
-    imageInfo.format = format;
-    imageInfo.tiling = tiling;
-    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    imageInfo.usage = usage;
-    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    if (vkCreateImage(context->device, &imageInfo, nullptr, outImage) != VK_SUCCESS)
-    {
-        DebugLog("Fail to create image\n");
-        return false;
-    }
-
-    VkMemoryRequirements memReq;
-    vkGetImageMemoryRequirements(context->device, *outImage, &memReq);
-
-    uint32 memoryType = FindMemoryType(context->physicalDevice, memReq.memoryTypeBits, memoryProperties);
-    Assert(memoryType != INVALID_MEMORY_TYPE);
-
-    VkMemoryAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memReq.size;
-    allocInfo.memoryTypeIndex = memoryType;
-
-    if (vkAllocateMemory(context->device, &allocInfo, nullptr, outMemory) != VK_SUCCESS)
-    {
-        DebugLog("Fail to allocate image memory\n");
-        return false;
-    }
-
-    vkBindImageMemory(context->device, *outImage, *outMemory, 0);
-
-    return true;
-}
-
-internal VkImageView CreateImageView(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspectMask, VkImageViewType viewType, uint32 layers)
-{
-    VkImageViewCreateInfo viewInfo{};
-    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    viewInfo.image = image;
-    viewInfo.viewType = viewType;
-    viewInfo.format = format;
-
-    viewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-    viewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-    viewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-    viewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-
-    viewInfo.subresourceRange.aspectMask = aspectMask;
-    viewInfo.subresourceRange.baseMipLevel = 0;
-    viewInfo.subresourceRange.levelCount = 1;
-    viewInfo.subresourceRange.baseArrayLayer = 0;
-    viewInfo.subresourceRange.layerCount = layers;
-
-    VkImageView view = VK_NULL_HANDLE;
-    if (vkCreateImageView(device, &viewInfo, nullptr, &view) != VK_SUCCESS)
-    {
-        DebugLog("Fail to create image view\n");
-        return VK_NULL_HANDLE;
-    }
-    return view;
-}
-
-internal VkImageView CreateColorImageView(VkDevice device, VkImage image, VkFormat format)
-{
-    return CreateImageView(device, image, format, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_VIEW_TYPE_2D, 1);
-}
-
-internal VkImageView CreateCubeImageView(VkDevice device, VkImage image, VkFormat format)
-{
-    return CreateImageView(device, image, format, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_VIEW_TYPE_CUBE, 6);
-}
-
-internal VkImageView CreateDepthImageView(VkDevice device, VkImage image, VkFormat format)
-{
-    return CreateImageView(device, image, format, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_VIEW_TYPE_2D, 1);
 }
 
 internal VkCommandBuffer BeginSingleTimeCommands(vulkan_context *context)
@@ -386,52 +51,316 @@ internal void EndSingleTimeCommands(vulkan_context *context, VkCommandBuffer cmd
     vkFreeCommandBuffers(context->device, context->commandPool, 1, &cmd);
 }
 
-internal void TransitionImageLayout(vulkan_context *context, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout, uint32 layers)
+internal VkDeviceMemory AllocateBufferMemory(vulkan_context *context, VkBuffer buffer, VkMemoryPropertyFlags preferred, VkMemoryPropertyFlags required, uint32 *outMemoryType)
 {
-    VkCommandBuffer cmd = BeginSingleTimeCommands(context);
+    VkMemoryRequirements memReq;
+    vkGetBufferMemoryRequirements(context->device, buffer, &memReq);
 
-    VkImageMemoryBarrier barrier{};
-    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    barrier.oldLayout = oldLayout;
-    barrier.newLayout = newLayout;
-    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = image;
-    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    barrier.subresourceRange.baseMipLevel = 0;
-    barrier.subresourceRange.levelCount = 1;
-    barrier.subresourceRange.baseArrayLayer = 0;
-    barrier.subresourceRange.layerCount = layers;
-
-    VkPipelineStageFlags srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-    VkPipelineStageFlags dstStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-
-    if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+    uint32 memoryType = FindMemoryType(context, memReq.memoryTypeBits, preferred);
+    if (memoryType == INVALID_MEMORY_TYPE && preferred != required)
     {
-        barrier.srcAccessMask = 0;
-        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-        dstStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    }
-    else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-    {
-        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        srcStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        memoryType = FindMemoryType(context, memReq.memoryTypeBits, required);
     }
 
-    vkCmdPipelineBarrier(cmd, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+    Assert(memoryType != INVALID_MEMORY_TYPE);
 
-    EndSingleTimeCommands(context, cmd);
+    VkMemoryAllocateFlagsInfo flagsInfo{};
+    flagsInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
+    flagsInfo.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize  = memReq.size;
+    allocInfo.memoryTypeIndex = memoryType;
+    allocInfo.pNext           = &flagsInfo;
+
+    VkDeviceMemory memory = VK_NULL_HANDLE;
+
+    VkResult allocated = vkAllocateMemory(context->device, &allocInfo, nullptr, &memory);
+    Assert(allocated == VK_SUCCESS);
+
+    VkResult bound = vkBindBufferMemory(context->device, buffer, memory, 0);
+    Assert(bound == VK_SUCCESS);
+
+    *outMemoryType = memoryType;
+    return memory;
 }
 
-internal void CopyBufferToImage(vulkan_context *context, VkBuffer buffer, VkImage image, uint32 width, uint32 height, uint32 layers)
+internal VkBuffer CreateBufferObject(vulkan_context *context, VkBufferUsageFlags usage, VkDeviceSize size)
 {
-    VkCommandBuffer cmd = BeginSingleTimeCommands(context);
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size        = size;
+    bufferInfo.usage       = usage | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
+    VkBuffer buffer = VK_NULL_HANDLE;
+
+    VkResult created = vkCreateBuffer(context->device, &bufferInfo, nullptr, &buffer);
+    Assert(created == VK_SUCCESS);
+
+    return buffer;
+}
+
+internal VkDeviceAddress BufferAddress(vulkan_context *context, VkBuffer buffer)
+{
+    VkBufferDeviceAddressInfo addressInfo{};
+    addressInfo.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+    addressInfo.buffer = buffer;
+
+    return vkGetBufferDeviceAddress(context->device, &addressInfo);
+}
+
+internal gpu_buffer CreateGpuBuffer(vulkan_context *context, VkBufferUsageFlags usage, VkDeviceSize size)
+{
+    gpu_buffer buffer = {};
+
+    uint32 memoryType = 0;
+
+    buffer.Buffer  = CreateBufferObject(context, usage, size);
+    buffer.Memory  = AllocateBufferMemory(context, buffer.Buffer, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &memoryType);
+    buffer.Address = BufferAddress(context, buffer.Buffer);
+    buffer.Size    = size;
+    buffer.Limit   = size;
+
+    return buffer;
+}
+
+internal void DestroyGpuBuffer(vulkan_context *context, gpu_buffer *buffer)
+{
+    vkDestroyBuffer(context->device, buffer->Buffer, nullptr);
+    vkFreeMemory(context->device, buffer->Memory, nullptr);
+
+    *buffer = {};
+}
+
+internal gpu_alloc GpuBufferAlloc(gpu_buffer *buffer, VkDeviceSize size, VkDeviceSize alignment)
+{
+    VkDeviceSize offset = AlignPow2(buffer->Used, alignment);
+
+    Assert(offset + size <= buffer->Limit);
+
+    gpu_alloc result;
+    result.Gpu    = buffer->Address + offset;
+    result.Offset = offset;
+
+    buffer->Used = offset + size;
+
+    return result;
+}
+
+internal shared_buffer CreateSharedBuffer(vulkan_context *context, VkBufferUsageFlags usage, VkDeviceSize size, VkMemoryPropertyFlags preferred)
+{
+    VkMemoryPropertyFlags required = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+    shared_buffer buffer = {};
+
+    uint32 memoryType = 0;
+
+    buffer.Buffer  = CreateBufferObject(context, usage, size);
+    buffer.Memory  = AllocateBufferMemory(context, buffer.Buffer, preferred | required, required, &memoryType);
+    buffer.Address = BufferAddress(context, buffer.Buffer);
+    buffer.Size    = size;
+    buffer.Limit   = size;
+
+    VkResult mapped = vkMapMemory(context->device, buffer.Memory, 0, size, 0, &buffer.Mapped);
+    Assert(mapped == VK_SUCCESS);
+
+    return buffer;
+}
+
+internal shared_buffer CreateDeviceBuffer(vulkan_context *context, VkBufferUsageFlags usage, VkDeviceSize size)
+{
+    return CreateSharedBuffer(context, usage, size, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+}
+
+internal shared_buffer CreateUploadBuffer(vulkan_context *context, VkBufferUsageFlags usage, VkDeviceSize size)
+{
+    return CreateSharedBuffer(context, usage, size, 0);
+}
+
+internal void DestroySharedBuffer(vulkan_context *context, shared_buffer *buffer)
+{
+    vkUnmapMemory(context->device, buffer->Memory);
+
+    vkDestroyBuffer(context->device, buffer->Buffer, nullptr);
+    vkFreeMemory(context->device, buffer->Memory, nullptr);
+
+    *buffer = {};
+}
+
+internal shared_alloc SharedBufferAlloc(shared_buffer *buffer, VkDeviceSize size, VkDeviceSize alignment)
+{
+    VkDeviceSize offset = AlignPow2(buffer->Used, alignment);
+
+    Assert(offset + size <= buffer->Limit);
+
+    shared_alloc result;
+    result.Cpu    = (uint8 *)buffer->Mapped + offset;
+    result.Gpu    = buffer->Address + offset;
+    result.Offset = offset;
+
+    buffer->Used = offset + size;
+
+    return result;
+}
+
+internal shared_alloc SharedBufferWrite(shared_buffer *buffer, const void *data, VkDeviceSize size, VkDeviceSize alignment)
+{
+    shared_alloc result = SharedBufferAlloc(buffer, size, alignment);
+
+    CopySize(size, (void *)data, result.Cpu);
+
+    return result;
+}
+
+internal void ResetFrameRegion(shared_buffer *buffer, uint32 frameSlot)
+{
+    VkDeviceSize regionSize = buffer->Size / MAX_FRAMES_IN_FLIGHT;
+
+    buffer->Used  = frameSlot * regionSize;
+    buffer->Limit = buffer->Used + regionSize;
+}
+
+internal VkImageCreateInfo ImageInfo(uint32 width, uint32 height, VkFormat format, uint32 layers, VkImageTiling tiling, VkImageUsageFlags usage)
+{
+    VkImageCreateInfo imageInfo{};
+    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.imageType = VK_IMAGE_TYPE_2D;
+    imageInfo.extent.width  = width;
+    imageInfo.extent.height = height;
+    imageInfo.extent.depth  = 1;
+    imageInfo.mipLevels = 1;
+    imageInfo.arrayLayers = layers;
+    imageInfo.format = format;
+    imageInfo.tiling = tiling;
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    imageInfo.usage = usage;
+    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    if (layers == 6)
+    {
+        imageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    }
+
+    return imageInfo;
+}
+
+internal VkImage CreateImage(vulkan_context *context, uint32 width, uint32 height, VkFormat format, uint32 layers, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags memoryProperties, VkDeviceMemory *outMemory)
+{
+    VkImageCreateInfo imageInfo = ImageInfo(width, height, format, layers, tiling, usage);
+
+    VkImage image = VK_NULL_HANDLE;
+
+    VkResult created = vkCreateImage(context->device, &imageInfo, nullptr, &image);
+    Assert(created == VK_SUCCESS);
+
+    VkMemoryRequirements memReq;
+    vkGetImageMemoryRequirements(context->device, image, &memReq);
+
+    uint32 memoryType = FindMemoryType(context, memReq.memoryTypeBits, memoryProperties);
+    Assert(memoryType != INVALID_MEMORY_TYPE);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memReq.size;
+    allocInfo.memoryTypeIndex = memoryType;
+
+    VkResult allocated = vkAllocateMemory(context->device, &allocInfo, nullptr, outMemory);
+    Assert(allocated == VK_SUCCESS);
+
+    VkResult bound = vkBindImageMemory(context->device, image, *outMemory, 0);
+    Assert(bound == VK_SUCCESS);
+
+    return image;
+}
+
+internal VkImage CreateTextureImage(vulkan_context *context, uint32 width, uint32 height, VkFormat format, uint32 layers, VkDeviceMemory *outMemory)
+{
+    return CreateImage(context, width, height, format, layers, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, outMemory);
+}
+
+internal VkImageView CreateImageView(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspectMask, VkImageViewType viewType, uint32 layers)
+{
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image = image;
+    viewInfo.viewType = viewType;
+    viewInfo.format = format;
+
+    viewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    viewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    viewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    viewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+    viewInfo.subresourceRange.aspectMask = aspectMask;
+    viewInfo.subresourceRange.baseMipLevel = 0;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount = layers;
+
+    VkImageView view = VK_NULL_HANDLE;
+
+    VkResult created = vkCreateImageView(device, &viewInfo, nullptr, &view);
+    Assert(created == VK_SUCCESS);
+
+    return view;
+}
+
+internal VkImageView CreateColorImageView(VkDevice device, VkImage image, VkFormat format)
+{
+    return CreateImageView(device, image, format, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_VIEW_TYPE_2D, 1);
+}
+
+internal VkImageView CreateCubeImageView(VkDevice device, VkImage image, VkFormat format)
+{
+    return CreateImageView(device, image, format, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_VIEW_TYPE_CUBE, 6);
+}
+
+internal VkImageView CreateDepthImageView(VkDevice device, VkImage image, VkFormat format)
+{
+    return CreateImageView(device, image, format, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_VIEW_TYPE_2D, 1);
+}
+
+internal void DestroyTexture(vulkan_context *context, gpu_texture *texture)
+{
+    vkDestroyImageView(context->device, texture->View, nullptr);
+    vkDestroyImage(context->device, texture->Image, nullptr);
+    vkFreeMemory(context->device, texture->Memory, nullptr);
+
+    *texture = {};
+}
+
+internal void CmdImageToGeneral(VkCommandBuffer cmd, VkImage image, VkImageAspectFlags aspect, uint32 layers, VkPipelineStageFlags2 dstStage, VkAccessFlags2 dstAccess)
+{
+    VkImageMemoryBarrier2 barrier{};
+    barrier.sType                       = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    barrier.srcStageMask                = VK_PIPELINE_STAGE_2_NONE;
+    barrier.srcAccessMask               = 0;
+    barrier.dstStageMask                = dstStage;
+    barrier.dstAccessMask               = dstAccess;
+    barrier.oldLayout                   = VK_IMAGE_LAYOUT_UNDEFINED;
+    barrier.newLayout                   = VK_IMAGE_LAYOUT_GENERAL;
+    barrier.srcQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image                       = image;
+    barrier.subresourceRange.aspectMask = aspect;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.layerCount = layers;
+
+    VkDependencyInfo dependency{};
+    dependency.sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    dependency.imageMemoryBarrierCount = 1;
+    dependency.pImageMemoryBarriers    = &barrier;
+
+    vkCmdPipelineBarrier2(cmd, &dependency);
+}
+
+internal void CmdCopyBufferToImage(VkCommandBuffer cmd, VkBuffer buffer, VkDeviceSize bufferOffset, VkImage image, uint32 width, uint32 height, uint32 layers)
+{
     VkBufferImageCopy region{};
-    region.bufferOffset = 0;
+    region.bufferOffset = bufferOffset;
     region.bufferRowLength = 0;
     region.bufferImageHeight = 0;
     region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -442,7 +371,36 @@ internal void CopyBufferToImage(vulkan_context *context, VkBuffer buffer, VkImag
     region.imageExtent.height = height;
     region.imageExtent.depth  = 1;
 
-    vkCmdCopyBufferToImage(cmd, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+    vkCmdCopyBufferToImage(cmd, buffer, image, VK_IMAGE_LAYOUT_GENERAL, 1, &region);
+}
 
-    EndSingleTimeCommands(context, cmd);
+internal void CmdUploadImage(VkCommandBuffer cmd, VkBuffer staging, VkDeviceSize stagingOffset, VkImage image, uint32 width, uint32 height, uint32 layers)
+{
+    CmdImageToGeneral(cmd, image, VK_IMAGE_ASPECT_COLOR_BIT, layers, VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+    CmdCopyBufferToImage(cmd, staging, stagingOffset, image, width, height, layers);
+}
+
+internal void CmdImageToPresent(VkCommandBuffer cmd, VkImage image)
+{
+    VkImageMemoryBarrier2 barrier{};
+    barrier.sType                       = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    barrier.srcStageMask                = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+    barrier.srcAccessMask               = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+    barrier.dstStageMask                = VK_PIPELINE_STAGE_2_NONE;
+    barrier.dstAccessMask               = 0;
+    barrier.oldLayout                   = VK_IMAGE_LAYOUT_GENERAL;
+    barrier.newLayout                   = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    barrier.srcQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image                       = image;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.layerCount = 1;
+
+    VkDependencyInfo dependency{};
+    dependency.sType                   = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    dependency.imageMemoryBarrierCount = 1;
+    dependency.pImageMemoryBarriers    = &barrier;
+
+    vkCmdPipelineBarrier2(cmd, &dependency);
 }

@@ -109,7 +109,12 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
     game_input* OldInput = &Input[1];
     Win32PrimeMouseInput(Window, NewInput, OldInput);
 
-    InitVulkan(Instance, Window);
+    const char *RendererError = InitVulkan(Instance, Window);
+    if (RendererError)
+    {
+        MessageBoxA(Window, RendererError, "MyEngine", MB_OK | MB_ICONERROR);
+        return 0;
+    }
 
     isRunning = true;
     bool32 SoundIsValid = false;
@@ -160,7 +165,9 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
         Win32OutputFrameStats(MSPerFrame, CycleElapsed);
     }
 
+#if ENGINE_INTERNAL
     ShutdownVulkan();
+#endif
 
     return 0;
 }

@@ -202,7 +202,7 @@ internal uint32 LakeAddMesh(data_lake *Lake, const char *Name, enga_vertex *Vert
     Lake->IndexUsed  += IndexCount;
     Lake->MeshCount++;
 
-    Handle = Slot + 1;
+    Handle = Slot;
 
     return Handle;
 }
@@ -229,7 +229,7 @@ internal uint32 LakeAddTexture(data_lake *Lake, const char *Name, void *Pixels, 
     Lake->TextureCount++;
     Lake->PixelByteCount += ByteSize;
 
-    Handle = Slot + 1;
+    Handle = Slot;
 
     return Handle;
 }
@@ -254,7 +254,7 @@ internal uint32 LakeAddCubemap(data_lake *Lake, const char *Name, void *Pixels, 
     Lake->CubemapCount++;
     Lake->PixelByteCount += ByteSize;
 
-    Handle = Slot + 1;
+    Handle = Slot;
 
     return Handle;
 }
@@ -266,7 +266,6 @@ internal uint32 LakeAddFont(data_lake *Lake, const char *Name, asset_font_info *
     Assert(Lake->FontCount < Lake->FontCapacity);
 
     uint32 TextureHandle = LakeAddTexture(Lake, Name, AtlasPixels, Info->AtlasSize, Info->AtlasSize, false, ImageFormat_RGBA8);
-    Assert(TextureHandle);
 
     uint32 Slot = Lake->FontCount;
 
@@ -279,7 +278,7 @@ internal uint32 LakeAddFont(data_lake *Lake, const char *Name, asset_font_info *
 
     Lake->FontCount++;
 
-    Handle = Slot + 1;
+    Handle = Slot;
 
     return Handle;
 }
@@ -338,76 +337,66 @@ internal void LakeLoadENGA(data_lake *Lake, void *PackData, uint32 PackSize)
 
 internal uint32 LakeGetMeshHandle(data_lake *Lake, const char *Name)
 {
-    uint32 Handle = {};
-
     for (uint32 Index = 0; Index < Lake->MeshCount; ++Index)
     {
         if (StringsAreEqual(Lake->MeshNames + (memory_size)Index * ENGA_MAX_ASSET_NAME, Name))
         {
-            Handle = Index + 1;
-            return Handle;
+            return Index;
         }
     }
 
     DebugLog("Mesh '%s' not found\n", Name);
+    Assert(!"Mesh not found");
 
-    return Handle;
+    return 0;
 }
 
 internal uint32 LakeGetTextureHandle(data_lake *Lake, const char *Name)
 {
-    uint32 Handle = {};
-
     for (uint32 Index = 0; Index < Lake->TextureCount; ++Index)
     {
         if (StringsAreEqual(Lake->TextureNames + (memory_size)Index * ENGA_MAX_ASSET_NAME, Name))
         {
-            Handle = Index + 1;
-            return Handle;
+            return Index;
         }
     }
 
     DebugLog("Texture '%s' not found\n", Name);
+    Assert(!"Texture not found");
 
-    return Handle;
+    return 0;
 }
 
 internal uint32 LakeGetCubemapHandle(data_lake *Lake, const char *Name)
 {
-    uint32 Handle = {};
-
     for (uint32 Index = 0; Index < Lake->CubemapCount; ++Index)
     {
         if (StringsAreEqual(Lake->CubemapNames + (memory_size)Index * ENGA_MAX_ASSET_NAME, Name))
         {
-            Handle = Index + 1;
-
-            return Handle;
+            return Index;
         }
     }
 
     DebugLog("Cubemap '%s' not found\n", Name);
+    Assert(!"Cubemap not found");
 
-    return Handle;
+    return 0;
 }
 
 internal uint32 LakeGetFontHandle(data_lake *Lake, const char *Name)
 {
-    uint32 Handle = {};
-
     for (uint32 Index = 0; Index < Lake->FontCount; ++Index)
     {
         if (StringsAreEqual(Lake->FontNames + (memory_size)Index * ENGA_MAX_ASSET_NAME, Name))
         {
-            Handle = Index + 1;
-
-            return Handle;
+            return Index;
         }
     }
 
     DebugLog("Font '%s' not found\n", Name);
+    Assert(!"Font not found");
 
-    return Handle;
+    return 0;
 }
 
 #endif

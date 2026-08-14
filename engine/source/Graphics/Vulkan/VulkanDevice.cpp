@@ -7,14 +7,24 @@ global_variable const char *RequiredInstanceExtensions[] =
     VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
 };
 
+#if ENGINE_INTERNAL
+global_variable const char *DebugInstanceExtensions[] =
+{
+    VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
+};
+
+global_variable const char *ValidationLayers[] =
+{
+    "VK_LAYER_KHRONOS_validation",
+};
+#endif
+
 global_variable const char *RequiredDeviceExtensions[] =
 {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-};
-
-global_variable const char *OptionalDeviceExtensions[] =
-{
-    VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME,
+    VK_KHR_UNIFIED_IMAGE_LAYOUTS_EXTENSION_NAME,
+    VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME,
+    VK_EXT_SHADER_OBJECT_EXTENSION_NAME,
 };
 
 #define REQUIRED_API_VERSION VK_API_VERSION_1_3
@@ -93,7 +103,7 @@ internal bool32 CheckInstanceVersion()
     return true;
 }
 
-internal VkApplicationInfo VkGetInfo()
+internal VkApplicationInfo AppInfo()
 {
     VkApplicationInfo appInfo = {};
 
@@ -107,7 +117,7 @@ internal VkApplicationInfo VkGetInfo()
     return appInfo;
 }
 
-internal VkInstanceCreateInfo GetInstanceInfo(VkApplicationInfo *appInfo, const char **extensions, uint32 extensionCount)
+internal VkInstanceCreateInfo InstanceInfo(VkApplicationInfo *appInfo, const char **extensions, uint32 extensionCount)
 {
     VkInstanceCreateInfo createInfo{};
 
@@ -118,6 +128,117 @@ internal VkInstanceCreateInfo GetInstanceInfo(VkApplicationInfo *appInfo, const 
 
     return createInfo;
 }
+
+internal uint32 GatherInstanceExtensions(const char **out, uint32 maxCount)
+{
+    uint32 count = 0;
+
+    for (uint32 i = 0; i < ArrayCount(RequiredInstanceExtensions); ++i)
+    {
+        Assert(count < maxCount);
+        out[count++] = RequiredInstanceExtensions[i];
+    }
+
+#if ENGINE_INTERNAL
+    if (CheckInstanceExtensionSupport(DebugInstanceExtensions, (uint32)ArrayCount(DebugInstanceExtensions)))
+    {
+        Assert(count < maxCount);
+        out[count++] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
+    }
+#endif
+
+    return count;
+}
+
+#if ENGINE_INTERNAL
+
+internal bool32 CheckInstanceLayerSupport(const char **required, uint32 requiredCount)
+{
+    uint32 availableCount = 0;
+    vkEnumerateInstanceLayerProperties(&availableCount, nullptr);
+
+    Assert(availableCount <= MAX_EXTENSIONS);
+
+    VkLayerProperties available[MAX_EXTENSIONS];
+    vkEnumerateInstanceLayerProperties(&availableCount, available);
+
+    for (uint32 i = 0; i < requiredCount; ++i)
+    {
+        bool32 found = false;
+        for (uint32 j = 0; j < availableCount; ++j)
+        {
+            if (StringsAreEqual(required[i], available[j].layerName))
+            {
+                found = true;
+                break;
+            }
+        }
+
+        if (!found)
+        {
+            DebugLog("Instance layer %s not available\n", required[i]);
+            return false;
+        }
+    }
+
+    return true;
+}
+
+internal VKAPI_ATTR VkBool32 VKAPI_CALL DebugMessengerCallback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT types, const VkDebugUtilsMessengerCallbackDataEXT *data, void *userData)
+{
+    DebugLog("[vulkan] %s\n", data->pMessage);
+
+    return VK_FALSE;
+}
+
+internal VkDebugUtilsMessengerCreateInfoEXT DebugMessengerInfo()
+{
+    VkDebugUtilsMessengerCreateInfoEXT info{};
+    info.sType           = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+    info.messageType     = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    info.pfnUserCallback = DebugMessengerCallback;
+
+    return info;
+}
+
+internal void CreateDebugMessenger(vulkan_context *context)
+{
+    PFN_vkCreateDebugUtilsMessengerEXT create =
+        (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(context->instance, "vkCreateDebugUtilsMessengerEXT");
+
+    if (!create)
+    {
+        DebugLog("Debug messenger entry point missing\n");
+        return;
+    }
+
+    VkDebugUtilsMessengerCreateInfoEXT info = DebugMessengerInfo();
+
+    VkResult result = create(context->instance, &info, nullptr, &context->debugMessenger);
+    Assert(result == VK_SUCCESS);
+
+    DebugLog("Validation layer active\n");
+}
+
+internal void DestroyDebugMessenger(vulkan_context *context)
+{
+    if (context->debugMessenger == VK_NULL_HANDLE)
+    {
+        return;
+    }
+
+    PFN_vkDestroyDebugUtilsMessengerEXT destroy =
+        (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(context->instance, "vkDestroyDebugUtilsMessengerEXT");
+
+    if (destroy)
+    {
+        destroy(context->instance, context->debugMessenger, nullptr);
+    }
+
+    context->debugMessenger = VK_NULL_HANDLE;
+}
+#endif
 
 internal void CreateSurface(vulkan_context *context, HINSTANCE hinstance, HWND hwnd)
 {
@@ -158,12 +279,6 @@ internal uint32 GetDevices(const VkInstance *instance, VkPhysicalDevice *devices
     vkEnumeratePhysicalDevices(*instance, &devicesCount, devices);
 
     return devicesCount;
-}
-
-internal void GetDevicePropsAndFeatures(const VkPhysicalDevice *devise, VkPhysicalDeviceProperties *deviceProperties, VkPhysicalDeviceFeatures *features)
-{
-    vkGetPhysicalDeviceProperties(*devise, deviceProperties);
-    vkGetPhysicalDeviceFeatures(*devise, features);
 }
 
 internal queue_family_indices SelectQueueFamilyIndices(VkPhysicalDevice device, VkSurfaceKHR surface)
@@ -243,12 +358,7 @@ internal bool32 CheckDeviceExtensionSupport(VkPhysicalDevice device, const char 
     return true;
 }
 
-internal bool32 DeviceSupportsExtension(VkPhysicalDevice device, const char *name)
-{
-    return CheckDeviceExtensionSupport(device, &name, 1);
-}
-
-internal swapchain_support_details GetQuerySwapchainSupportDetails(VkPhysicalDevice device, VkSurfaceKHR surface)
+internal swapchain_support_details QuerySwapchainSupport(VkPhysicalDevice device, VkSurfaceKHR surface)
 {
     swapchain_support_details details = {};
 
@@ -278,7 +388,51 @@ internal swapchain_support_details GetQuerySwapchainSupportDetails(VkPhysicalDev
     return details;
 }
 
-internal bool32 SelectDevice(vulkan_context *context)
+internal bool32 CheckDeviceFeatures(VkPhysicalDevice device)
+{
+    VkPhysicalDeviceShaderObjectFeaturesEXT shaderObject{};
+    shaderObject.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT;
+
+    VkPhysicalDeviceVulkan12Features vulkan12{};
+    vulkan12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+
+    VkPhysicalDeviceVulkan13Features vulkan13{};
+    vulkan13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+
+    VkPhysicalDeviceUnifiedImageLayoutsFeaturesKHR unifiedLayouts{};
+    unifiedLayouts.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFIED_IMAGE_LAYOUTS_FEATURES_KHR;
+
+    VkPhysicalDeviceDescriptorBufferFeaturesEXT descriptorBuffer{};
+    descriptorBuffer.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT;
+
+    shaderObject.pNext   = &vulkan12;
+    vulkan12.pNext       = &vulkan13;
+    vulkan13.pNext       = &unifiedLayouts;
+    unifiedLayouts.pNext = &descriptorBuffer;
+
+    VkPhysicalDeviceFeatures2 available{};
+    available.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    available.pNext = &shaderObject;
+    vkGetPhysicalDeviceFeatures2(device, &available);
+
+    bool32 supported = shaderObject.shaderObject && descriptorBuffer.descriptorBuffer && unifiedLayouts.unifiedImageLayouts &&
+                       vulkan12.bufferDeviceAddress && vulkan12.scalarBlockLayout && vulkan12.timelineSemaphore &&
+                       vulkan13.dynamicRendering && vulkan13.synchronization2 &&
+                       available.features.shaderInt64 && available.features.shaderSampledImageArrayDynamicIndexing;
+
+    if (!supported)
+    {
+        DebugLog("Device features: shaderObject %d, descriptorBuffer %d, unifiedImageLayouts %d, bufferDeviceAddress %d, scalarBlockLayout %d, timelineSemaphore %d, dynamicRendering %d, synchronization2 %d, shaderInt64 %d, sampledImageArrayDynamicIndexing %d\n",
+                 (int)shaderObject.shaderObject, (int)descriptorBuffer.descriptorBuffer, (int)unifiedLayouts.unifiedImageLayouts,
+                 (int)vulkan12.bufferDeviceAddress, (int)vulkan12.scalarBlockLayout, (int)vulkan12.timelineSemaphore,
+                 (int)vulkan13.dynamicRendering, (int)vulkan13.synchronization2,
+                 (int)available.features.shaderInt64, (int)available.features.shaderSampledImageArrayDynamicIndexing);
+    }
+
+    return supported;
+}
+
+internal void SelectDevice(vulkan_context *context)
 {
     VkPhysicalDevice devices[MAX_DEVICES];
     uint32 devicesCount = GetDevices(&context->instance, devices, ArrayCount(devices));
@@ -286,18 +440,12 @@ internal bool32 SelectDevice(vulkan_context *context)
     for (uint32 i = 0; i < devicesCount; i++)
     {
         VkPhysicalDeviceProperties deviceProperties;
-        VkPhysicalDeviceFeatures features;
+        vkGetPhysicalDeviceProperties(devices[i], &deviceProperties);
 
-        GetDevicePropsAndFeatures(&devices[i], &deviceProperties, &features);
-        queue_family_indices indices = SelectQueueFamilyIndices(devices[i], context->surface);
-
-        if (!CheckDeviceExtensionSupport(devices[i], RequiredDeviceExtensions, ArrayCount(RequiredDeviceExtensions)))
+        if (deviceProperties.deviceType != REQUIRED_DEVICE_TYPE)
         {
             continue;
         }
-
-        swapchain_support_details swapchain = GetQuerySwapchainSupportDetails(devices[i], context->surface);
-        bool32 swapchainOk = (swapchain.formatCount > 0) && (swapchain.presentModeCount > 0);
 
         if (deviceProperties.apiVersion < REQUIRED_API_VERSION)
         {
@@ -305,20 +453,38 @@ internal bool32 SelectDevice(vulkan_context *context)
             continue;
         }
 
-        if (deviceProperties.deviceType == REQUIRED_DEVICE_TYPE && indices.graphicsSupported && indices.presentSupported && swapchainOk &&
-            features.shaderSampledImageArrayDynamicIndexing)
+        if (!CheckDeviceExtensionSupport(devices[i], RequiredDeviceExtensions, ArrayCount(RequiredDeviceExtensions)))
         {
-            context->physicalDevice = devices[i];
-            context->graphicsFamilyIndex = indices.graphicsIndex;
-            context->presentFamilyIndex = indices.presentIndex;
-            return true;
+            continue;
         }
-    }
 
-    return false;
+        if (!CheckDeviceFeatures(devices[i]))
+        {
+            continue;
+        }
+
+        swapchain_support_details swapchain = QuerySwapchainSupport(devices[i], context->surface);
+        if (!swapchain.formatCount || !swapchain.presentModeCount)
+        {
+            continue;
+        }
+
+        queue_family_indices indices = SelectQueueFamilyIndices(devices[i], context->surface);
+        if (!indices.graphicsSupported || !indices.presentSupported)
+        {
+            continue;
+        }
+
+        DebugLog("Device '%s' selected\n", deviceProperties.deviceName);
+
+        context->physicalDevice = devices[i];
+        context->graphicsFamilyIndex = indices.graphicsIndex;
+        context->presentFamilyIndex = indices.presentIndex;
+        return;
+    }
 }
 
-internal VkQueue CreateQueue(VkDevice device, uint32 queueFamilyIndex)
+internal VkQueue GetQueue(VkDevice device, uint32 queueFamilyIndex)
 {
     Assert(device != VK_NULL_HANDLE);
 
@@ -327,7 +493,7 @@ internal VkQueue CreateQueue(VkDevice device, uint32 queueFamilyIndex)
     return queue;
 }
 
-internal bool32 CreateLogicalDevice(vulkan_context *context)
+internal void CreateLogicalDevice(vulkan_context *context)
 {
     float queuePriority = 1.0f;
 
@@ -348,56 +514,37 @@ internal bool32 CreateLogicalDevice(vulkan_context *context)
         queueInfos[i].pQueuePriorities = &queuePriority;
     }
 
-    const char *enabledExtensions[ArrayCount(RequiredDeviceExtensions) + ArrayCount(OptionalDeviceExtensions)];
-    uint32      enabledExtensionCount = 0;
+    VkPhysicalDeviceShaderObjectFeaturesEXT shaderObject{};
+    shaderObject.sType        = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT;
+    shaderObject.shaderObject = VK_TRUE;
 
-    for (uint32 i = 0; i < ArrayCount(RequiredDeviceExtensions); ++i)
-    {
-        enabledExtensions[enabledExtensionCount++] = RequiredDeviceExtensions[i];
-    }
+    VkPhysicalDeviceDescriptorBufferFeaturesEXT descriptorBuffer{};
+    descriptorBuffer.sType            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT;
+    descriptorBuffer.descriptorBuffer = VK_TRUE;
+    descriptorBuffer.pNext            = &shaderObject;
 
-    VkPhysicalDeviceExtendedDynamicState3FeaturesEXT dynamicState3{};
-    dynamicState3.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT;
+    VkPhysicalDeviceUnifiedImageLayoutsFeaturesKHR unifiedLayouts{};
+    unifiedLayouts.sType                = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_UNIFIED_IMAGE_LAYOUTS_FEATURES_KHR;
+    unifiedLayouts.unifiedImageLayouts  = VK_TRUE;
+    unifiedLayouts.pNext                = &descriptorBuffer;
+
+    VkPhysicalDeviceVulkan13Features vulkan13{};
+    vulkan13.sType             = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+    vulkan13.dynamicRendering  = VK_TRUE;
+    vulkan13.synchronization2  = VK_TRUE;
+    vulkan13.pNext             = &unifiedLayouts;
 
     VkPhysicalDeviceVulkan12Features vulkan12{};
     vulkan12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-
-    {
-        dynamicState3.pNext = &vulkan12;
-
-        VkPhysicalDeviceFeatures2 available{};
-        available.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-        available.pNext = &dynamicState3;
-        vkGetPhysicalDeviceFeatures2(context->physicalDevice, &available);
-
-        if (dynamicState3.extendedDynamicState3ColorBlendEnable &&
-            DeviceSupportsExtension(context->physicalDevice, VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME))
-        {
-            enabledExtensions[enabledExtensionCount++] = VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME;
-            context->DynamicBlend = true;
-        }
-
-        if (!vulkan12.descriptorBindingPartiallyBound || !vulkan12.descriptorBindingSampledImageUpdateAfterBind)
-        {
-            DebugLog("Device lacks descriptor indexing (partiallyBound %d, updateAfterBind %d)\n",
-                     (int)vulkan12.descriptorBindingPartiallyBound, (int)vulkan12.descriptorBindingSampledImageUpdateAfterBind);
-            return false;
-        }
-    }
-
-    dynamicState3 = {};
-    dynamicState3.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT;
-    dynamicState3.extendedDynamicState3ColorBlendEnable = VK_TRUE;
-
-    vulkan12 = {};
-    vulkan12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-    vulkan12.descriptorBindingPartiallyBound              = VK_TRUE;
-    vulkan12.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
-    vulkan12.pNext = context->DynamicBlend ? &dynamicState3 : nullptr;
+    vulkan12.bufferDeviceAddress                          = VK_TRUE;
+    vulkan12.scalarBlockLayout                            = VK_TRUE;
+    vulkan12.timelineSemaphore                            = VK_TRUE;
+    vulkan12.pNext = &vulkan13;
 
     VkPhysicalDeviceFeatures2 features{};
     features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
     features.features.shaderSampledImageArrayDynamicIndexing = VK_TRUE;
+    features.features.shaderInt64                            = VK_TRUE;
     features.pNext = &vulkan12;
 
     VkDeviceCreateInfo deviceInfo{};
@@ -406,30 +553,53 @@ internal bool32 CreateLogicalDevice(vulkan_context *context)
     deviceInfo.queueCreateInfoCount = uniqueCount;
     deviceInfo.pQueueCreateInfos = queueInfos;
     deviceInfo.pEnabledFeatures = nullptr;
-    deviceInfo.enabledExtensionCount = enabledExtensionCount;
-    deviceInfo.ppEnabledExtensionNames = enabledExtensions;
+    deviceInfo.enabledExtensionCount = (uint32)ArrayCount(RequiredDeviceExtensions);
+    deviceInfo.ppEnabledExtensionNames = RequiredDeviceExtensions;
 
     VkResult result = vkCreateDevice(context->physicalDevice, &deviceInfo, nullptr, &context->device);
-    if (result != VK_SUCCESS)
-    {
-        DebugLog("Fail to create logical device\n");
-        return false;
-    }
+    Assert(result == VK_SUCCESS);
 
-    if (context->DynamicBlend)
-    {
-        context->CmdSetColorBlendEnableEXT = (PFN_vkCmdSetColorBlendEnableEXT)vkGetDeviceProcAddr(context->device, "vkCmdSetColorBlendEnableEXT");
-        if (!context->CmdSetColorBlendEnableEXT)
-        {
-            context->DynamicBlend = false;
-        }
-    }
+    context->CreateShadersEXT               = (PFN_vkCreateShadersEXT)vkGetDeviceProcAddr(context->device, "vkCreateShadersEXT");
+    context->DestroyShaderEXT               = (PFN_vkDestroyShaderEXT)vkGetDeviceProcAddr(context->device, "vkDestroyShaderEXT");
+    context->CmdBindShadersEXT              = (PFN_vkCmdBindShadersEXT)vkGetDeviceProcAddr(context->device, "vkCmdBindShadersEXT");
+    context->CmdSetVertexInputEXT           = (PFN_vkCmdSetVertexInputEXT)vkGetDeviceProcAddr(context->device, "vkCmdSetVertexInputEXT");
+    context->CmdSetRasterizationSamplesEXT  = (PFN_vkCmdSetRasterizationSamplesEXT)vkGetDeviceProcAddr(context->device, "vkCmdSetRasterizationSamplesEXT");
+    context->CmdSetSampleMaskEXT            = (PFN_vkCmdSetSampleMaskEXT)vkGetDeviceProcAddr(context->device, "vkCmdSetSampleMaskEXT");
+    context->CmdSetAlphaToCoverageEnableEXT = (PFN_vkCmdSetAlphaToCoverageEnableEXT)vkGetDeviceProcAddr(context->device, "vkCmdSetAlphaToCoverageEnableEXT");
+    context->CmdSetPolygonModeEXT           = (PFN_vkCmdSetPolygonModeEXT)vkGetDeviceProcAddr(context->device, "vkCmdSetPolygonModeEXT");
+    context->CmdSetDepthClampEnableEXT      = (PFN_vkCmdSetDepthClampEnableEXT)vkGetDeviceProcAddr(context->device, "vkCmdSetDepthClampEnableEXT");
+    context->CmdSetLogicOpEnableEXT         = (PFN_vkCmdSetLogicOpEnableEXT)vkGetDeviceProcAddr(context->device, "vkCmdSetLogicOpEnableEXT");
+    context->CmdSetColorBlendEnableEXT      = (PFN_vkCmdSetColorBlendEnableEXT)vkGetDeviceProcAddr(context->device, "vkCmdSetColorBlendEnableEXT");
+    context->CmdSetColorBlendEquationEXT    = (PFN_vkCmdSetColorBlendEquationEXT)vkGetDeviceProcAddr(context->device, "vkCmdSetColorBlendEquationEXT");
+    context->CmdSetColorWriteMaskEXT        = (PFN_vkCmdSetColorWriteMaskEXT)vkGetDeviceProcAddr(context->device, "vkCmdSetColorWriteMaskEXT");
 
-    context->graphicsQueue = CreateQueue(context->device, context->graphicsFamilyIndex);
-    context->presentQueue  = CreateQueue(context->device, context->presentFamilyIndex);
+    Assert(context->CreateShadersEXT && context->DestroyShaderEXT && context->CmdBindShadersEXT && context->CmdSetVertexInputEXT &&
+           context->CmdSetRasterizationSamplesEXT && context->CmdSetSampleMaskEXT && context->CmdSetAlphaToCoverageEnableEXT &&
+           context->CmdSetPolygonModeEXT && context->CmdSetDepthClampEnableEXT && context->CmdSetLogicOpEnableEXT &&
+           context->CmdSetColorBlendEnableEXT && context->CmdSetColorBlendEquationEXT && context->CmdSetColorWriteMaskEXT);
 
-    DebugLog("Logical device created (dynamic blend %s)\n", context->DynamicBlend ? "on" : "off");
-    return true;
+    context->GetDescriptorSetLayoutSizeEXT         = (PFN_vkGetDescriptorSetLayoutSizeEXT)vkGetDeviceProcAddr(context->device, "vkGetDescriptorSetLayoutSizeEXT");
+    context->GetDescriptorSetLayoutBindingOffsetEXT = (PFN_vkGetDescriptorSetLayoutBindingOffsetEXT)vkGetDeviceProcAddr(context->device, "vkGetDescriptorSetLayoutBindingOffsetEXT");
+    context->GetDescriptorEXT                       = (PFN_vkGetDescriptorEXT)vkGetDeviceProcAddr(context->device, "vkGetDescriptorEXT");
+    context->CmdBindDescriptorBuffersEXT            = (PFN_vkCmdBindDescriptorBuffersEXT)vkGetDeviceProcAddr(context->device, "vkCmdBindDescriptorBuffersEXT");
+    context->CmdSetDescriptorBufferOffsetsEXT       = (PFN_vkCmdSetDescriptorBufferOffsetsEXT)vkGetDeviceProcAddr(context->device, "vkCmdSetDescriptorBufferOffsetsEXT");
+
+    Assert(context->GetDescriptorSetLayoutSizeEXT && context->GetDescriptorSetLayoutBindingOffsetEXT && context->GetDescriptorEXT &&
+           context->CmdBindDescriptorBuffersEXT && context->CmdSetDescriptorBufferOffsetsEXT);
+
+    context->DescriptorProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT;
+
+    VkPhysicalDeviceProperties2 deviceProps{};
+    deviceProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+    deviceProps.pNext = &context->DescriptorProps;
+    vkGetPhysicalDeviceProperties2(context->physicalDevice, &deviceProps);
+
+    vkGetPhysicalDeviceMemoryProperties(context->physicalDevice, &context->MemoryProps);
+
+    context->graphicsQueue = GetQueue(context->device, context->graphicsFamilyIndex);
+    context->presentQueue  = GetQueue(context->device, context->presentFamilyIndex);
+
+    DebugLog("Logical device created\n");
 }
 
 internal VkSurfaceFormatKHR ChooseSwapSurfaceFormat(swapchain_support_details *support)
@@ -496,9 +666,9 @@ internal VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR *capabilitie
     return extent;
 }
 
-internal bool32 CreateSwapchain(vulkan_context *context, HWND hwnd)
+internal void CreateSwapchain(vulkan_context *context, HWND hwnd)
 {
-    swapchain_support_details support = GetQuerySwapchainSupportDetails(context->physicalDevice, context->surface);
+    swapchain_support_details support = QuerySwapchainSupport(context->physicalDevice, context->surface);
 
     VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(&support);
     VkPresentModeKHR   presentMode   = ChooseSwapPresentMode(&support);
@@ -538,14 +708,14 @@ internal bool32 CreateSwapchain(vulkan_context *context, HWND hwnd)
     createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     createInfo.presentMode = presentMode;
     createInfo.clipped = VK_TRUE;
-    createInfo.oldSwapchain = VK_NULL_HANDLE;
+    createInfo.oldSwapchain = context->swapchain;
 
-    VkResult result = vkCreateSwapchainKHR(context->device, &createInfo, nullptr, &context->swapchain);
-    if (result != VK_SUCCESS)
-    {
-        DebugLog("Fail to create swapchain\n");
-        return false;
-    }
+    VkSwapchainKHR swapchain = VK_NULL_HANDLE;
+
+    VkResult result = vkCreateSwapchainKHR(context->device, &createInfo, nullptr, &swapchain);
+    Assert(result == VK_SUCCESS);
+
+    context->swapchain = swapchain;
 
     uint32 count = 0;
     vkGetSwapchainImagesKHR(context->device, context->swapchain, &count, nullptr);
@@ -557,44 +727,39 @@ internal bool32 CreateSwapchain(vulkan_context *context, HWND hwnd)
     context->swapchainExtent = extent;
 
     DebugLog("Swapchain created (%u images, %ux%u, format %d)\n", count, extent.width, extent.height, surfaceFormat.format);
-    return true;
 }
 
-internal bool32 CreateImageViews(vulkan_context *context)
+internal void CreateSwapchainImageViews(vulkan_context *context)
 {
     for (uint32 i = 0; i < context->swapchainImageCount; ++i)
     {
         context->swapchainImageViews[i] = CreateColorImageView(context->device, context->swapchainImages[i], context->swapchainImageFormat);
-        if (context->swapchainImageViews[i] == VK_NULL_HANDLE)
-        {
-            return false;
-        }
     }
 
     DebugLog("Image views created (%u)\n", context->swapchainImageCount);
-    return true;
 }
 
-internal bool32 CreateDepthResources(vulkan_context *context)
+internal void CreateDepthResources(vulkan_context *context)
 {
     context->depthFormat = VK_FORMAT_D32_SFLOAT;
 
-    if (!CreateStandaloneImage(context, context->swapchainExtent.width, context->swapchainExtent.height,
-                     context->depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &context->depthImage, &context->depthImageMemory))
-    {
-        DebugLog("Fail to create depth image\n");
-        return false;
-    }
+    context->depth.Image = CreateImage(context, context->swapchainExtent.width, context->swapchainExtent.height,
+                                       context->depthFormat, 1, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                                       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &context->depth.Memory);
 
-    context->depthImageView = CreateDepthImageView(context->device, context->depthImage, context->depthFormat);
-    if (context->depthImageView == VK_NULL_HANDLE)
-    {
-        return false;
-    }
+    context->depth.View = CreateDepthImageView(context->device, context->depth.Image, context->depthFormat);
 
     DebugLog("Depth resources created\n");
-    return true;
+}
+
+internal void DestroySwapchainResources(vulkan_context *context)
+{
+    DestroyTexture(context, &context->depth);
+
+    for (uint32 i = 0; i < context->swapchainImageCount; ++i)
+    {
+        vkDestroyImageView(context->device, context->swapchainImageViews[i], nullptr);
+    }
 }
 
 internal bool32 RecreateSwapchain(vulkan_context *context)
@@ -609,19 +774,16 @@ internal bool32 RecreateSwapchain(vulkan_context *context)
 
     vkDeviceWaitIdle(context->device);
 
-    vkDestroyImageView(context->device, context->depthImageView, nullptr);
-    vkDestroyImage(context->device, context->depthImage, nullptr);
-    vkFreeMemory(context->device, context->depthImageMemory, nullptr);
+    DestroySwapchainResources(context);
 
-    for (uint32 i = 0; i < context->swapchainImageCount; ++i)
-    {
-        vkDestroyImageView(context->device, context->swapchainImageViews[i], nullptr);
-    }
-    vkDestroySwapchainKHR(context->device, context->swapchain, nullptr);
+    VkSwapchainKHR old = context->swapchain;
 
-    if (!CreateSwapchain(context, context->windowHandle)) return false;
-    if (!CreateImageViews(context))                       return false;
-    if (!CreateDepthResources(context))                   return false;
+    CreateSwapchain(context, context->windowHandle);
+
+    vkDestroySwapchainKHR(context->device, old, nullptr);
+
+    CreateSwapchainImageViews(context);
+    CreateDepthResources(context);
 
     return true;
 }
@@ -645,12 +807,12 @@ internal void CreateCommandBuffer(vulkan_context *context)
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocInfo.commandPool = context->commandPool;
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandBufferCount = 1;
+    allocInfo.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
 
-    VkResult result = vkAllocateCommandBuffers(context->device, &allocInfo, &context->commandBuffer);
+    VkResult result = vkAllocateCommandBuffers(context->device, &allocInfo, context->commandBuffers);
     Assert(result == VK_SUCCESS);
 
-    DebugLog("Command buffer allocated\n");
+    DebugLog("Command buffers allocated (%d)\n", MAX_FRAMES_IN_FLIGHT);
 }
 
 internal void CreateSyncObjects(vulkan_context *context)
@@ -658,21 +820,29 @@ internal void CreateSyncObjects(vulkan_context *context)
     VkSemaphoreCreateInfo semInfo{};
     semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-    VkFenceCreateInfo fenceInfo{};
-    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+    for (uint32 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+    {
+        VkResult result = vkCreateSemaphore(context->device, &semInfo, nullptr, &context->imageAvailableSemaphores[i]);
+        Assert(result == VK_SUCCESS);
+    }
 
-    VkResult semaphoreResult = vkCreateSemaphore(context->device, &semInfo, nullptr, &context->imageAvailableSemaphore);
-    Assert(semaphoreResult == VK_SUCCESS);
-
-    VkResult fenceResult = vkCreateFence(context->device, &fenceInfo, nullptr, &context->inFlightFence);
-    Assert(fenceResult == VK_SUCCESS);
-
-    for (uint32 i = 0; i < context->swapchainImageCount; ++i)
+    for (uint32 i = 0; i < MAX_SWAPCHAIN_IMAGES; ++i)
     {
         VkResult result = vkCreateSemaphore(context->device, &semInfo, nullptr, &context->renderFinishedSemaphores[i]);
         Assert(result == VK_SUCCESS);
     }
+
+    VkSemaphoreTypeCreateInfo timelineInfo{};
+    timelineInfo.sType         = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
+    timelineInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
+    timelineInfo.initialValue  = 0;
+
+    VkSemaphoreCreateInfo timelineSemInfo{};
+    timelineSemInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    timelineSemInfo.pNext = &timelineInfo;
+
+    VkResult timelineResult = vkCreateSemaphore(context->device, &timelineSemInfo, nullptr, &context->frameTimeline);
+    Assert(timelineResult == VK_SUCCESS);
 
     DebugLog("Sync objects created\n");
 }

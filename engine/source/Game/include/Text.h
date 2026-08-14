@@ -49,12 +49,12 @@ internal uint32 NextCodepoint(const char **At)
 
 internal void DrawText(render_commands *Commands, data_lake *Lake, uint32 FontHandle, Vector2 P, Vector4 Color, const char *Text)
 {
-    if (!FontHandle || FontHandle > Lake->FontCount)
+    if (FontHandle >= Lake->FontCount)
     {
         return;
     }
 
-    uint32 Slot = FontHandle - 1;
+    uint32 Slot = FontHandle;
 
     asset_font_info *Font     = Lake->FontInfo + Slot;
     uint16          *Map      = LakeFontMap(Lake, Slot);
@@ -95,12 +95,12 @@ internal real32 TextWidth(data_lake *Lake, uint32 FontHandle, const char *Text)
 {
     real32 Width = 0.0f;
 
-    if (!FontHandle || FontHandle > Lake->FontCount)
+    if (FontHandle >= Lake->FontCount)
     {
         return Width;
     }
 
-    real32 *Advances = LakeFontAdvance(Lake, FontHandle - 1);
+    real32 *Advances = LakeFontAdvance(Lake, FontHandle);
 
     for (const char *At = Text; *At;)
     {
@@ -116,12 +116,12 @@ internal real32 TextWidth(data_lake *Lake, uint32 FontHandle, const char *Text)
 
 internal real32 TextLineAdvance(data_lake *Lake, uint32 FontHandle)
 {
-    if (!FontHandle || FontHandle > Lake->FontCount)
+    if (FontHandle >= Lake->FontCount)
     {
         return 0.0f;
     }
 
-    return Lake->FontInfo[FontHandle - 1].LineAdvance;
+    return Lake->FontInfo[FontHandle].LineAdvance;
 }
 
 #endif

@@ -1,10 +1,6 @@
 #include "ShaderInterop.h"
 
-[[vk::binding(BINDING_VERTICES, SET_GLOBAL)]] StructuredBuffer<vertex> Vertices;
-
-[[vk::binding(BINDING_CAMERA, SET_GLOBAL)]] ConstantBuffer<camera_uniforms> cam;
-
-[[vk::push_constant]] draw_push_constants pc;
+[[vk::push_constant]] push_constants pc;
 
 struct vs_output
 {
@@ -15,10 +11,14 @@ struct vs_output
 
 vs_output main(uint vertexID : SV_VertexID)
 {
-    vertex v = Vertices[vertexID];
+    draw_params_ptr params = draw_params_ptr(pc.Params);
+
+    vertex v = vk::RawBufferLoad<vertex>(params.Get().Vertices + (uint64_t)vertexID * VERTEX_STRIDE, 4);
+
+    camera_ptr cam = camera_ptr(params.Get().Camera);
 
     vs_output output;
-    output.Position = mul(cam.ViewProj, mul(pc.Model, float4(v.Pos, 1.0)));
+    output.Position = mul(cam.Get().ViewProj, mul(params.Get().Model, float4(v.Pos, 1.0)));
     output.Color    = v.Color;
     output.UV       = v.UV;
     return output;

@@ -30,6 +30,8 @@ enum texture_format
     TextureFormat_RGBA16F,
 };
 
+#define TEXTURE_NONE 0xFFFFFFFF
+
 enum blend_mode
 {
     Blend_Opaque = 0,
@@ -302,7 +304,7 @@ inline void PushRenderTexturedRect(render_commands *Commands, Vector2 Min, Vecto
 
 inline void PushRenderRect(render_commands *Commands, Vector2 Min, Vector2 Max, Vector4 Color)
 {
-    PushRenderTexturedRect(Commands, Min, Max, Color, Vector4(0.0f, 0.0f, 0.0f, 0.0f), 0);
+    PushRenderTexturedRect(Commands, Min, Max, Color, Vector4(0.0f, 0.0f, 0.0f, 0.0f), TEXTURE_NONE);
 }
 
 inline void PushRenderSkybox(render_commands *Commands, uint32 Cubemap)

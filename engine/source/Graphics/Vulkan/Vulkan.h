@@ -14,6 +14,9 @@
 #include "VulkanRender.h"
 
 static_assert(sizeof(vertex) == sizeof(enga_vertex), "vertex must match the packed asset layout");
+static_assert(sizeof(vertex) == VERTEX_STRIDE, "vertex stride must match the shader stride");
+static_assert(sizeof(gpu_material) == MATERIAL_STRIDE, "material stride must match the shader stride");
+static_assert(sizeof(rect_params) == RECT_PARAMS_STRIDE, "rect params stride must match the shader stride");
 
 #define MAX_SURFACE_FORMATS   64
 #define MAX_PRESENT_MODES     8
@@ -21,6 +24,7 @@ static_assert(sizeof(vertex) == sizeof(enga_vertex), "vertex must match the pack
 struct vulkan_context
 {
     VkInstance instance;
+    VkDebugUtilsMessengerEXT debugMessenger;
     VkSurfaceKHR surface;
     HWND windowHandle;
     VkPhysicalDevice physicalDevice;
@@ -37,20 +41,39 @@ struct vulkan_context
     VkFormat swapchainImageFormat;
     VkExtent2D swapchainExtent;
 
-    VkImage depthImage;
-    VkDeviceMemory depthImageMemory;
-    VkImageView depthImageView;
+    gpu_texture depth;
     VkFormat depthFormat;
 
     VkCommandPool commandPool;
-    VkCommandBuffer commandBuffer;
+    VkCommandBuffer commandBuffers[MAX_FRAMES_IN_FLIGHT];
 
-    VkSemaphore imageAvailableSemaphore;
+    VkSemaphore imageAvailableSemaphores[MAX_FRAMES_IN_FLIGHT];
     VkSemaphore renderFinishedSemaphores[MAX_SWAPCHAIN_IMAGES];
-    VkFence inFlightFence;
+    VkSemaphore frameTimeline;
+    uint64      frameIndex;
 
-    bool32                          DynamicBlend;
-    PFN_vkCmdSetColorBlendEnableEXT CmdSetColorBlendEnableEXT;
+    PFN_vkCreateShadersEXT                  CreateShadersEXT;
+    PFN_vkDestroyShaderEXT                  DestroyShaderEXT;
+    PFN_vkCmdBindShadersEXT                 CmdBindShadersEXT;
+    PFN_vkCmdSetVertexInputEXT              CmdSetVertexInputEXT;
+    PFN_vkCmdSetRasterizationSamplesEXT     CmdSetRasterizationSamplesEXT;
+    PFN_vkCmdSetSampleMaskEXT               CmdSetSampleMaskEXT;
+    PFN_vkCmdSetAlphaToCoverageEnableEXT    CmdSetAlphaToCoverageEnableEXT;
+    PFN_vkCmdSetPolygonModeEXT              CmdSetPolygonModeEXT;
+    PFN_vkCmdSetDepthClampEnableEXT         CmdSetDepthClampEnableEXT;
+    PFN_vkCmdSetLogicOpEnableEXT            CmdSetLogicOpEnableEXT;
+    PFN_vkCmdSetColorBlendEnableEXT         CmdSetColorBlendEnableEXT;
+    PFN_vkCmdSetColorBlendEquationEXT       CmdSetColorBlendEquationEXT;
+    PFN_vkCmdSetColorWriteMaskEXT           CmdSetColorWriteMaskEXT;
+
+    PFN_vkGetDescriptorSetLayoutSizeEXT          GetDescriptorSetLayoutSizeEXT;
+    PFN_vkGetDescriptorSetLayoutBindingOffsetEXT GetDescriptorSetLayoutBindingOffsetEXT;
+    PFN_vkGetDescriptorEXT                       GetDescriptorEXT;
+    PFN_vkCmdBindDescriptorBuffersEXT            CmdBindDescriptorBuffersEXT;
+    PFN_vkCmdSetDescriptorBufferOffsetsEXT       CmdSetDescriptorBufferOffsetsEXT;
+
+    VkPhysicalDeviceDescriptorBufferPropertiesEXT DescriptorProps;
+    VkPhysicalDeviceMemoryProperties              MemoryProps;
 };
 
 struct queue_family_indices
@@ -70,7 +93,7 @@ struct swapchain_support_details
     uint32 presentModeCount;
 };
 
-internal void InitVulkan(HINSTANCE hinstance, HWND hwnd);
+internal const char *InitVulkan(HINSTANCE hinstance, HWND hwnd);
 internal void RenderVulkanFrame(render_commands *Commands);
 internal void ShutdownVulkan();
 

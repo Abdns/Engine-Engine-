@@ -31,17 +31,17 @@ internal void PushLakeToRender(data_lake *Lake, render_commands *Commands)
 {
     for (uint32 Slot = 0; Slot < Lake->MeshCount; ++Slot)
     {
-        PushLoadMesh(Commands, Slot + 1, LakeMeshVertices(Lake, Slot), Lake->MeshVertexCount[Slot], LakeMeshIndices(Lake, Slot), Lake->MeshIndexCount[Slot]);
+        PushLoadMesh(Commands, Slot, LakeMeshVertices(Lake, Slot), Lake->MeshVertexCount[Slot], LakeMeshIndices(Lake, Slot), Lake->MeshIndexCount[Slot]);
     }
 
     for (uint32 Slot = 0; Slot < Lake->TextureCount; ++Slot)
     {
-        PushLoadTexture(Commands, Slot + 1, LakeTexturePixels(Lake, Slot), Lake->TextureWidth[Slot], Lake->TextureHeight[Slot], Lake->TextureSRGB[Slot], TextureFormatFromAsset(Lake->TextureFormat[Slot]));
+        PushLoadTexture(Commands, Slot, LakeTexturePixels(Lake, Slot), Lake->TextureWidth[Slot], Lake->TextureHeight[Slot], Lake->TextureSRGB[Slot], TextureFormatFromAsset(Lake->TextureFormat[Slot]));
     }
 
     for (uint32 Slot = 0; Slot < Lake->CubemapCount; ++Slot)
     {
-        PushLoadCubemap(Commands, Slot + 1, LakeCubemapPixels(Lake, Slot), Lake->CubemapFaceSize[Slot], TextureFormatFromAsset(Lake->CubemapFormat[Slot]));
+        PushLoadCubemap(Commands, Slot, LakeCubemapPixels(Lake, Slot), Lake->CubemapFaceSize[Slot], TextureFormatFromAsset(Lake->CubemapFormat[Slot]));
     }
 }
 
@@ -78,12 +78,12 @@ internal uint32 BuildEntityColliders(data_lake *Lake, collider *Colliders, uint3
         }
 
         uint32 MeshHandle = Entity->MeshHandle;
-        if (!MeshHandle || MeshHandle > Lake->MeshCount)
+        if (MeshHandle >= Lake->MeshCount)
         {
             continue;
         }
 
-        Colliders[Count++] = MakeCollider(Entity->ID, EntityTransform(Lake, Entity), LakeCollisionMesh(Lake, MeshHandle - 1));
+        Colliders[Count++] = MakeCollider(Entity->ID, EntityTransform(Lake, Entity), LakeCollisionMesh(Lake, MeshHandle));
     }
 
     return Count;

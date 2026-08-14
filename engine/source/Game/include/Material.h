@@ -47,7 +47,7 @@ internal uint32 AddMaterial(materials* Materials, material Material)
 
     Materials->Items[Index] = Material;
 
-    return Index + 1;
+    return Index;
 }
 
 internal void PushMaterialsToRender(materials* Materials, render_commands* Commands)
@@ -55,7 +55,7 @@ internal void PushMaterialsToRender(materials* Materials, render_commands* Comma
     for (uint32 Index = 0; Index < Materials->Count; ++Index)
     {
         material* Material = Materials->Items + Index;
-        PushLoadMaterial(Commands, Index + 1, Material->Pipeline, Material->CullMode, Material->BlendMode, Material->DepthTest, Material->DepthWrite, Material->BaseColor, Material->TextureHandle);
+        PushLoadMaterial(Commands, Index, Material->Pipeline, Material->CullMode, Material->BlendMode, Material->DepthTest, Material->DepthWrite, Material->BaseColor, Material->TextureHandle);
     }
 }
 

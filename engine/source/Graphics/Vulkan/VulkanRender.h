@@ -10,12 +10,10 @@
 #include "shaders/ShaderInterop.h"
 
 #define MAX_SWAPCHAIN_IMAGES  8
+#define MAX_FRAMES_IN_FLIGHT  2
 #define MAX_MESHES            256
-#define MAX_VERTICES          (1u << 20)
-#define MAX_INDICES           (1u << 21)
-#define IMAGE_ARENA_SIZE      Megabytes(64)
-
-#define MAX_PASS_DEPENDENCIES 2
+#define FRAME_BUFFER_SIZE     Megabytes(4)
+#define STAGING_MEMORY_SIZE   Megabytes(64)
 
 #define PIPELINE_TOPOLOGY     VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
 #define PIPELINE_FRONT_FACE   VK_FRONT_FACE_CLOCKWISE
@@ -29,20 +27,40 @@ struct vulkan_shader
 
 struct gpu_buffer
 {
-    VkDeviceMemory Memory;
-    VkBuffer       Buffer;
-    uint32         Stride;
-    uint32         Capacity;
-    uint32         Used;
-    void          *Mapped;
+    VkBuffer        Buffer;
+    VkDeviceMemory  Memory;
+    VkDeviceSize    Size;
+    VkDeviceSize    Used;
+    VkDeviceSize    Limit;
+
+    VkDeviceAddress Address;
 };
 
-struct gpu_memory_arena
+struct shared_buffer
 {
-    VkDeviceMemory Memory;
-    VkDeviceSize   Capacity;
-    VkDeviceSize   Used;
+    VkBuffer        Buffer;
+    VkDeviceMemory  Memory;
+    VkDeviceSize    Size;
+    VkDeviceSize    Used;
+    VkDeviceSize    Limit;
+
+    void           *Mapped;
+    VkDeviceAddress Address;
 };
+
+struct gpu_alloc
+{
+    VkDeviceAddress Gpu;
+    VkDeviceSize    Offset;
+};
+
+struct shared_alloc
+{
+    void           *Cpu;
+    VkDeviceAddress Gpu;
+    VkDeviceSize    Offset;
+};
+
 
 struct gpu_mesh
 {
@@ -54,15 +72,20 @@ struct gpu_mesh
 
 struct gpu_texture
 {
-    VkImage     Image;
-    VkImageView View;
+    VkImage        Image;
+    VkImageView    View;
+    VkDeviceMemory Memory;
 };
 
 
-struct descriptor_set
+struct descriptor_heap
 {
     VkDescriptorSetLayout Layout;
-    VkDescriptorSet       Handle;
+    shared_buffer         Buffer;
+
+    VkDeviceSize TextureOffset;
+    VkDeviceSize SamplerOffset;
+    VkDeviceSize CubemapOffset;
 };
 
 struct material_state
@@ -76,20 +99,19 @@ struct material_state
 
 struct vulkan_resources
 {
-    VkDescriptorPool DescriptorPool;
-    descriptor_set   GlobalSet;
-    VkSampler        Sampler;
+    descriptor_heap Heap;
+    VkSampler       Sampler;
 
-    gpu_buffer CameraBuffer;
-    gpu_buffer MaterialBuffer;
-    gpu_buffer VertexBuffer;
-    gpu_buffer IndexBuffer;
+    shared_buffer VertexBuffer;
+    shared_buffer IndexBuffer;
+    shared_buffer MaterialBuffer;
+    shared_buffer FrameArena;
 
-    gpu_mesh          Meshes[MAX_MESHES];
-    gpu_texture       Textures[MAX_TEXTURES];
-    gpu_texture       Cubemaps[MAX_CUBEMAPS];
-    material_state    MaterialStates[MAX_MATERIALS];
-    gpu_memory_arena  ImageArena;
+    gpu_mesh       Meshes[MAX_MESHES];
+    gpu_texture    Textures[MAX_TEXTURES];
+    gpu_texture    Cubemaps[MAX_CUBEMAPS];
+    material_state MaterialStates[MAX_MATERIALS];
+    uint32         MaterialCount;
 };
 
 enum pass_id
@@ -100,43 +122,15 @@ enum pass_id
     Pass_Count,
 };
 
-enum pass_sync
+struct render_pass
 {
-    Sync_None = 0,
-    Sync_WriteThenSample,
-    Sync_WriteThenPresent,
-};
+    VkAttachmentLoadOp ColorLoad;
+    Vector4            ClearColor;
 
-struct render_target
-{
-    VkImage        Image;
-    VkDeviceMemory Memory;
-    VkImageView    View;
-};
-
-struct pass_desc
-{
-    const char *Name;
-
-    VkFormat            ColorFormat;
-    VkAttachmentLoadOp  ColorLoad;
-    VkAttachmentStoreOp ColorStore;
-    VkImageLayout       ColorFinalLayout;
-    Vector4             ClearColor;
+    VkImageView ColorViews[MAX_SWAPCHAIN_IMAGES];
 
     bool32 UseDepth;
     bool32 PerSwapchainImage;
-
-    pass_sync Sync;
-};
-
-struct render_pass
-{
-    pass_desc Desc;
-
-    VkRenderPass  Handle;
-    VkFramebuffer Framebuffers[MAX_SWAPCHAIN_IMAGES];
-    uint32        FramebufferCount;
 };
 
 struct render_state
@@ -151,28 +145,26 @@ struct render_state
 struct pipeline_desc
 {
     const char *ShaderName;
-    pass_id     Pass;
 
     VkBool32 DepthTest;
     VkBool32 DepthWrite;
     VkBool32 Blend;
-    bool32   OwnSet;
 };
 
 struct render_pipeline
 {
-    pipeline_desc Desc;
-    render_state  DefaultState;
+    render_state DefaultState;
 
-    VkPipeline       Handle;
+    VkShaderEXT      Vert;
+    VkShaderEXT      Frag;
     VkPipelineLayout Layout;
-    descriptor_set   Set;
 };
 
 struct vulkan_frame
 {
     VkCommandBuffer Cmd;
     uint32          ImageIndex;
+    uint32          Slot;
     bool32          Ready;
     bool32          NeedsResize;
 };
