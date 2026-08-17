@@ -324,7 +324,6 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
     PushRenderCamera(RenderCommands, CameraView(Camera), Camera->FovY);
 
-    PushRenderPipeline(RenderCommands, Pipeline_Skybox);
     PushRenderSkybox(RenderCommands, GameState->SkyHandle);
 
     PushEntitiesToRender(Lake, RenderCommands, GameState->SelectedEntityID);

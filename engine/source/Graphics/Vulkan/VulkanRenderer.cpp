@@ -9,7 +9,6 @@
 
 global_variable gpu_texture     SceneTarget;
 global_variable gpu_texture     PostTarget;
-global_variable render_pass     Passes[Pass_Count];
 global_variable render_pipeline Pipelines[Pipeline_Count];
 
 global_variable pipeline_desc PipelineDescs[] =
@@ -23,39 +22,6 @@ global_variable pipeline_desc PipelineDescs[] =
 
 static_assert(ArrayCount(PipelineDescs) == Pipeline_Count, "PipelineDescs must describe every pipeline_type");
 
-internal void CreateFramePasses(vulkan_context *context)
-{
-    SceneTarget = CreateRenderTarget(context, VK_FORMAT_R16G16B16A16_SFLOAT);
-    PostTarget  = CreateRenderTarget(context, VK_FORMAT_R16G16B16A16_SFLOAT);
-
-    Passes[Pass_Scene] = CreateScenePass(context, SceneTarget.View);
-    Passes[Pass_Post]  = CreatePostPass(context, PostTarget.View);
-    Passes[Pass_UI]    = CreateUIPass(context, context->swapchainImageViews, context->swapchainImageCount);
-
-    VkCommandBuffer cmd = BeginSingleTimeCommands(context);
-    CmdImageToGeneral(cmd, SceneTarget.Image,     VK_IMAGE_ASPECT_COLOR_BIT, 1, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, 0);
-    CmdImageToGeneral(cmd, PostTarget.Image,      VK_IMAGE_ASPECT_COLOR_BIT, 1, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, 0);
-    CmdImageToGeneral(cmd, context->depth.Image,  VK_IMAGE_ASPECT_DEPTH_BIT, 1, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, 0);
-    EndSingleTimeCommands(context, cmd);
-
-}
-
-internal void DestroyFramePasses(vulkan_context *context)
-{
-    Passes[Pass_Scene] = {};
-    Passes[Pass_Post]  = {};
-    Passes[Pass_UI]    = {};
-
-    DestroyTexture(context, &SceneTarget);
-    DestroyTexture(context, &PostTarget);
-}
-
-internal void WriteRenderTargetsToHeap(vulkan_context *context)
-{
-    WriteImageDescriptor(context, &GlobalResources.Heap, GlobalResources.Heap.TextureOffset, TEXTURE_SLOT_SCENE, SceneTarget.View);
-    WriteImageDescriptor(context, &GlobalResources.Heap, GlobalResources.Heap.TextureOffset, TEXTURE_SLOT_POST,  PostTarget.View);
-}
-
 internal void ResizeRenderer(vulkan_context *context)
 {
     if (!RecreateSwapchain(context))
@@ -63,9 +29,11 @@ internal void ResizeRenderer(vulkan_context *context)
         return;
     }
 
-    DestroyFramePasses(context);
-    CreateFramePasses(context);
-    WriteRenderTargetsToHeap(context);
+    DestroyTexture(context, &SceneTarget);
+    DestroyTexture(context, &PostTarget);
+
+    SceneTarget = CreateRenderTarget(context, &GlobalResources, TEXTURE_SLOT_SCENE, VK_FORMAT_R16G16B16A16_SFLOAT);
+    PostTarget  = CreateRenderTarget(context, &GlobalResources, TEXTURE_SLOT_POST,  VK_FORMAT_R16G16B16A16_SFLOAT);
 }
 
 internal const char *InitVulkan(HINSTANCE hinstance, HWND hwnd)
@@ -123,25 +91,23 @@ internal const char *InitVulkan(HINSTANCE hinstance, HWND hwnd)
     }
 
     CreateLogicalDevice(context);
-    CreateSwapchain(context, hwnd);
-    CreateSwapchainImageViews(context);
-    CreateDepthResources(context);
     CreateCommandPool(context);
     CreateCommandBuffer(context);
     CreateSyncObjects(context);
 
-    CreateResources(context, &GlobalResources);
-    CreateDescriptorHeap(context, &GlobalResources);
-    WriteSamplerDescriptor(context, &GlobalResources.Heap, GlobalResources.Heap.SamplerOffset, GlobalResources.Sampler);
+    CreateSwapchain(context, hwnd);
+    CreateSwapchainImageViews(context);
+    CreateDepthResources(context);
 
-    CreateFramePasses(context);
+    CreateResources(context, &GlobalResources);
+
+    SceneTarget = CreateRenderTarget(context, &GlobalResources, TEXTURE_SLOT_SCENE, VK_FORMAT_R16G16B16A16_SFLOAT);
+    PostTarget  = CreateRenderTarget(context, &GlobalResources, TEXTURE_SLOT_POST,  VK_FORMAT_R16G16B16A16_SFLOAT);
 
     for (uint32 i = 0; i < Pipeline_Count; ++i)
     {
         CreateRenderPipeline(context, &GlobalResources, &Pipelines[i], &PipelineDescs[i]);
     }
-
-    WriteRenderTargetsToHeap(context);
 
     DebugLog("Vulkan ready\n");
     return nullptr;
@@ -154,35 +120,20 @@ internal void LoadAssets(vulkan_context *context, vulkan_resources *res, render_
         return;
     }
 
-    uint32 vertexCount   = 0;
-    uint32 indexCount    = 0;
-    uint32 materialCount = 0;
+    Assert(res->VertexBuffer.Buffer == VK_NULL_HANDLE);
+    Assert(commands->VertexCount && commands->IndexCount);
+    Assert(commands->MaterialCount && commands->MaterialCount <= MAX_MATERIALS);
+
+    res->VertexBuffer   = CreateDeviceBuffer(context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, sizeof(vertex) * commands->VertexCount);
+    res->IndexBuffer    = CreateDeviceBuffer(context, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,   sizeof(uint32) * commands->IndexCount);
+    res->MaterialBuffer = CreateDeviceBuffer(context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, sizeof(gpu_material) * commands->MaterialCount);
+    res->MaterialCount  = commands->MaterialCount;
+
+    shared_buffer staging = CreateUploadBuffer(context, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, STAGING_MEMORY_SIZE);
+    VkCommandBuffer cmd = BeginSingleTimeCommands(context);
 
     uint32 offset = 0;
-    for (command_type *header = NextRenderCommand(commands, &offset); header; header = NextRenderCommand(commands, &offset))
-    {
-        if (*header == Load_Mesh)
-        {
-            command_load_mesh *entry = (command_load_mesh *)header;
-            vertexCount += entry->VertexCount;
-            indexCount  += entry->IndexCount;
-        }
-        else if (*header == Load_Material)
-        {
-            command_load_material *entry = (command_load_material *)header;
-            if (entry->MaterialHandle >= materialCount)
-            {
-                materialCount = entry->MaterialHandle + 1;
-            }
-        }
-    }
 
-    CreateAssetBuffers(context, res, vertexCount, indexCount, materialCount);
-
-    shared_buffer   staging = CreateUploadBuffer(context, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, STAGING_MEMORY_SIZE);
-    VkCommandBuffer cmd     = BeginSingleTimeCommands(context);
-
-    offset = 0;
     for (command_type *header = NextRenderCommand(commands, &offset); header; header = NextRenderCommand(commands, &offset))
     {
         if (*header == Load_Mesh)
@@ -192,7 +143,12 @@ internal void LoadAssets(vulkan_context *context, vulkan_resources *res, render_
             shared_alloc vertices = SharedBufferWrite(&res->VertexBuffer, entry->Vertices, entry->VertexCount * sizeof(vertex), sizeof(vertex));
             shared_alloc indices  = SharedBufferWrite(&res->IndexBuffer,  entry->Indices,  entry->IndexCount  * sizeof(uint32), sizeof(uint32));
 
-            CreateMesh(res, entry->MeshHandle, vertices.Offset, entry->VertexCount, indices.Offset, entry->IndexCount);
+            Assert(entry->MeshHandle < MAX_MESHES);
+
+            gpu_mesh *mesh = res->Meshes + entry->MeshHandle;
+            Assert(!mesh->IndexCount);
+
+            *mesh = CreateMesh(vertices.Offset, entry->VertexCount, indices.Offset, entry->IndexCount);
         }
         else if (*header == Load_Texture)
         {
@@ -200,7 +156,7 @@ internal void LoadAssets(vulkan_context *context, vulkan_resources *res, render_
 
             VkDeviceSize imageSize = (VkDeviceSize)entry->Width * entry->Height * TextureFormatBytes(entry->Format);
 
-            shared_alloc    upload  = SharedBufferWrite(&staging, entry->Pixels, imageSize, 16);
+            shared_alloc upload  = SharedBufferWrite(&staging, entry->Pixels, imageSize, 16);
             gpu_texture *texture = CreateTexture(context, res, entry->TextureHandle, entry->Width, entry->Height, entry->SRGB, entry->Format);
 
             CmdUploadImage(cmd, staging.Buffer, upload.Offset, texture->Image, entry->Width, entry->Height, 1);
@@ -212,8 +168,8 @@ internal void LoadAssets(vulkan_context *context, vulkan_resources *res, render_
 
             VkDeviceSize imageSize = (VkDeviceSize)entry->FaceSize * entry->FaceSize * 6 * TextureFormatBytes(entry->Format);
 
-            shared_alloc    upload = SharedBufferWrite(&staging, entry->Pixels, imageSize, 16);
-            gpu_texture *cube   = CreateCubemap(context, res, entry->CubemapHandle, entry->FaceSize, entry->Format);
+            shared_alloc upload = SharedBufferWrite(&staging, entry->Pixels, imageSize, 16);
+            gpu_texture *cube = CreateCubemap(context, res, entry->CubemapHandle, entry->FaceSize, entry->Format);
 
             CmdUploadImage(cmd, staging.Buffer, upload.Offset, cube->Image, entry->FaceSize, entry->FaceSize, 6);
             WriteImageDescriptor(context, &res->Heap, res->Heap.CubemapOffset, entry->CubemapHandle, cube->View);
@@ -226,7 +182,15 @@ internal void LoadAssets(vulkan_context *context, vulkan_resources *res, render_
         if (*header == Load_Material)
         {
             command_load_material *entry = (command_load_material *)header;
-            WriteMaterial(res, entry);
+
+            Assert(entry->TextureHandle < MAX_TEXTURES && res->Textures[entry->TextureHandle].View);
+            Assert(entry->MaterialHandle < res->MaterialCount);
+
+            material_state *state    = res->MaterialStates + entry->MaterialHandle;
+            shared_alloc    material = GetSharedBufferSlot(&res->MaterialBuffer, entry->MaterialHandle, sizeof(gpu_material));
+
+            *state                        = CreateMaterialState(entry);
+            *(gpu_material *)material.Cpu = CreateMaterial(entry);
         }
     }
 
@@ -239,20 +203,20 @@ internal void LoadAssets(vulkan_context *context, vulkan_resources *res, render_
 
 internal void ExecuteRenderCommands(vulkan_context *context, VkCommandBuffer cmd, vulkan_resources *res, render_pipeline *pipelines, render_commands *commands)
 {
-    render_pipeline *pipeline = &pipelines[Pipeline_Unlit];
+    render_pipeline *pipeline = 0;
+    uint32 piplineId = Pipeline_Count;
 
     render_state current = {};
     render_state wanted  = {};
-    BindPipelineState(context, cmd, res, pipeline, &current, &wanted);
 
-    real32 aspect = (real32)context->swapchainExtent.width / (real32)context->swapchainExtent.height;
+    real32 FOVaspect = (real32)context->swapchainExtent.width / (real32)context->swapchainExtent.height;
 
     shared_alloc cameraAlloc = SharedBufferAlloc(&res->FrameArena, sizeof(camera_uniforms), 16);
     camera_uniforms *camera = (camera_uniforms *)cameraAlloc.Cpu;
+    *camera = {};
 
     vkCmdBindIndexBuffer(cmd, res->IndexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
 
-    uint32 activeId = Pipeline_Unlit;
     uint32 offset   = 0;
     for (command_type *cmdBase = NextRenderCommand(commands, &offset); cmdBase; cmdBase = NextRenderCommand(commands, &offset))
     {
@@ -261,7 +225,7 @@ internal void ExecuteRenderCommands(vulkan_context *context, VkCommandBuffer cmd
             case Render_Camera:
             {
                 command_render_camera *cameraCmd = (command_render_camera *)cmdBase;
-                Matrix4 proj = Mat4Perspective(cameraCmd->FovY, aspect, 0.1f, 100.0f);
+                Matrix4 proj = Mat4Perspective(cameraCmd->FovY, FOVaspect, 0.1f, 100.0f);
                 camera->ViewProj = Mat4Multiply(proj, cameraCmd->View);
 
                 Matrix4 *view = &cameraCmd->View;
@@ -273,43 +237,18 @@ internal void ExecuteRenderCommands(vulkan_context *context, VkCommandBuffer cmd
                 camera->SkyForward = Vector4(-view->Elements[0][2], -view->Elements[1][2], -view->Elements[2][2], 0.0f);
             } break;
 
-            case Set_Pipeline:
-            {
-                command_set_pipeline *pipelineCmd = (command_set_pipeline *)cmdBase;
-
-                if (pipelines[pipelineCmd->PipelineType].Vert == VK_NULL_HANDLE)
-                {
-                    DebugLog("Set pipeline %d ignored: not ready\n", pipelineCmd->PipelineType);
-                    break;
-                }
-
-                if ((uint32)pipelineCmd->PipelineType == activeId)
-                {
-                    break;
-                }
-
-                activeId = (uint32)pipelineCmd->PipelineType;
-                pipeline = &pipelines[activeId];
-
-                BindPipelineState(context, cmd, res, pipeline, &current, &wanted);
-
-            } break;
-
             case Render_Skybox:
             {
                 command_render_skybox *skyCmd = (command_render_skybox *)cmdBase;
 
-                if (activeId != Pipeline_Skybox || skyCmd->CubemapHandle >= MAX_CUBEMAPS)
-                {
-                    break;
-                }
-
                 uint32 cubeSlot = skyCmd->CubemapHandle;
-                if (!res->Cubemaps[cubeSlot].View)
-                {
-                    break;
-                }
+                Assert(cubeSlot < MAX_CUBEMAPS);
+                Assert(res->Cubemaps[cubeSlot].View);
 
+                piplineId = Pipeline_Skybox;
+                pipeline = &pipelines[piplineId];
+
+                BindPipelineState(context, cmd, pipeline, &current, &wanted);
                 ApplyRenderState(context, cmd, &current, &wanted);
 
                 shared_alloc alloc = SharedBufferAlloc(&res->FrameArena, sizeof(skybox_params), 16);
@@ -321,7 +260,7 @@ internal void ExecuteRenderCommands(vulkan_context *context, VkCommandBuffer cmd
 
                 *(skybox_params *)alloc.Cpu = params;
 
-                BindParams(cmd, pipeline, alloc.Gpu);
+                BindParams(cmd, res->PipelineLayout, alloc.Gpu);
 
                 vkCmdDraw(cmd, 3, 1, 0, 0);
             } break;
@@ -329,29 +268,27 @@ internal void ExecuteRenderCommands(vulkan_context *context, VkCommandBuffer cmd
             case Render_Mesh:
             {
                 command_render_mesh *meshCmd = (command_render_mesh *)cmdBase;
+                Assert(meshCmd->MeshHandle < MAX_MESHES);
 
-                gpu_mesh *mesh = ResolveMesh(res, meshCmd->MeshHandle);
-                if (!mesh || !mesh->IndexCount)
-                {
-                    break;
-                }
+                gpu_mesh *mesh = res->Meshes + meshCmd->MeshHandle;
+                Assert(mesh->IndexCount);
 
                 uint32 materialSlot = meshCmd->MaterialHandle;
                 Assert(materialSlot < res->MaterialCount);
 
                 material_state *material = &res->MaterialStates[materialSlot];
 
-                if ((uint32)material->Pipeline != activeId)
+                if ((uint32)material->Pipeline != piplineId)
                 {
                     if (pipelines[material->Pipeline].Vert == VK_NULL_HANDLE)
                     {
                         break;
                     }
 
-                    activeId = (uint32)material->Pipeline;
-                    pipeline = &pipelines[activeId];
+                    piplineId = (uint32)material->Pipeline;
+                    pipeline = &pipelines[piplineId];
 
-                    BindPipelineState(context, cmd, res, pipeline, &current, &wanted);
+                    BindPipelineState(context, cmd, pipeline, &current, &wanted);
                 }
 
                 wanted.CullMode   = ToVulkanCullMode(material->CullMode);
@@ -373,7 +310,7 @@ internal void ExecuteRenderCommands(vulkan_context *context, VkCommandBuffer cmd
 
                 *(draw_params *)alloc.Cpu = params;
 
-                BindParams(cmd, pipeline, alloc.Gpu);
+                BindParams(cmd, res->PipelineLayout, alloc.Gpu);
 
                 vkCmdDrawIndexed(cmd, mesh->IndexCount, 1, mesh->FirstIndex, (int32)mesh->FirstVertex, 0);
             } break;
@@ -423,12 +360,9 @@ internal void ExecuteUICommands(vulkan_context *context, VkCommandBuffer cmd, vu
         command_render_rect *rectCmd = (command_render_rect *)cmdBase;
 
         rect_params entry = {};
-        entry.Rect        = Vector4(rectCmd->Min.X / width  * 2.0f - 1.0f,
-                                    rectCmd->Min.Y / height * 2.0f - 1.0f,
-                                    rectCmd->Max.X / width  * 2.0f - 1.0f,
-                                    rectCmd->Max.Y / height * 2.0f - 1.0f);
-        entry.UVRect      = rectCmd->UV;
-        entry.Tint        = rectCmd->Color;
+        entry.Rect = Vector4(rectCmd->Min.X / width  * 2.0f - 1.0f, rectCmd->Min.Y / height * 2.0f - 1.0f, rectCmd->Max.X / width  * 2.0f - 1.0f, rectCmd->Max.Y / height * 2.0f - 1.0f);
+        entry.UVRect = rectCmd->UV;
+        entry.Tint = rectCmd->Color;
         entry.TextureSlot = rectCmd->TextureSlot;
 
         params[index++] = entry;
@@ -436,9 +370,9 @@ internal void ExecuteUICommands(vulkan_context *context, VkCommandBuffer cmd, vu
 
     render_state current = {};
     render_state wanted  = {};
-    BindPipelineState(context, cmd, res, pipeline, &current, &wanted);
+    BindPipelineState(context, cmd, pipeline, &current, &wanted);
 
-    BindParams(cmd, pipeline, alloc.Gpu);
+    BindParams(cmd, res->PipelineLayout, alloc.Gpu);
 
     vkCmdDraw(cmd, 6, rectCount, 0, 0);
 }
@@ -468,20 +402,22 @@ internal void RenderVulkanFrame(render_commands *Commands)
 
     VkImage swapchainImage = context->swapchainImages[Frame.ImageIndex];
 
-    BeginPass(context, Frame.Cmd, &Passes[Pass_Scene], context->swapchainExtent, Frame.ImageIndex);
+    BindDescriptorHeap(context, Frame.Cmd, &GlobalResources, GlobalResources.PipelineLayout);
+
+    BeginPass(context, Frame.Cmd, SceneTarget.View, VK_ATTACHMENT_LOAD_OP_CLEAR, Vector4(0.05f, 0.05f, 0.08f, 1.0f), true);
     ExecuteRenderCommands(context, Frame.Cmd, &GlobalResources, Pipelines, Commands);
     EndPass(Frame.Cmd);
 
     GpuBarrier(Frame.Cmd, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 
-    BeginPass(context, Frame.Cmd, &Passes[Pass_Post], context->swapchainExtent, Frame.ImageIndex);
+    BeginPass(context, Frame.Cmd, PostTarget.View, VK_ATTACHMENT_LOAD_OP_DONT_CARE, Vector4(0.0f, 0.0f, 0.0f, 0.0f), false);
     DrawFullscreen(context, Frame.Cmd, &GlobalResources, &Pipelines[Pipeline_Post], TEXTURE_SLOT_SCENE);
     EndPass(Frame.Cmd);
 
     GpuBarrier(Frame.Cmd, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
     CmdImageToGeneral(Frame.Cmd, swapchainImage, VK_IMAGE_ASPECT_COLOR_BIT, 1, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
 
-    BeginPass(context, Frame.Cmd, &Passes[Pass_UI], context->swapchainExtent, Frame.ImageIndex);
+    BeginPass(context, Frame.Cmd, context->swapchainImageViews[Frame.ImageIndex], VK_ATTACHMENT_LOAD_OP_DONT_CARE, Vector4(0.0f, 0.0f, 0.0f, 0.0f), false);
     DrawFullscreen(context, Frame.Cmd, &GlobalResources, &Pipelines[Pipeline_UI], TEXTURE_SLOT_POST);
     ExecuteUICommands(context, Frame.Cmd, &GlobalResources, Pipelines, Commands);
     EndPass(Frame.Cmd);
@@ -493,59 +429,5 @@ internal void RenderVulkanFrame(render_commands *Commands)
     if (Frame.NeedsResize)
     {
         ResizeRenderer(context);
-    }
-}
-
-internal void ShutdownVulkan()
-{
-    vulkan_context *context = &GlobalVulkan;
-
-    if (context->device != VK_NULL_HANDLE)
-    {
-        vkDeviceWaitIdle(context->device);
-
-        for (uint32 i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
-        {
-            vkDestroySemaphore(context->device, context->imageAvailableSemaphores[i], nullptr);
-        }
-        for (uint32 i = 0; i < MAX_SWAPCHAIN_IMAGES; ++i)
-        {
-            vkDestroySemaphore(context->device, context->renderFinishedSemaphores[i], nullptr);
-        }
-        vkDestroySemaphore(context->device, context->frameTimeline, nullptr);
-
-        vkDestroyCommandPool(context->device, context->commandPool, nullptr);
-
-        DestroyFramePasses(context);
-
-        for (uint32 i = 0; i < Pipeline_Count; ++i)
-        {
-            if (Pipelines[i].Vert != VK_NULL_HANDLE)
-            {
-                DestroyRenderPipeline(context, &Pipelines[i]);
-            }
-        }
-
-        DestroyDescriptorHeap(context, &GlobalResources);
-        DestroyResources(context, &GlobalResources);
-
-        DestroySwapchainResources(context);
-
-        vkDestroySwapchainKHR(context->device, context->swapchain, nullptr);
-        vkDestroyDevice(context->device, nullptr);
-    }
-
-    if (context->instance != VK_NULL_HANDLE)
-    {
-        if (context->surface != VK_NULL_HANDLE)
-        {
-            vkDestroySurfaceKHR(context->instance, context->surface, nullptr);
-        }
-
-#if ENGINE_INTERNAL
-        DestroyDebugMessenger(context);
-#endif
-
-        vkDestroyInstance(context->instance, nullptr);
     }
 }

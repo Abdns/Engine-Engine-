@@ -78,22 +78,20 @@ internal void ApplyFixedState(vulkan_context *context, VkCommandBuffer cmd)
     context->CmdSetColorBlendEquationEXT(cmd, 0, 1, &blendEquation);
 }
 
-internal void BindParams(VkCommandBuffer cmd, render_pipeline *pipeline, VkDeviceAddress address)
+internal void BindParams(VkCommandBuffer cmd, VkPipelineLayout layout, VkDeviceAddress address)
 {
     push_constants pc;
     pc.Params = address;
 
-    vkCmdPushConstants(cmd, pipeline->Layout, PIPELINE_PUSH_STAGES, 0, (uint32)sizeof(pc), &pc);
+    vkCmdPushConstants(cmd, layout, PIPELINE_PUSH_STAGES, 0, (uint32)sizeof(pc), &pc);
 }
 
-internal void BindPipelineState(vulkan_context *context, VkCommandBuffer cmd, vulkan_resources *res, render_pipeline *pipeline, render_state *current, render_state *wanted)
+internal void BindPipelineState(vulkan_context *context, VkCommandBuffer cmd, render_pipeline *pipeline, render_state *current, render_state *wanted)
 {
     VkShaderStageFlagBits stages[2] = { VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT };
-    VkShaderEXT           shaders[2] = { pipeline->Vert, pipeline->Frag };
+    VkShaderEXT shaders[2] = { pipeline->Vert, pipeline->Frag };
 
     context->CmdBindShadersEXT(cmd, 2, stages, shaders);
-
-    BindDescriptorHeap(context, cmd, res, pipeline->Layout);
 
     ApplyFixedState(context, cmd);
 
@@ -112,7 +110,7 @@ internal void DrawFullscreen(vulkan_context *context, VkCommandBuffer cmd, vulka
 
     render_state current = {};
     render_state wanted  = {};
-    BindPipelineState(context, cmd, res, pipeline, &current, &wanted);
+    BindPipelineState(context, cmd, pipeline, &current, &wanted);
 
     shared_alloc alloc = SharedBufferAlloc(&res->FrameArena, sizeof(image_params), 16);
 
@@ -121,7 +119,7 @@ internal void DrawFullscreen(vulkan_context *context, VkCommandBuffer cmd, vulka
 
     *(image_params *)alloc.Cpu = params;
 
-    BindParams(cmd, pipeline, alloc.Gpu);
+    BindParams(cmd, res->PipelineLayout, alloc.Gpu);
 
     vkCmdDraw(cmd, 3, 1, 0, 0);
 }

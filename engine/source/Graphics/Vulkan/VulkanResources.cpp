@@ -30,48 +30,6 @@ internal VkSampler CreateTextureSampler(vulkan_context *context, VkFilter filter
     return sampler;
 }
 
-internal void CreateResources(vulkan_context *context, vulkan_resources *res)
-{
-    res->FrameArena = CreateDeviceBuffer(context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, FRAME_BUFFER_SIZE);
-    res->Sampler = CreateTextureSampler(context, VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
-}
-
-internal void CreateAssetBuffers(vulkan_context *context, vulkan_resources *res, uint32 vertexCount, uint32 indexCount, uint32 materialCount)
-{
-    Assert(res->VertexBuffer.Buffer == VK_NULL_HANDLE);
-    Assert(vertexCount && indexCount);
-    Assert(materialCount && materialCount <= MAX_MATERIALS);
-
-    res->VertexBuffer   = CreateDeviceBuffer(context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, sizeof(vertex) * vertexCount);
-    res->IndexBuffer    = CreateDeviceBuffer(context, VK_BUFFER_USAGE_INDEX_BUFFER_BIT,   sizeof(uint32) * indexCount);
-    res->MaterialBuffer = CreateDeviceBuffer(context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, sizeof(gpu_material) * materialCount);
-
-    res->MaterialCount = materialCount;
-
-    DebugLog("Asset buffers created (%u vertices, %u indices, %u materials)\n", vertexCount, indexCount, materialCount);
-}
-
-internal void DestroyResources(vulkan_context *context, vulkan_resources *res)
-{
-    vkDestroySampler(context->device, res->Sampler, nullptr);
-    res->Sampler = VK_NULL_HANDLE;
-
-    DestroySharedBuffer(context, &res->FrameArena);
-    DestroySharedBuffer(context, &res->MaterialBuffer);
-    DestroySharedBuffer(context, &res->IndexBuffer);
-    DestroySharedBuffer(context, &res->VertexBuffer);
-
-    for (uint32 i = 0; i < ArrayCount(res->Textures); ++i)
-    {
-        DestroyTexture(context, &res->Textures[i]);
-    }
-
-    for (uint32 i = 0; i < MAX_CUBEMAPS; ++i)
-    {
-        DestroyTexture(context, &res->Cubemaps[i]);
-    }
-}
-
 internal void WriteImageDescriptor(vulkan_context *context, descriptor_heap *heap, VkDeviceSize bindingOffset, uint32 arrayElement, VkImageView view)
 {
     VkDescriptorImageInfo imageInfo{};
@@ -142,13 +100,44 @@ internal void CreateDescriptorHeap(vulkan_context *context, vulkan_resources *re
     res->Heap.Buffer = CreateDeviceBuffer(context, heapUsage, heapSize);
 }
 
-internal void DestroyDescriptorHeap(vulkan_context *context, vulkan_resources *res)
+internal VkPushConstantRange ParamsPushRange()
 {
-    DestroySharedBuffer(context, &res->Heap.Buffer);
+    VkPushConstantRange pushRange{};
+    pushRange.stageFlags = PIPELINE_PUSH_STAGES;
+    pushRange.offset = 0;
+    pushRange.size = (uint32)sizeof(push_constants);
 
-    vkDestroyDescriptorSetLayout(context->device, res->Heap.Layout, nullptr);
+    return pushRange;
+}
 
-    res->Heap = {};
+internal VkPipelineLayout CreatePipelineLayout(vulkan_context *context, VkDescriptorSetLayout heapLayout)
+{
+    VkPushConstantRange pushRange = ParamsPushRange();
+
+    VkPipelineLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    layoutInfo.setLayoutCount = 1;
+    layoutInfo.pSetLayouts = &heapLayout;
+    layoutInfo.pushConstantRangeCount = 1;
+    layoutInfo.pPushConstantRanges = &pushRange;
+
+    VkPipelineLayout layout = VK_NULL_HANDLE;
+
+    VkResult result = vkCreatePipelineLayout(context->device, &layoutInfo, nullptr, &layout);
+    Assert(result == VK_SUCCESS);
+
+    return layout;
+}
+
+internal void CreateResources(vulkan_context *context, vulkan_resources *res)
+{
+    res->FrameArena = CreateDeviceBuffer(context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, FRAME_BUFFER_SIZE);
+    res->Sampler    = CreateTextureSampler(context, VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
+
+    CreateDescriptorHeap(context, res);
+    res->PipelineLayout = CreatePipelineLayout(context, res->Heap.Layout);
+
+    WriteSamplerDescriptor(context, &res->Heap, res->Heap.SamplerOffset, res->Sampler);
 }
 
 internal void BindDescriptorHeap(vulkan_context *context, VkCommandBuffer cmd, vulkan_resources *res, VkPipelineLayout layout)
@@ -166,28 +155,15 @@ internal void BindDescriptorHeap(vulkan_context *context, VkCommandBuffer cmd, v
     context->CmdSetDescriptorBufferOffsetsEXT(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1, &bufferIndex, &setOffset);
 }
 
-internal gpu_mesh *ResolveMesh(vulkan_resources *res, uint32 MeshHandle)
+internal gpu_mesh CreateMesh(VkDeviceSize vertexOffset, uint32 VertexCount, VkDeviceSize indexOffset, uint32 IndexCount)
 {
-    if (MeshHandle >= MAX_MESHES)
-    {
-        return 0;
-    }
+    gpu_mesh result;
+    result.FirstVertex = (uint32)(vertexOffset / sizeof(vertex));
+    result.VertexCount = VertexCount;
+    result.FirstIndex  = (uint32)(indexOffset / sizeof(uint32));
+    result.IndexCount  = IndexCount;
 
-    return res->Meshes + MeshHandle;
-}
-
-internal gpu_mesh *CreateMesh(vulkan_resources *res, uint32 MeshHandle, VkDeviceSize vertexOffset, uint32 VertexCount, VkDeviceSize indexOffset, uint32 IndexCount)
-{
-    gpu_mesh *mesh = ResolveMesh(res, MeshHandle);
-    Assert(mesh);
-    Assert(!mesh->IndexCount);
-
-    mesh->FirstVertex = (uint32)(vertexOffset / sizeof(vertex));
-    mesh->VertexCount = VertexCount;
-    mesh->FirstIndex  = (uint32)(indexOffset / sizeof(uint32));
-    mesh->IndexCount  = IndexCount;
-
-    return mesh;
+    return result;
 }
 
 internal VkFormat TextureVkFormat(texture_format Format, uint32 SRGB)
@@ -230,21 +206,25 @@ internal gpu_texture *CreateCubemap(vulkan_context *context, vulkan_resources *r
     return cube;
 }
 
-internal void WriteMaterial(vulkan_resources *res, command_load_material *Description)
+internal material_state CreateMaterialState(command_load_material *Description)
 {
-    uint32 slot = Description->MaterialHandle;
-    Assert(slot < res->MaterialCount);
     Assert(Description->Pipeline < Pipeline_MeshCount);
-    Assert(Description->TextureHandle < MAX_TEXTURES && res->Textures[Description->TextureHandle].View);
 
-    material_state *state = res->MaterialStates + slot;
-    state->Pipeline   = Description->Pipeline;
-    state->CullMode   = Description->CullMode;
-    state->BlendMode  = Description->BlendMode;
-    state->DepthTest  = Description->DepthTest;
-    state->DepthWrite = Description->DepthWrite;
+    material_state result;
+    result.Pipeline   = Description->Pipeline;
+    result.CullMode   = Description->CullMode;
+    result.BlendMode  = Description->BlendMode;
+    result.DepthTest  = Description->DepthTest;
+    result.DepthWrite = Description->DepthWrite;
 
-    gpu_material *materials = (gpu_material *)res->MaterialBuffer.Mapped;
-    materials[slot].BaseColor   = Description->BaseColor;
-    materials[slot].TextureSlot = Description->TextureHandle;
+    return result;
+}
+
+internal gpu_material CreateMaterial(command_load_material *Description)
+{
+    gpu_material result = {};
+    result.BaseColor   = Description->BaseColor;
+    result.TextureSlot = Description->TextureHandle;
+
+    return result;
 }

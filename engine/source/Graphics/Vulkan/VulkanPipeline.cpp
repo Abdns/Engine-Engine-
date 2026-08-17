@@ -33,34 +33,16 @@ internal void FreeShader(vulkan_shader *shader)
     *shader = {};
 }
 
-internal VkPushConstantRange ParamsPushRange()
+internal void CreateRenderPipeline(vulkan_context *context, vulkan_resources *res, render_pipeline *pipeline, pipeline_desc *desc)
 {
-    VkPushConstantRange pushRange{};
-    pushRange.stageFlags = PIPELINE_PUSH_STAGES;
-    pushRange.offset = 0;
-    pushRange.size = (uint32)sizeof(push_constants);
+    pipeline->DefaultState.CullMode   = VK_CULL_MODE_NONE;
+    pipeline->DefaultState.DepthTest  = desc->DepthTest;
+    pipeline->DefaultState.DepthWrite = desc->DepthWrite;
+    pipeline->DefaultState.AlphaBlend = desc->Blend;
 
-    return pushRange;
-}
+    VkDescriptorSetLayout heapLayout = res->Heap.Layout;
 
-internal void CreatePipelineLayout(vulkan_context *context, render_pipeline *pipeline, VkDescriptorSetLayout heapLayout)
-{
-    VkPushConstantRange pushRange = ParamsPushRange();
-
-    VkPipelineLayoutCreateInfo layoutInfo{};
-    layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    layoutInfo.setLayoutCount = 1;
-    layoutInfo.pSetLayouts = &heapLayout;
-    layoutInfo.pushConstantRangeCount = 1;
-    layoutInfo.pPushConstantRanges = &pushRange;
-
-    VkResult result = vkCreatePipelineLayout(context->device, &layoutInfo, nullptr, &pipeline->Layout);
-    Assert(result == VK_SUCCESS);
-}
-
-internal void CreateLinkedShaders(vulkan_context *context, render_pipeline *pipeline, const char *shaderName, VkDescriptorSetLayout heapLayout)
-{
-    vulkan_shader shader = LoadShader(shaderName);
+    vulkan_shader shader = LoadShader(desc->ShaderName);
 
     VkPushConstantRange pushRange = ParamsPushRange();
 
@@ -102,23 +84,3 @@ internal void CreateLinkedShaders(vulkan_context *context, render_pipeline *pipe
     FreeShader(&shader);
 }
 
-internal void CreateRenderPipeline(vulkan_context *context, vulkan_resources *res, render_pipeline *pipeline, pipeline_desc *desc)
-{
-    pipeline->DefaultState.CullMode   = VK_CULL_MODE_NONE;
-    pipeline->DefaultState.DepthTest  = desc->DepthTest;
-    pipeline->DefaultState.DepthWrite = desc->DepthWrite;
-    pipeline->DefaultState.AlphaBlend = desc->Blend;
-
-    CreatePipelineLayout(context, pipeline, res->Heap.Layout);
-    CreateLinkedShaders(context, pipeline, desc->ShaderName, res->Heap.Layout);
-}
-
-internal void DestroyRenderPipeline(vulkan_context *context, render_pipeline *pipeline)
-{
-    context->DestroyShaderEXT(context->device, pipeline->Vert, nullptr);
-    context->DestroyShaderEXT(context->device, pipeline->Frag, nullptr);
-
-    vkDestroyPipelineLayout(context->device, pipeline->Layout, nullptr);
-
-    *pipeline = {};
-}

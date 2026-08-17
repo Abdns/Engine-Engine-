@@ -220,24 +220,6 @@ internal void CreateDebugMessenger(vulkan_context *context)
 
     DebugLog("Validation layer active\n");
 }
-
-internal void DestroyDebugMessenger(vulkan_context *context)
-{
-    if (context->debugMessenger == VK_NULL_HANDLE)
-    {
-        return;
-    }
-
-    PFN_vkDestroyDebugUtilsMessengerEXT destroy =
-        (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(context->instance, "vkDestroyDebugUtilsMessengerEXT");
-
-    if (destroy)
-    {
-        destroy(context->instance, context->debugMessenger, nullptr);
-    }
-
-    context->debugMessenger = VK_NULL_HANDLE;
-}
 #endif
 
 internal void CreateSurface(vulkan_context *context, HINSTANCE hinstance, HWND hwnd)
@@ -741,13 +723,17 @@ internal void CreateSwapchainImageViews(vulkan_context *context)
 
 internal void CreateDepthResources(vulkan_context *context)
 {
-    context->depthFormat = VK_FORMAT_D32_SFLOAT;
+    VkFormat depthFormat = VK_FORMAT_D32_SFLOAT;
 
     context->depth.Image = CreateImage(context, context->swapchainExtent.width, context->swapchainExtent.height,
-                                       context->depthFormat, 1, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                                       depthFormat, 1, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
                                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &context->depth.Memory);
 
-    context->depth.View = CreateDepthImageView(context->device, context->depth.Image, context->depthFormat);
+    context->depth.View = CreateDepthImageView(context->device, context->depth.Image, depthFormat);
+
+    VkCommandBuffer cmd = BeginSingleTimeCommands(context);
+    CmdImageToGeneral(cmd, context->depth.Image, VK_IMAGE_ASPECT_DEPTH_BIT, 1, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, 0);
+    EndSingleTimeCommands(context, cmd);
 
     DebugLog("Depth resources created\n");
 }

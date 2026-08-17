@@ -10,7 +10,6 @@ enum command_type
     Render_Camera,
     Render_Skybox,
     Render_Rect,
-    Set_Pipeline,
     Load_Mesh,
     Load_Texture,
     Load_Cubemap,
@@ -127,12 +126,6 @@ struct command_render_camera
     real32  FovY;
 };
 
-struct command_set_pipeline
-{
-    command_type Type;
-    pipeline_type PipelineType;
-};
-
 inline uint32 CommandSize(command_type Type)
 {
     switch (Type)
@@ -145,7 +138,6 @@ inline uint32 CommandSize(command_type Type)
         case Load_Texture:       return (uint32)sizeof(command_load_texture);
         case Load_Cubemap:       return (uint32)sizeof(command_load_cubemap);
         case Load_Material:      return (uint32)sizeof(command_load_material);
-        case Set_Pipeline:       return (uint32)sizeof(command_set_pipeline);
     }
     return 0;
 }
@@ -153,6 +145,9 @@ inline uint32 CommandSize(command_type Type)
 struct render_commands
 {
     uint32 LoadCount;
+    uint32 VertexCount;
+    uint32 IndexCount;
+    uint32 MaterialCount;
 
     uint8 *PushBufferBase;
     uint32 PushBufferSize;
@@ -202,15 +197,6 @@ inline command_type *NextRenderCommand(render_commands *Commands, uint32 *Offset
     return CmdBase;
 }
 
-inline void PushRenderPipeline(render_commands* Commands, pipeline_type type)
-{
-    command_set_pipeline* cmd = (command_set_pipeline*)PushRenderCommand(Commands, Set_Pipeline);
-    if (cmd)
-    {
-        cmd->PipelineType = type;
-    }
-}
-
 inline void PushRenderCamera(render_commands *Commands, Matrix4 View, real32 FovY)
 {
     command_render_camera *cmd = (command_render_camera *)PushRenderCommand(Commands, Render_Camera);
@@ -233,6 +219,8 @@ inline void PushLoadMesh(render_commands *Commands, uint32 MeshHandle, void *Ver
         cmd->IndexCount  = IndexCount;
 
         Commands->LoadCount++;
+        Commands->VertexCount += VertexCount;
+        Commands->IndexCount  += IndexCount;
     }
 }
 
@@ -286,6 +274,10 @@ inline void PushLoadMaterial(render_commands *Commands, uint32 MaterialHandle, p
         cmd->TextureHandle  = TextureHandle;
 
         Commands->LoadCount++;
+        if (MaterialHandle >= Commands->MaterialCount)
+        {
+            Commands->MaterialCount = MaterialHandle + 1;
+        }
     }
 }
 

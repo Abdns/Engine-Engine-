@@ -214,6 +214,20 @@ internal shared_alloc SharedBufferWrite(shared_buffer *buffer, const void *data,
     return result;
 }
 
+internal shared_alloc GetSharedBufferSlot(shared_buffer *buffer, uint32 slot, VkDeviceSize size)
+{
+    VkDeviceSize offset = (VkDeviceSize)slot * size;
+
+    Assert(offset + size <= buffer->Size);
+
+    shared_alloc result;
+    result.Cpu    = (uint8 *)buffer->Mapped + offset;
+    result.Gpu    = buffer->Address + offset;
+    result.Offset = offset;
+
+    return result;
+}
+
 internal void ResetFrameRegion(shared_buffer *buffer, uint32 frameSlot)
 {
     VkDeviceSize regionSize = buffer->Size / MAX_FRAMES_IN_FLIGHT;

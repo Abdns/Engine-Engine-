@@ -99,8 +99,9 @@ struct material_state
 
 struct vulkan_resources
 {
-    descriptor_heap Heap;
-    VkSampler       Sampler;
+    descriptor_heap  Heap;
+    VkPipelineLayout PipelineLayout;
+    VkSampler        Sampler;
 
     shared_buffer VertexBuffer;
     shared_buffer IndexBuffer;
@@ -112,25 +113,6 @@ struct vulkan_resources
     gpu_texture    Cubemaps[MAX_CUBEMAPS];
     material_state MaterialStates[MAX_MATERIALS];
     uint32         MaterialCount;
-};
-
-enum pass_id
-{
-    Pass_Scene = 0,
-    Pass_Post,
-    Pass_UI,
-    Pass_Count,
-};
-
-struct render_pass
-{
-    VkAttachmentLoadOp ColorLoad;
-    Vector4            ClearColor;
-
-    VkImageView ColorViews[MAX_SWAPCHAIN_IMAGES];
-
-    bool32 UseDepth;
-    bool32 PerSwapchainImage;
 };
 
 struct render_state
@@ -155,9 +137,8 @@ struct render_pipeline
 {
     render_state DefaultState;
 
-    VkShaderEXT      Vert;
-    VkShaderEXT      Frag;
-    VkPipelineLayout Layout;
+    VkShaderEXT Vert;
+    VkShaderEXT Frag;
 };
 
 struct vulkan_frame

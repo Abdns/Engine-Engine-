@@ -42,7 +42,6 @@ struct vulkan_context
     VkExtent2D swapchainExtent;
 
     gpu_texture depth;
-    VkFormat depthFormat;
 
     VkCommandPool commandPool;
     VkCommandBuffer commandBuffers[MAX_FRAMES_IN_FLIGHT];
@@ -95,6 +94,5 @@ struct swapchain_support_details
 
 internal const char *InitVulkan(HINSTANCE hinstance, HWND hwnd);
 internal void RenderVulkanFrame(render_commands *Commands);
-internal void ShutdownVulkan();
 
 #endif

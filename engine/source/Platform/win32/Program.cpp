@@ -165,9 +165,5 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
         Win32OutputFrameStats(MSPerFrame, CycleElapsed);
     }
 
-#if ENGINE_INTERNAL
-    ShutdownVulkan();
-#endif
-
     return 0;
 }

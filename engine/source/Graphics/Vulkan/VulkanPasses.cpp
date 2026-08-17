@@ -1,6 +1,6 @@
 #include "Vulkan.h"
 
-internal gpu_texture CreateRenderTarget(vulkan_context *context, VkFormat format)
+internal gpu_texture CreateRenderTarget(vulkan_context *context, vulkan_resources *res, uint32 textureSlot, VkFormat format)
 {
     gpu_texture target = {};
 
@@ -16,62 +16,28 @@ internal gpu_texture CreateRenderTarget(vulkan_context *context, VkFormat format
 
     target.View = CreateColorImageView(context->device, target.Image, format);
 
+    VkCommandBuffer cmd = BeginSingleTimeCommands(context);
+    CmdImageToGeneral(cmd, target.Image, VK_IMAGE_ASPECT_COLOR_BIT, 1, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, 0);
+    EndSingleTimeCommands(context, cmd);
+
+    WriteImageDescriptor(context, &res->Heap, res->Heap.TextureOffset, textureSlot, target.View);
+
     return target;
 }
 
-internal render_pass CreateScenePass(vulkan_context *context, VkImageView target)
+internal void BeginPass(vulkan_context *context, VkCommandBuffer cmd, VkImageView target, VkAttachmentLoadOp colorLoad, Vector4 clearColor, bool32 useDepth)
 {
-    render_pass pass = {};
-    pass.ColorLoad         = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    pass.ClearColor        = Vector4(0.05f, 0.05f, 0.08f, 1.0f);
-    pass.ColorViews[0]     = target;
-    pass.UseDepth          = true;
-    pass.PerSwapchainImage = false;
-
-    return pass;
-}
-
-internal render_pass CreatePostPass(vulkan_context *context, VkImageView target)
-{
-    render_pass pass = {};
-    pass.ColorLoad         = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    pass.ColorViews[0]     = target;
-    pass.UseDepth          = false;
-    pass.PerSwapchainImage = false;
-
-    return pass;
-}
-
-internal render_pass CreateUIPass(vulkan_context *context, VkImageView *swapchainViews, uint32 swapchainViewCount)
-{
-    render_pass pass = {};
-    pass.ColorLoad         = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    pass.UseDepth          = false;
-    pass.PerSwapchainImage = true;
-
-    for (uint32 i = 0; i < swapchainViewCount; ++i)
-    {
-        pass.ColorViews[i] = swapchainViews[i];
-    }
-
-    return pass;
-}
-
-internal void BeginPass(vulkan_context *context, VkCommandBuffer cmd, render_pass *pass, VkExtent2D extent, uint32 imageIndex)
-{
-    uint32 viewIndex = pass->PerSwapchainImage ? imageIndex : 0;
-
     VkRenderingAttachmentInfo color{};
     color.sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    color.imageView   = pass->ColorViews[viewIndex];
+    color.imageView   = target;
     color.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-    color.loadOp      = pass->ColorLoad;
+    color.loadOp      = colorLoad;
     color.storeOp     = VK_ATTACHMENT_STORE_OP_STORE;
 
-    color.clearValue.color.float32[0] = pass->ClearColor.X;
-    color.clearValue.color.float32[1] = pass->ClearColor.Y;
-    color.clearValue.color.float32[2] = pass->ClearColor.Z;
-    color.clearValue.color.float32[3] = pass->ClearColor.W;
+    color.clearValue.color.float32[0] = clearColor.X;
+    color.clearValue.color.float32[1] = clearColor.Y;
+    color.clearValue.color.float32[2] = clearColor.Z;
+    color.clearValue.color.float32[3] = clearColor.W;
 
     VkRenderingAttachmentInfo depth{};
     depth.sType                        = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
@@ -83,11 +49,11 @@ internal void BeginPass(vulkan_context *context, VkCommandBuffer cmd, render_pas
 
     VkRenderingInfo rendering{};
     rendering.sType                = VK_STRUCTURE_TYPE_RENDERING_INFO;
-    rendering.renderArea.extent    = extent;
+    rendering.renderArea.extent    = context->swapchainExtent;
     rendering.layerCount           = 1;
     rendering.colorAttachmentCount = 1;
     rendering.pColorAttachments    = &color;
-    rendering.pDepthAttachment     = pass->UseDepth ? &depth : nullptr;
+    rendering.pDepthAttachment     = useDepth ? &depth : nullptr;
 
     vkCmdBeginRendering(cmd, &rendering);
 }
