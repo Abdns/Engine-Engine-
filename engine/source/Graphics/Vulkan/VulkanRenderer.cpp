@@ -326,30 +326,21 @@ internal void ExecuteUICommands(vulkan_context *context, VkCommandBuffer cmd, vu
         return;
     }
 
-    real32 width  = (real32)context->swapchainExtent.width;
-    real32 height = (real32)context->swapchainExtent.height;
-
-    uint32 rectCount = 0;
-    uint32 offset    = 0;
-    for (command_type *cmdBase = NextRenderCommand(commands, &offset); cmdBase; cmdBase = NextRenderCommand(commands, &offset))
-    {
-        if (*cmdBase == Render_Rect)
-        {
-            ++rectCount;
-        }
-    }
-
+    uint32 rectCount = commands->RectCount;
     if (!rectCount)
     {
         return;
     }
+
+    real32 width  = (real32)context->swapchainExtent.width;
+    real32 height = (real32)context->swapchainExtent.height;
 
     shared_alloc alloc = SharedBufferAlloc(&res->FrameArena, rectCount * sizeof(rect_params), 16);
 
     rect_params *params = (rect_params *)alloc.Cpu;
     uint32       index  = 0;
 
-    offset = 0;
+    uint32 offset = 0;
     for (command_type *cmdBase = NextRenderCommand(commands, &offset); cmdBase; cmdBase = NextRenderCommand(commands, &offset))
     {
         if (*cmdBase != Render_Rect)

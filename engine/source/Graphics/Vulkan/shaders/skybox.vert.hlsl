@@ -2,6 +2,13 @@
 
 [[vk::push_constant]] push_constants pc;
 
+static const float2 Positions[3] =
+{
+    float2(-1.0, -1.0),
+    float2( 3.0, -1.0),
+    float2(-1.0,  3.0),
+};
+
 struct vs_output
 {
     float4 Position : SV_Position;
@@ -10,7 +17,7 @@ struct vs_output
 
 vs_output main(uint vertexID : SV_VertexID)
 {
-    float2 NDC = float2((vertexID << 1) & 2, vertexID & 2) * 2.0 - 1.0;
+    float2 NDC = Positions[vertexID];
 
     camera_ptr cam = camera_ptr(skybox_params_ptr(pc.Params).Get().Camera);
 

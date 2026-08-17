@@ -148,6 +148,7 @@ struct render_commands
     uint32 VertexCount;
     uint32 IndexCount;
     uint32 MaterialCount;
+    uint32 RectCount;
 
     uint8 *PushBufferBase;
     uint32 PushBufferSize;
@@ -291,6 +292,8 @@ inline void PushRenderTexturedRect(render_commands *Commands, Vector2 Min, Vecto
         cmd->Color       = Color;
         cmd->UV          = UV;
         cmd->TextureSlot = TextureSlot;
+
+        Commands->RectCount++;
     }
 }
 
