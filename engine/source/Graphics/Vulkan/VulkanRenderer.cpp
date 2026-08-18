@@ -14,6 +14,7 @@ global_variable render_pipeline Pipelines[Pipeline_Count];
 global_variable pipeline_desc PipelineDescs[] =
 {
     { "unlit",  VK_TRUE,  VK_TRUE,  VK_FALSE },
+    { "lit",    VK_TRUE,  VK_TRUE,  VK_FALSE },
     { "skybox", VK_FALSE, VK_FALSE, VK_FALSE },
     { "post",   VK_FALSE, VK_FALSE, VK_FALSE },
     { "UI",     VK_FALSE, VK_FALSE, VK_FALSE },
@@ -218,6 +219,15 @@ internal void ExecuteRenderCommands(vulkan_context *context, VkCommandBuffer cmd
     {
         switch (*cmdBase)
         {
+            case Render_Light:
+            {
+                command_render_light *lightCmd = (command_render_light *)cmdBase;
+
+                frame_globals *globals = (frame_globals *)res->Globals.Cpu;
+
+                globals->LightDir = lightCmd->Direction;
+
+            } break;
             case Render_Camera:
             {
                 command_render_camera *cameraCmd = (command_render_camera *)cmdBase;

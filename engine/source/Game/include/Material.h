@@ -40,6 +40,20 @@ internal material UnlitMaterial(Vector4 BaseColor, uint32 TextureHandle)
     return Result;
 }
 
+internal material LitMaterial(Vector4 BaseColor)
+{
+    material Result = {};
+    Result.Pipeline      = Pipeline_Lit;
+    Result.CullMode      = Cull_None;
+    Result.BlendMode     = Blend_Opaque;
+    Result.DepthTest     = true;
+    Result.DepthWrite    = true;
+    Result.BaseColor     = BaseColor;
+    Result.TextureHandle = 0;
+
+    return Result;
+}
+
 internal uint32 AddMaterial(materials* Materials, material Material)
 {
     Assert(Materials->Count < MAX_GAME_MATERIALS);

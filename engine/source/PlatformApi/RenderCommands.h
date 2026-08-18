@@ -8,6 +8,7 @@ enum command_type
 {
     Render_Mesh = 0,
     Render_Camera,
+    Render_Light,
     Render_Skybox,
     Render_Rect,
     Load_Mesh,
@@ -40,6 +41,7 @@ enum blend_mode
 enum pipeline_type
 {
     Pipeline_Unlit = 0,
+    Pipeline_Lit,
     Pipeline_Skybox,
     Pipeline_Post,
     Pipeline_UI,
@@ -126,6 +128,12 @@ struct command_render_camera
     real32  FovY;
 };
 
+struct command_render_light
+{
+    command_type Type;
+    Vector3 Direction;
+};
+
 inline uint32 CommandSize(command_type Type)
 {
     switch (Type)
@@ -134,6 +142,7 @@ inline uint32 CommandSize(command_type Type)
         case Render_Skybox:      return (uint32)sizeof(command_render_skybox);
         case Render_Rect:        return (uint32)sizeof(command_render_rect);
         case Render_Camera:      return (uint32)sizeof(command_render_camera);
+        case Render_Light:      return (uint32)sizeof(command_render_light);
         case Load_Mesh:          return (uint32)sizeof(command_load_mesh);
         case Load_Texture:       return (uint32)sizeof(command_load_texture);
         case Load_Cubemap:       return (uint32)sizeof(command_load_cubemap);
@@ -205,6 +214,16 @@ inline void PushRenderCamera(render_commands *Commands, Matrix4 View, real32 Fov
     {
         cmd->View = View;
         cmd->FovY = FovY;
+    }
+}
+
+inline void PushRenderLight(render_commands* Commands, Vector3 Direction)
+{
+    command_render_light* cmd = (command_render_light*)PushRenderCommand(Commands, Render_Light);
+
+    if (cmd)
+    {
+        cmd->Direction = Direction;
     }
 }
 

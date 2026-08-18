@@ -76,6 +76,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\engine\source\Graphics\Vulkan\shaders\unlit.hlsl" />
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\lit.hlsl" />
     <None Include="..\engine\source\Graphics\Vulkan\shaders\skybox.hlsl" />
     <None Include="..\engine\source\Graphics\Vulkan\shaders\post.hlsl" />
     <None Include="..\engine\source\Graphics\Vulkan\shaders\UI.hlsl" />

@@ -116,13 +116,6 @@ internal uint32 AddUIButton(data_lake *Lake, const char *Name, rect2 Rect)
     return Entity ? Entity->ID : 0;
 }
 
-internal uint32 AddUISlider(data_lake *Lake, const char *Name, rect2 Rect, real32 Value)
-{
-    entity *Entity = AddWidgetEntity(Lake, Name, Entity_UISlider, Rect.Min, Rect.Max, Value);
-
-    return Entity ? Entity->ID : 0;
-}
-
 internal rect2 EntityRect(data_lake *Lake, entity *Entity)
 {
     Assert(Entity->Type == Entity_UIButton || Entity->Type == Entity_UISlider || Entity->Type == Entity_UIList);
@@ -150,53 +143,9 @@ internal bool32 UIEntityButton(ui_context *UI, data_lake *Lake, uint32 FontHandl
     return Clicked;
 }
 
-internal bool32 UIEntitySlider(ui_context *UI, data_lake *Lake, uint32 Handle)
-{
-    entity *Entity = GetEntity(Lake, Handle);
-
-    return UISlider(UI, Handle, EntityRect(Lake, Entity), Lake->Widgets.Value + Entity->Slot);
-}
-
-internal uint32 AddUIList(data_lake *Lake, const char *Name, rect2 Rect)
-{
-    entity *Entity = AddWidgetEntity(Lake, Name, Entity_UIList, Rect.Min, Rect.Max, 0.0f);
-
-    return Entity ? Entity->ID : 0;
-}
-
-internal uint32 UIEntityList(ui_context *UI, data_lake *Lake, uint32 Handle, uint32 *EntityIDs, uint32 Count, uint32 SelectedID)
-{
-    const char *Names[MAX_ENTITIES];
-    int32 SelectedIndex = -1;
-
-    for (uint32 Index = 0; Index < Count; ++Index)
-    {
-        Names[Index] = EntityName(Lake, GetEntity(Lake, EntityIDs[Index]));
-        if (SelectedID && EntityIDs[Index] == SelectedID)
-        {
-            SelectedIndex = (int32)Index;
-        }
-    }
-
-    entity *List = GetEntity(Lake, Handle);
-
-    int32 Clicked = UIList(UI, Handle, EntityRect(Lake, List), Names, Count, 5, SelectedIndex, Lake->Widgets.Value + List->Slot);
-
-    return (Clicked >= 0) ? EntityIDs[Clicked] : 0;
-}
-
-internal uint32 SpawnEntity(game_state *GameState)
+internal uint32 SpawnEntity(game_state *GameState, Vector3 Position, Vector3 Rotation, Vector3 AngularVelocity, uint32 MeshHandle, uint32 MaterialHandle)
 {
     data_lake *Lake = &GameState->Lake;
-
-    uint32 Index  = Lake->Transforms.Count;
-    real32 Angle  = (real32)Index * 2.39996f;
-    real32 Radius = 0.9f * SquareRoot((real32)Index + 1.0f);
-
-    Vector3 Position = Vector3(Cos(Angle) * Radius, 0.0f, Sin(Angle) * Radius);
-
-    uint32 MeshHandle     = GameState->SpawnMeshHandles[Index % ArrayCount(GameState->SpawnMeshHandles)];
-    uint32 MaterialHandle = GameState->SpawnMaterialHandles[Index % ArrayCount(GameState->SpawnMaterialHandles)];
 
     entity *Entity = AddMeshEntity(Lake, 0, Position, MeshHandle, MaterialHandle);
     if (!Entity)
@@ -204,7 +153,8 @@ internal uint32 SpawnEntity(game_state *GameState)
         return 0;
     }
 
-    Lake->Transforms.AngularVelocity[Entity->Slot] = ENTITY_SPIN;
+    Lake->Transforms.Rotation[Entity->Slot]        = Rotation;
+    Lake->Transforms.AngularVelocity[Entity->Slot] = AngularVelocity;
 
     return Entity->ID;
 }
@@ -244,14 +194,27 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 
         materials* Materials = &GameState->Materials;
         GameState->SpawnMaterialHandles[0] = AddMaterial(Materials, UnlitMaterial(Vector4(1.0f, 1.0f, 1.0f, 1.0f), TexTestHandle));
-        GameState->SpawnMaterialHandles[1] = AddMaterial(Materials, UnlitMaterial(Vector4(1.0f, 0.5f, 0.5f, 1.0f), TexTestHandle));
-        GameState->SpawnMaterialHandles[2] = AddMaterial(Materials, UnlitMaterial(Vector4(0.5f, 1.0f, 0.5f, 1.0f), TexTestHandle));
+
+        uint32 LitMaterialHandle = AddMaterial(Materials, LitMaterial(Vector4(0.9f, 0.5f, 0.2f, 1.0f)));
+
         PushMaterialsToRender(Materials, RenderCommands);
 
         for (uint32 SpawnIndex = 0; SpawnIndex < 3; ++SpawnIndex)
         {
-            SpawnEntity(GameState);
+            uint32 Index  = Lake->Transforms.Count;
+            real32 Angle  = (real32)Index * 2.39996f;
+            real32 Radius = 0.9f * SquareRoot((real32)Index + 1.0f);
+
+            Vector3 Position = Vector3(Cos(Angle) * Radius, 0.0f, Sin(Angle) * Radius);
+
+            uint32 MeshHandle     = GameState->SpawnMeshHandles[Index % ArrayCount(GameState->SpawnMeshHandles)];
+            uint32 MaterialHandle = GameState->SpawnMaterialHandles[Index % ArrayCount(GameState->SpawnMaterialHandles)];
+
+            SpawnEntity(GameState, Position, Vector3(0.0f, 0.0f, 0.0f), ENTITY_SPIN, MeshHandle, MaterialHandle);
         }
+
+        SpawnEntity(GameState, Vector3(-2.5f, 0.0f, 0.0f), Vector3(0.0f, 0.0f, 0.0f), ENTITY_SPIN, GameState->SpawnMeshHandles[1], LitMaterialHandle);
+        SpawnEntity(GameState, Vector3( 2.5f, 0.0f, 0.0f), Vector3(0.0f, 0.0f, 0.0f), ENTITY_SPIN, GameState->SpawnMeshHandles[0], LitMaterialHandle);
 
         InitCamera(&GameState->Camera, Vector3(0.0f, 0.0f, 4.0f), DegToRad(75.0f));
 
@@ -261,10 +224,8 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         GameState->SpinPaused = false;
 
         GameState->PauseButton = AddUIButton(Lake, "pause", RectMinDim(20.0f, 20.0f, 140.0f, 36.0f));
-        GameState->SpeedSlider = AddUISlider(Lake, "speed", RectMinDim(20.0f, 66.0f, 140.0f, 24.0f), 1.0f);
-        GameState->SpawnButton = AddUIButton(Lake, "spawn", RectMinDim(20.0f, 100.0f, 140.0f, 36.0f));
-        GameState->ClearButton = AddUIButton(Lake, "clear", RectMinDim(20.0f, 146.0f, 140.0f, 36.0f));
-        GameState->EntityList  = AddUIList(Lake, "list", RectMinDim(20.0f, 192.0f, 140.0f, 120.0f));
+        GameState->SpawnButton = AddUIButton(Lake, "spawn", RectMinDim(20.0f, 66.0f, 140.0f, 36.0f));
+        GameState->ClearButton = AddUIButton(Lake, "clear", RectMinDim(20.0f, 112.0f, 140.0f, 36.0f));
 
         Memory->IsInitialized = true;
     }
@@ -279,11 +240,18 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         GameState->SpinPaused = !GameState->SpinPaused;
     }
 
-    UIEntitySlider(UI, Lake, GameState->SpeedSlider);
-
     if (UIEntityButton(UI, Lake, FontHandle, GameState->SpawnButton))
     {
-        GameState->SelectedEntityID = SpawnEntity(GameState);
+        uint32 Index  = Lake->Transforms.Count;
+        real32 Angle  = (real32)Index * 2.39996f;
+        real32 Radius = 0.9f * SquareRoot((real32)Index + 1.0f);
+
+        Vector3 Position = Vector3(Cos(Angle) * Radius, 0.0f, Sin(Angle) * Radius);
+
+        uint32 MeshHandle     = GameState->SpawnMeshHandles[Index % ArrayCount(GameState->SpawnMeshHandles)];
+        uint32 MaterialHandle = GameState->SpawnMaterialHandles[Index % ArrayCount(GameState->SpawnMaterialHandles)];
+
+        GameState->SelectedEntityID = SpawnEntity(GameState, Position, Vector3(0.0f, 0.0f, 0.0f), ENTITY_SPIN, MeshHandle, MaterialHandle);
     }
 
     if (UIEntityButton(UI, Lake, FontHandle, GameState->ClearButton))
@@ -291,24 +259,7 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         GameState->SelectedEntityID = 0;
     }
 
-    uint32 MeshIDs[MAX_ENTITIES];
-    uint32 MeshCount = 0;
-    for (uint32 Index = 0; Index < Lake->EntityCount; ++Index)
-    {
-        entity *Entity = Lake->Entities + Index;
-        if (Entity->Type == Entity_Mesh)
-        {
-            MeshIDs[MeshCount++] = Entity->ID;
-        }
-    }
-
-    uint32 ClickedID = UIEntityList(UI, Lake, GameState->EntityList, MeshIDs, MeshCount, GameState->SelectedEntityID);
-    if (ClickedID)
-    {
-        GameState->SelectedEntityID = ClickedID;
-    }
-
-    real32 SpinScale = GameState->SpinPaused ? 0.0f : EntityValue(Lake, GameState->SpeedSlider);
+    real32 SpinScale = GameState->SpinPaused ? 0.0f : 1.0f;
     UpdateEntities(Lake, Input->dtForFrame * SpinScale);
 
     camera* Camera = &GameState->Camera;
@@ -323,9 +274,8 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
     }
 
     PushRenderCamera(RenderCommands, CameraView(Camera), Camera->FovY);
-
+    PushRenderLight(RenderCommands, Vector3(30,0,0));
     PushRenderSkybox(RenderCommands, GameState->SkyHandle);
-
     PushEntitiesToRender(Lake, RenderCommands, GameState->SelectedEntityID);
 
     EndUI(UI);

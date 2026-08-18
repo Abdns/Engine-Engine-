@@ -178,6 +178,9 @@
     <None Include="..\engine\source\Graphics\Vulkan\shaders\unlit.hlsl">
       <Filter>engine\source\Graphics\Vulkan\shaders</Filter>
     </None>
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\lit.hlsl">
+      <Filter>engine\source\Graphics\Vulkan\shaders</Filter>
+    </None>
     <None Include="..\engine\source\Graphics\Vulkan\shaders\skybox.hlsl">
       <Filter>engine\source\Graphics\Vulkan\shaders</Filter>
     </None>

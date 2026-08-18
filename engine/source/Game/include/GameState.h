@@ -35,10 +35,8 @@ struct game_state
     bool32     SpinPaused;
 
     uint32 PauseButton;
-    uint32 SpeedSlider;
     uint32 SpawnButton;
     uint32 ClearButton;
-    uint32 EntityList;
 };
 
 #endif

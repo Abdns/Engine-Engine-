@@ -52,6 +52,9 @@ struct frame_globals
     float4 SkyRight;
     float4 SkyUp;
     float4 SkyForward;
+
+    float3 LightDir;
+    float  GlobalsPad0;
 };
 
 struct gpu_material
