@@ -81,7 +81,7 @@ internal void ApplyFixedState(vulkan_context *context, VkCommandBuffer cmd)
 internal void BindParams(VkCommandBuffer cmd, VkPipelineLayout layout, VkDeviceAddress address)
 {
     push_constants pc;
-    pc.Params = address;
+    pc.ParamsPtr = address;
 
     vkCmdPushConstants(cmd, layout, PIPELINE_PUSH_STAGES, 0, (uint32)sizeof(pc), &pc);
 }

@@ -55,7 +55,7 @@ internal void CreateRenderPipeline(vulkan_context *context, vulkan_resources *re
     createInfos[0].codeType               = VK_SHADER_CODE_TYPE_SPIRV_EXT;
     createInfos[0].codeSize               = shader.vert.Size;
     createInfos[0].pCode                  = shader.vert.Data;
-    createInfos[0].pName                  = "main";
+    createInfos[0].pName                  = "VSMain";
     createInfos[0].setLayoutCount         = 1;
     createInfos[0].pSetLayouts            = &heapLayout;
     createInfos[0].pushConstantRangeCount = 1;
@@ -67,7 +67,7 @@ internal void CreateRenderPipeline(vulkan_context *context, vulkan_resources *re
     createInfos[1].codeType               = VK_SHADER_CODE_TYPE_SPIRV_EXT;
     createInfos[1].codeSize               = shader.frag.Size;
     createInfos[1].pCode                  = shader.frag.Data;
-    createInfos[1].pName                  = "main";
+    createInfos[1].pName                  = "PSMain";
     createInfos[1].setLayoutCount         = 1;
     createInfos[1].pSetLayouts            = &heapLayout;
     createInfos[1].pushConstantRangeCount = 1;

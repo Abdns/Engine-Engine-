@@ -5,17 +5,27 @@
 
 [[vk::push_constant]] push_constants pc;
 
-struct ps_input
+struct vs_output
 {
     float4 Position : SV_Position;
     [[vk::location(0)]] float2 UV : TEXCOORD0;
 };
 
-float4 main(ps_input input) : SV_Target
+vs_output VSMain(uint vertexID : SV_VertexID)
 {
-    image_params_ptr params = image_params_ptr(pc.Params);
+    float2 NDC = float2((vertexID << 1) & 2, vertexID & 2) * 2.0 - 1.0;
 
-    float3 Color = Tex[params.Get().TextureSlot].Sample(Samp, input.UV).rgb;
+    vs_output output;
+    output.Position = float4(NDC, 0.0, 1.0);
+    output.UV       = NDC * 0.5 + 0.5;
+    return output;
+}
+
+float4 PSMain(vs_output input) : SV_Target
+{
+    image_params params = LoadImageParams(pc.ParamsPtr);
+
+    float3 Color = Tex[params.TextureSlot].Sample(Samp, input.UV).rgb;
 
     float2 FromCenter = abs(input.UV - 0.5);
     bool CrosshairV = (FromCenter.x < 0.0015 && FromCenter.y < 0.012);

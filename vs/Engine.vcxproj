@@ -75,16 +75,11 @@
     <ClInclude Include="..\shared\Win32FileIO.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\engine\source\Graphics\Vulkan\shaders\unlit.vert.hlsl" />
-    <None Include="..\engine\source\Graphics\Vulkan\shaders\unlit.frag.hlsl" />
-    <None Include="..\engine\source\Graphics\Vulkan\shaders\skybox.vert.hlsl" />
-    <None Include="..\engine\source\Graphics\Vulkan\shaders\skybox.frag.hlsl" />
-    <None Include="..\engine\source\Graphics\Vulkan\shaders\post.vert.hlsl" />
-    <None Include="..\engine\source\Graphics\Vulkan\shaders\post.frag.hlsl" />
-    <None Include="..\engine\source\Graphics\Vulkan\shaders\UI.vert.hlsl" />
-    <None Include="..\engine\source\Graphics\Vulkan\shaders\UI.frag.hlsl" />
-    <None Include="..\engine\source\Graphics\Vulkan\shaders\uirect.vert.hlsl" />
-    <None Include="..\engine\source\Graphics\Vulkan\shaders\uirect.frag.hlsl" />
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\unlit.hlsl" />
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\skybox.hlsl" />
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\post.hlsl" />
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\UI.hlsl" />
+    <None Include="..\engine\source\Graphics\Vulkan\shaders\uirect.hlsl" />
     <None Include="..\EngaAsset\assets.enga" />
     <None Include="..\build.bat" />
   </ItemGroup>

@@ -1,17 +1,6 @@
 #ifndef SHADERINTEROP_H
 #define SHADERINTEROP_H
 
-#ifdef __cplusplus
-    #define float4x4 Matrix4
-    #define float4   Vector4
-    #define float3   Vector3
-    #define float2   Vector2
-    #define uint     uint32
-    #define gpu_ptr  uint64
-#else
-    #define gpu_ptr  uint64_t
-#endif
-
 #define SET_GLOBAL 0
 
 #define BINDING_TEXTURES 0
@@ -31,6 +20,22 @@
 #define VERTEX_STRIDE    32
 #define MATERIAL_STRIDE  32
 #define RECT_PARAMS_STRIDE 64
+
+#ifdef __cplusplus
+#define float4x4 Matrix4
+#define float4   Vector4
+#define float3   Vector3
+#define float2   Vector2
+#define uint     uint32
+#define gpu_ptr  uint64
+#else
+#define gpu_ptr  uint64_t
+#endif
+
+struct push_constants
+{
+    gpu_ptr ParamsPtr;
+};
 
 struct vertex
 {
@@ -100,17 +105,47 @@ struct image_params
     uint ImagePad2;
 };
 
-struct push_constants
-{
-    gpu_ptr Params;
-};
-
 #ifndef __cplusplus
-    typedef vk::BufferPointer<camera_uniforms, 16> camera_ptr;
+    typedef vk::BufferPointer<camera_uniforms, 16>   camera_ptr;
     typedef vk::BufferPointer<draw_params, 16>       draw_params_ptr;
     typedef vk::BufferPointer<skybox_params, 16>     skybox_params_ptr;
     typedef vk::BufferPointer<rect_params, 16>       rect_params_ptr;
     typedef vk::BufferPointer<image_params, 16>      image_params_ptr;
+
+    vertex LoadVertex(uint64_t base, uint index)
+    {
+        return vk::RawBufferLoad<vertex>(base + (uint64_t)index * VERTEX_STRIDE, 4);
+    }
+
+    gpu_material LoadMaterial(uint64_t base, uint slot)
+    {
+        return vk::RawBufferLoad<gpu_material>(base + (uint64_t)slot * MATERIAL_STRIDE, 16);
+    }
+
+    rect_params LoadRect(uint64_t base, uint index)
+    {
+        return rect_params_ptr(base + (uint64_t)index * RECT_PARAMS_STRIDE).Get();
+    }
+
+    camera_uniforms LoadCamera(uint64_t address)
+    {
+        return camera_ptr(address).Get();
+    }
+
+    draw_params LoadDrawParams(uint64_t address)
+    {
+        return draw_params_ptr(address).Get();
+    }
+
+    skybox_params LoadSkyboxParams(uint64_t address)
+    {
+        return skybox_params_ptr(address).Get();
+    }
+
+    image_params LoadImageParams(uint64_t address)
+    {
+        return image_params_ptr(address).Get();
+    }
 #endif
 
 #ifdef __cplusplus

@@ -9,8 +9,10 @@ pushd build
 del *.pdb > NUL 2> NUL
 
 if not exist CompiledShaders mkdir CompiledShaders
-for %%f in (..\engine\source\Graphics\Vulkan\shaders\*.vert.hlsl) do ("%VULKAN_SDK%\Bin\dxc.exe" -spirv -fvk-use-dx-layout -fspv-target-env=vulkan1.3 -T vs_6_0 -E main "%%f" -Fo "CompiledShaders\%%~nf.spv" || goto :failed)
-for %%f in (..\engine\source\Graphics\Vulkan\shaders\*.frag.hlsl) do ("%VULKAN_SDK%\Bin\dxc.exe" -spirv -fvk-use-dx-layout -fspv-target-env=vulkan1.3 -T ps_6_0 -E main "%%f" -Fo "CompiledShaders\%%~nf.spv" || goto :failed)
+for %%f in (..\engine\source\Graphics\Vulkan\shaders\*.hlsl) do (
+    "%VULKAN_SDK%\Bin\dxc.exe" -spirv -fvk-use-dx-layout -fspv-target-env=vulkan1.3 -T vs_6_0 -E VSMain "%%f" -Fo "CompiledShaders\%%~nf.vert.spv" || goto :failed
+    "%VULKAN_SDK%\Bin\dxc.exe" -spirv -fvk-use-dx-layout -fspv-target-env=vulkan1.3 -T ps_6_0 -E PSMain "%%f" -Fo "CompiledShaders\%%~nf.frag.spv" || goto :failed
+)
 
 set CommonCompilerFlags=-MTd^
  -nologo^
