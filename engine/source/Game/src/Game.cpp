@@ -240,25 +240,6 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
         GameState->SpinPaused = !GameState->SpinPaused;
     }
 
-    if (UIEntityButton(UI, Lake, FontHandle, GameState->SpawnButton))
-    {
-        uint32 Index  = Lake->Transforms.Count;
-        real32 Angle  = (real32)Index * 2.39996f;
-        real32 Radius = 0.9f * SquareRoot((real32)Index + 1.0f);
-
-        Vector3 Position = Vector3(Cos(Angle) * Radius, 0.0f, Sin(Angle) * Radius);
-
-        uint32 MeshHandle     = GameState->SpawnMeshHandles[Index % ArrayCount(GameState->SpawnMeshHandles)];
-        uint32 MaterialHandle = GameState->SpawnMaterialHandles[Index % ArrayCount(GameState->SpawnMaterialHandles)];
-
-        GameState->SelectedEntityID = SpawnEntity(GameState, Position, Vector3(0.0f, 0.0f, 0.0f), ENTITY_SPIN, MeshHandle, MaterialHandle);
-    }
-
-    if (UIEntityButton(UI, Lake, FontHandle, GameState->ClearButton))
-    {
-        GameState->SelectedEntityID = 0;
-    }
-
     real32 SpinScale = GameState->SpinPaused ? 0.0f : 1.0f;
     UpdateEntities(Lake, Input->dtForFrame * SpinScale);
 
