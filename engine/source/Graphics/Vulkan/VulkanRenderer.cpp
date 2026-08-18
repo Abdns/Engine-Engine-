@@ -211,10 +211,6 @@ internal void ExecuteRenderCommands(vulkan_context *context, VkCommandBuffer cmd
 
     real32 FOVaspect = (real32)context->swapchainExtent.width / (real32)context->swapchainExtent.height;
 
-    shared_alloc cameraAlloc = SharedBufferAlloc(&res->FrameArena, sizeof(camera_uniforms), 16);
-    camera_uniforms *camera = (camera_uniforms *)cameraAlloc.Cpu;
-    *camera = {};
-
     vkCmdBindIndexBuffer(cmd, res->IndexBuffer.Buffer, 0, VK_INDEX_TYPE_UINT32);
 
     uint32 offset   = 0;
@@ -225,16 +221,19 @@ internal void ExecuteRenderCommands(vulkan_context *context, VkCommandBuffer cmd
             case Render_Camera:
             {
                 command_render_camera *cameraCmd = (command_render_camera *)cmdBase;
+
+                frame_globals *globals = (frame_globals *)res->Globals.Cpu;
+
                 Matrix4 proj = Mat4Perspective(cameraCmd->FovY, FOVaspect, 0.1f, 100.0f);
-                camera->ViewProj = Mat4Multiply(proj, cameraCmd->View);
+                globals->ViewProj = Mat4Multiply(proj, cameraCmd->View);
 
                 Matrix4 *view = &cameraCmd->View;
                 real32 rightScale = 1.0f / proj.Elements[0][0];
                 real32 upScale    = 1.0f / proj.Elements[1][1];
 
-                camera->SkyRight   = Vector4(view->Elements[0][0] * rightScale, view->Elements[1][0] * rightScale, view->Elements[2][0] * rightScale, 0.0f);
-                camera->SkyUp      = Vector4(view->Elements[0][1] * upScale,    view->Elements[1][1] * upScale,    view->Elements[2][1] * upScale,    0.0f);
-                camera->SkyForward = Vector4(-view->Elements[0][2], -view->Elements[1][2], -view->Elements[2][2], 0.0f);
+                globals->SkyRight   = Vector4(view->Elements[0][0] * rightScale, view->Elements[1][0] * rightScale, view->Elements[2][0] * rightScale, 0.0f);
+                globals->SkyUp      = Vector4(view->Elements[0][1] * upScale,    view->Elements[1][1] * upScale,    view->Elements[2][1] * upScale,    0.0f);
+                globals->SkyForward = Vector4(-view->Elements[0][2], -view->Elements[1][2], -view->Elements[2][2], 0.0f);
             } break;
 
             case Render_Skybox:
@@ -255,7 +254,6 @@ internal void ExecuteRenderCommands(vulkan_context *context, VkCommandBuffer cmd
 
                 skybox_params params = {};
                 params.Tint         = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
-                params.Camera       = cameraAlloc.Gpu;
                 params.CubemapIndex = cubeSlot;
 
                 *(skybox_params *)alloc.Cpu = params;
@@ -303,10 +301,9 @@ internal void ExecuteRenderCommands(vulkan_context *context, VkCommandBuffer cmd
                 draw_params params = {};
                 params.Model         = meshCmd->Transform;
                 params.Tint          = meshCmd->Tint;
-                params.Camera        = cameraAlloc.Gpu;
                 params.Vertices      = res->VertexBuffer.Address;
-                params.Materials    = res->MaterialBuffer.Address;
-                params.MaterialSlot = materialSlot;
+                params.Materials     = res->MaterialBuffer.Address;
+                params.MaterialSlot  = materialSlot;
 
                 *(draw_params *)alloc.Cpu = params;
 

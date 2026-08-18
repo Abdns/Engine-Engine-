@@ -131,7 +131,8 @@ internal VkPipelineLayout CreatePipelineLayout(vulkan_context *context, VkDescri
 
 internal void CreateResources(vulkan_context *context, vulkan_resources *res)
 {
-    res->FrameArena = CreateDeviceBuffer(context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, FRAME_BUFFER_SIZE);
+    res->FrameArena    = CreateDeviceBuffer(context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, FRAME_BUFFER_SIZE);
+    res->GlobalsBuffer = CreateDeviceBuffer(context, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, sizeof(frame_globals) * MAX_FRAMES_IN_FLIGHT);
     res->Sampler    = CreateTextureSampler(context, VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
 
     CreateDescriptorHeap(context, res);

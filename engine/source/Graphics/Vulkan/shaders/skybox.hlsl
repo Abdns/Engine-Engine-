@@ -22,11 +22,11 @@ vs_output VSMain(uint vertexID : SV_VertexID)
 {
     float2 NDC = Positions[vertexID];
 
-    camera_uniforms cam = LoadCamera(LoadSkyboxParams(pc.ParamsPtr).Camera);
+    frame_globals globals = LoadGlobals(pc.GlobalsPtr);
 
     vs_output output;
     output.Position  = float4(NDC, 1.0, 1.0);
-    output.Direction = cam.SkyRight.xyz * NDC.x + cam.SkyUp.xyz * NDC.y + cam.SkyForward.xyz;
+    output.Direction = globals.SkyRight.xyz * NDC.x + globals.SkyUp.xyz * NDC.y + globals.SkyForward.xyz;
     return output;
 }
 

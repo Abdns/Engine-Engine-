@@ -18,10 +18,10 @@ vs_output VSMain(uint vertexID : SV_VertexID)
 
     vertex v = LoadVertex(params.Vertices, vertexID);
 
-    camera_uniforms cam = LoadCamera(params.Camera);
+    frame_globals globals = LoadGlobals(pc.GlobalsPtr);
 
     vs_output output;
-    output.Position = mul(cam.ViewProj, mul(params.Model, float4(v.Pos, 1.0)));
+    output.Position = mul(globals.ViewProj, mul(params.Model, float4(v.Position, 1.0)));
     output.Color    = v.Color;
     output.UV       = v.UV;
     return output;

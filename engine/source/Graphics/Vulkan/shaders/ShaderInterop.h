@@ -35,16 +35,17 @@
 struct push_constants
 {
     gpu_ptr ParamsPtr;
+    gpu_ptr GlobalsPtr;
 };
 
 struct vertex
 {
-    float3 Pos;
+    float3 Position;
     float3 Color;
     float2 UV;
 };
 
-struct camera_uniforms
+struct frame_globals
 {
     float4x4 ViewProj;
 
@@ -67,7 +68,6 @@ struct draw_params
     float4x4 Model;
     float4   Tint;
 
-    gpu_ptr Camera;
     gpu_ptr Vertices;
     gpu_ptr Materials;
 
@@ -78,8 +78,6 @@ struct draw_params
 struct skybox_params
 {
     float4 Tint;
-
-    gpu_ptr Camera;
 
     uint CubemapIndex;
     uint SkyboxPad0;
@@ -106,11 +104,11 @@ struct image_params
 };
 
 #ifndef __cplusplus
-    typedef vk::BufferPointer<camera_uniforms, 16>   camera_ptr;
+    typedef vk::BufferPointer<frame_globals, 16>     frame_globals_ptr;
     typedef vk::BufferPointer<draw_params, 16>       draw_params_ptr;
+    typedef vk::BufferPointer<image_params, 16>      image_params_ptr;
     typedef vk::BufferPointer<skybox_params, 16>     skybox_params_ptr;
     typedef vk::BufferPointer<rect_params, 16>       rect_params_ptr;
-    typedef vk::BufferPointer<image_params, 16>      image_params_ptr;
 
     vertex LoadVertex(uint64_t base, uint index)
     {
@@ -127,9 +125,9 @@ struct image_params
         return rect_params_ptr(base + (uint64_t)index * RECT_PARAMS_STRIDE).Get();
     }
 
-    camera_uniforms LoadCamera(uint64_t address)
+    frame_globals LoadGlobals(uint64_t address)
     {
-        return camera_ptr(address).Get();
+        return frame_globals_ptr(address).Get();
     }
 
     draw_params LoadDrawParams(uint64_t address)

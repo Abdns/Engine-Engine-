@@ -80,10 +80,12 @@ internal void ApplyFixedState(vulkan_context *context, VkCommandBuffer cmd)
 
 internal void BindParams(VkCommandBuffer cmd, VkPipelineLayout layout, VkDeviceAddress address)
 {
-    push_constants pc;
-    pc.ParamsPtr = address;
+    vkCmdPushConstants(cmd, layout, PIPELINE_PUSH_STAGES, (uint32)offsetof(push_constants, ParamsPtr), (uint32)sizeof(address), &address);
+}
 
-    vkCmdPushConstants(cmd, layout, PIPELINE_PUSH_STAGES, 0, (uint32)sizeof(pc), &pc);
+internal void BindGlobals(VkCommandBuffer cmd, VkPipelineLayout layout, VkDeviceAddress address)
+{
+    vkCmdPushConstants(cmd, layout, PIPELINE_PUSH_STAGES, (uint32)offsetof(push_constants, GlobalsPtr), (uint32)sizeof(address), &address);
 }
 
 internal void BindPipelineState(vulkan_context *context, VkCommandBuffer cmd, render_pipeline *pipeline, render_state *current, render_state *wanted)
@@ -162,6 +164,9 @@ internal vulkan_frame BeginFrame(vulkan_context *context, vulkan_resources *res)
 
     ResetFrameRegion(&res->FrameArena, Frame.Slot);
 
+    res->Globals = GetSharedBufferSlot(&res->GlobalsBuffer, Frame.Slot, sizeof(frame_globals));
+    *(frame_globals *)res->Globals.Cpu = {};
+
     VkCommandBuffer cmd = context->commandBuffers[Frame.Slot];
     vkResetCommandBuffer(cmd, 0);
 
@@ -185,6 +190,8 @@ internal vulkan_frame BeginFrame(vulkan_context *context, vulkan_resources *res)
     scissor.offset.y = 0;
     scissor.extent = context->swapchainExtent;
     vkCmdSetScissorWithCount(cmd, 1, &scissor);
+
+    BindGlobals(cmd, res->PipelineLayout, res->Globals.Gpu);
 
     Frame.Cmd   = cmd;
     Frame.Ready = true;

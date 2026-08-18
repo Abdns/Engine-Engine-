@@ -107,6 +107,8 @@ struct vulkan_resources
     shared_buffer IndexBuffer;
     shared_buffer MaterialBuffer;
     shared_buffer FrameArena;
+    shared_buffer GlobalsBuffer;
+    shared_alloc  Globals;
 
     gpu_mesh       Meshes[MAX_MESHES];
     gpu_texture    Textures[MAX_TEXTURES];
