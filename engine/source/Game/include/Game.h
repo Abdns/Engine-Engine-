@@ -5,6 +5,5 @@
 #include "Intrinsics.h"
 #include "EngineMath.h"
 #include "PlatformAPI.h"
-#include "GameState.h"
 
 #endif

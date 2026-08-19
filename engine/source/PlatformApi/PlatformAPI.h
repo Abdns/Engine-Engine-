@@ -3,7 +3,6 @@
 
 #include "Types.h"
 #include "Strings.h"
-#include "FileIO.h"
 #include "RenderCommands.h"
 
 #define PLATFORM_READ_ENTIRE_FILE(name)  file_data name(const char *Filename)

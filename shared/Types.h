@@ -23,6 +23,8 @@ typedef double real64;
 
 #define Pi32 3.14159265359f
 
+#define Epsilon32 1.0e-8f
+
 #define ArrayCount(Array) (sizeof(Array) / sizeof((Array)[0]))
 
 #define AlignPow2(Value, Alignment) (((Value) + ((Alignment) - 1)) & ~((Alignment) - 1))
@@ -51,5 +53,11 @@ inline uint32 SafeTruncateUInt64(uint64 Value)
 	uint32 Result = (uint32)Value;
 	return Result;
 }
+
+struct file_data
+{
+    void  *Data;
+    uint32 Size;
+};
 
 #endif

@@ -256,18 +256,23 @@ inline Matrix4 Mat4InverseRigid(Matrix4 M)
     return Result;
 }
 
-inline Vector3 Mat4TransformPoint(Matrix4 M, Vector3 P)
+inline Vector3 Mat4Transform(Matrix4 M, Vector3 V, real32 W)
 {
-    return Vector3(M.Elements[0][0] * P.X + M.Elements[1][0] * P.Y + M.Elements[2][0] * P.Z + M.Elements[3][0],
-                   M.Elements[0][1] * P.X + M.Elements[1][1] * P.Y + M.Elements[2][1] * P.Z + M.Elements[3][1],
-                   M.Elements[0][2] * P.X + M.Elements[1][2] * P.Y + M.Elements[2][2] * P.Z + M.Elements[3][2]);
+    return Vector3(M.Elements[0][0] * V.X + M.Elements[1][0] * V.Y + M.Elements[2][0] * V.Z + M.Elements[3][0] * W,
+                   M.Elements[0][1] * V.X + M.Elements[1][1] * V.Y + M.Elements[2][1] * V.Z + M.Elements[3][1] * W,
+                   M.Elements[0][2] * V.X + M.Elements[1][2] * V.Y + M.Elements[2][2] * V.Z + M.Elements[3][2] * W);
 }
 
-inline Vector3 Mat4TransformDirection(Matrix4 M, Vector3 D)
+inline Vector3 Mat4Column(Matrix4 M, int Column)
 {
-    return Vector3(M.Elements[0][0] * D.X + M.Elements[1][0] * D.Y + M.Elements[2][0] * D.Z,
-                   M.Elements[0][1] * D.X + M.Elements[1][1] * D.Y + M.Elements[2][1] * D.Z,
-                   M.Elements[0][2] * D.X + M.Elements[1][2] * D.Y + M.Elements[2][2] * D.Z);
+    return Vector3(M.Elements[Column][0], M.Elements[Column][1], M.Elements[Column][2]);
+}
+
+inline void Mat4SetColumn(Matrix4 *M, int Column, Vector3 V)
+{
+    M->Elements[Column][0] = V.X;
+    M->Elements[Column][1] = V.Y;
+    M->Elements[Column][2] = V.Z;
 }
 
 #define REAL32_LARGE 1.0e30f

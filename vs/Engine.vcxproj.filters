@@ -19,9 +19,6 @@
     <Filter Include="engine\source\PlatformApi">
       <UniqueIdentifier>{a1000000-0000-0000-0000-0000000000c0}</UniqueIdentifier>
     </Filter>
-    <Filter Include="engine\source\Assets">
-      <UniqueIdentifier>{a1000000-0000-0000-0000-0000000000c1}</UniqueIdentifier>
-    </Filter>
     <Filter Include="engine\source\Physics">
       <UniqueIdentifier>{a1000000-0000-0000-0000-0000000000e0}</UniqueIdentifier>
     </Filter>
@@ -107,22 +104,28 @@
     <ClInclude Include="..\engine\source\Platform\win32\src\Win32Window.cpp">
       <Filter>engine\source\Platform\win32\src</Filter>
     </ClInclude>
+    <ClInclude Include="..\engine\source\Game\src\DataLake.cpp">
+      <Filter>engine\source\Game\src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\source\Game\src\Camera.cpp">
+      <Filter>engine\source\Game\src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\source\Game\src\Entity.cpp">
+      <Filter>engine\source\Game\src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\source\Game\src\Material.cpp">
+      <Filter>engine\source\Game\src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\source\Game\src\UI.cpp">
+      <Filter>engine\source\Game\src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\source\Game\src\Text.cpp">
+      <Filter>engine\source\Game\src</Filter>
+    </ClInclude>
     <ClInclude Include="..\engine\source\Game\include\Game.h">
       <Filter>engine\source\Game\include</Filter>
     </ClInclude>
     <ClInclude Include="..\engine\source\Game\include\GameState.h">
-      <Filter>engine\source\Game\include</Filter>
-    </ClInclude>
-    <ClInclude Include="..\engine\source\Game\include\UI.h">
-      <Filter>engine\source\Game\include</Filter>
-    </ClInclude>
-    <ClInclude Include="..\engine\source\Game\include\Camera.h">
-      <Filter>engine\source\Game\include</Filter>
-    </ClInclude>
-    <ClInclude Include="..\engine\source\Game\include\Entity.h">
-      <Filter>engine\source\Game\include</Filter>
-    </ClInclude>
-    <ClInclude Include="..\engine\source\Game\include\Material.h">
       <Filter>engine\source\Game\include</Filter>
     </ClInclude>
     <ClInclude Include="..\engine\source\PlatformApi\PlatformAPI.h">
@@ -143,19 +146,16 @@
     <ClInclude Include="..\shared\EngaFormat.h">
       <Filter>shared</Filter>
     </ClInclude>
-    <ClInclude Include="..\engine\source\Assets\AssetPack.h">
-      <Filter>engine\source\Assets</Filter>
+    <ClInclude Include="..\engine\source\Physics\Physics.cpp">
+      <Filter>engine\source\Physics</Filter>
     </ClInclude>
-    <ClInclude Include="..\engine\source\Assets\DataLake.h">
-      <Filter>engine\source\Assets</Filter>
+    <ClInclude Include="..\engine\source\Physics\Raycast.cpp">
+      <Filter>engine\source\Physics</Filter>
     </ClInclude>
-    <ClInclude Include="..\engine\source\Physics\Physics.h">
+    <ClInclude Include="..\engine\source\Physics\Geometry.h">
       <Filter>engine\source\Physics</Filter>
     </ClInclude>
     <ClInclude Include="..\shared\EngineMath.h">
-      <Filter>shared</Filter>
-    </ClInclude>
-    <ClInclude Include="..\shared\FileIO.h">
       <Filter>shared</Filter>
     </ClInclude>
     <ClInclude Include="..\shared\Win32FileIO.h">

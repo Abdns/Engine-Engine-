@@ -3,13 +3,6 @@
 
 #include "Types.h"
 #include "Memory.h"
-#include "Camera.h"
-#include "Entity.h"
-#include "Material.h"
-#include "DataLake.h"
-#include "Physics.h"
-#include "UI.h"
-#include "Text.h"
 
 struct game_state
 {
@@ -31,8 +24,12 @@ struct game_state
     uint32    ColliderCapacity;
     uint32    SelectedEntityID;
 
+    physics_body *Bodies;
+    uint32       *BodySlots;
+    hull         *MeshHulls;
+
     ui_context UI;
-    bool32     SpinPaused;
+    bool32     Paused;
 
     uint32 PauseButton;
     uint32 SpawnButton;

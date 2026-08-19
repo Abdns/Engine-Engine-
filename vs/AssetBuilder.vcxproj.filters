@@ -62,9 +62,6 @@
     <ClInclude Include="..\shared\EngaFormat.h">
       <Filter>shared</Filter>
     </ClInclude>
-    <ClInclude Include="..\shared\FileIO.h">
-      <Filter>shared</Filter>
-    </ClInclude>
     <ClInclude Include="..\shared\Half.h">
       <Filter>shared</Filter>
     </ClInclude>
