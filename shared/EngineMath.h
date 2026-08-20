@@ -275,6 +275,24 @@ inline void Mat4SetColumn(Matrix4 *M, int Column, Vector3 V)
     M->Elements[Column][2] = V.Z;
 }
 
+inline Matrix4 Mat4LerpRotation(Matrix4 A, Matrix4 B, real32 T)
+{
+    Matrix4 Result = Mat4Identity();
+
+    Vector3 AxisX = Mat4Column(A, 0) + T * (Mat4Column(B, 0) - Mat4Column(A, 0));
+    Vector3 AxisY = Mat4Column(A, 1) + T * (Mat4Column(B, 1) - Mat4Column(A, 1));
+
+    AxisX = Normalize(AxisX);
+    Vector3 AxisZ = Normalize(Cross(AxisX, AxisY));
+    AxisY = Cross(AxisZ, AxisX);
+
+    Mat4SetColumn(&Result, 0, AxisX);
+    Mat4SetColumn(&Result, 1, AxisY);
+    Mat4SetColumn(&Result, 2, AxisZ);
+
+    return Result;
+}
+
 #define REAL32_LARGE 1.0e30f
 
 struct ray

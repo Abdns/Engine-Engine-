@@ -20,9 +20,6 @@ struct entity
     uint32      ID;
     entity_type Type;
     uint32      Slot;
-    uint32      MeshHandle;
-    uint32      MaterialHandle;
-    bool32      Static;
 };
 
 internal void InitEntities(data_lake *Lake, memory_arena *Arena)
@@ -35,10 +32,14 @@ internal void InitEntities(data_lake *Lake, memory_arena *Arena)
 
     Lake->Transforms.Count           = 0;
     Lake->Transforms.Position        = PushArray(Arena, MAX_ENTITIES, Vector3);
-    Lake->Transforms.Velocity        = PushArray(Arena, MAX_ENTITIES, Vector3);
+    Lake->Transforms.PrevPosition    = PushArray(Arena, MAX_ENTITIES, Vector3);
     Lake->Transforms.Rotation        = PushArray(Arena, MAX_ENTITIES, Matrix4);
-    Lake->Transforms.AngularVelocity = PushArray(Arena, MAX_ENTITIES, Vector3);
+    Lake->Transforms.PrevRotation    = PushArray(Arena, MAX_ENTITIES, Matrix4);
     Lake->Transforms.Tint            = PushArray(Arena, MAX_ENTITIES, Vector4);
+    Lake->Transforms.EntityID        = PushArray(Arena, MAX_ENTITIES, uint32);
+    Lake->Transforms.MeshHandle      = PushArray(Arena, MAX_ENTITIES, uint32);
+    Lake->Transforms.MaterialHandle  = PushArray(Arena, MAX_ENTITIES, uint32);
+    Lake->Transforms.Static          = PushArray(Arena, MAX_ENTITIES, bool32);
 
     Lake->Widgets.Count   = 0;
     Lake->Widgets.RectMin = PushArray(Arena, MAX_ENTITIES, Vector2);
@@ -85,13 +86,33 @@ internal entity *GetEntityByName(data_lake *Lake, const char *Name)
     return Lake->Entities;
 }
 
-internal Matrix4 EntityLocalToWorld(data_lake *Lake, entity *Entity)
+internal Matrix4 EntityLocalToWorld(data_lake *Lake, uint32 Slot)
 {
-    Assert(Entity->Type == Entity_Mesh);
+    Assert(Slot < Lake->Transforms.Count);
 
-    Vector3 Position = Lake->Transforms.Position[Entity->Slot];
+    Vector3 Position = Lake->Transforms.Position[Slot];
 
-    return Mat4Multiply(Mat4Translation(Position.X, Position.Y, Position.Z), Lake->Transforms.Rotation[Entity->Slot]);
+    return Mat4Multiply(Mat4Translation(Position.X, Position.Y, Position.Z), Lake->Transforms.Rotation[Slot]);
+}
+
+internal Matrix4 EntityRenderTransform(data_lake *Lake, uint32 Slot, real32 Alpha)
+{
+    Assert(Slot < Lake->Transforms.Count);
+
+    Vector3 Prev     = Lake->Transforms.PrevPosition[Slot];
+    Vector3 Position = Prev + Alpha * (Lake->Transforms.Position[Slot] - Prev);
+    Matrix4 Rotation = Mat4LerpRotation(Lake->Transforms.PrevRotation[Slot], Lake->Transforms.Rotation[Slot], Alpha);
+
+    return Mat4Multiply(Mat4Translation(Position.X, Position.Y, Position.Z), Rotation);
+}
+
+internal void EntityUpdatePreviousTrasform(data_lake *Lake)
+{
+    for (uint32 Slot = 0; Slot < Lake->Transforms.Count; ++Slot)
+    {
+        Lake->Transforms.PrevPosition[Slot] = Lake->Transforms.Position[Slot];
+        Lake->Transforms.PrevRotation[Slot] = Lake->Transforms.Rotation[Slot];
+    }
 }
 
 internal entity *AddEntity(data_lake *Lake, const char *Name, entity_type Type)
@@ -116,12 +137,9 @@ internal entity *AddEntity(data_lake *Lake, const char *Name, entity_type Type)
     }
 
     entity *Entity = Lake->Entities + Lake->EntityCount++;
-    Entity->ID             = ++Lake->EntityNextID;
-    Entity->Type           = Type;
-    Entity->Slot           = (Type == Entity_Mesh) ? Lake->Transforms.Count++ : Lake->Widgets.Count++;
-    Entity->MeshHandle     = 0;
-    Entity->MaterialHandle = 0;
-    Entity->Static         = false;
+    Entity->ID   = ++Lake->EntityNextID;
+    Entity->Type = Type;
+    Entity->Slot = (Type == Entity_Mesh) ? Lake->Transforms.Count++ : Lake->Widgets.Count++;
 
     char *Dest = EntityName(Lake, Entity);
     Dest[0] = 0;
@@ -141,14 +159,15 @@ internal entity *AddMeshEntity(data_lake *Lake, const char *Name, Vector3 Positi
         return 0;
     }
 
-    Lake->Transforms.Position[Entity->Slot]        = Position;
-    Lake->Transforms.Velocity[Entity->Slot]        = Vector3(0.0f, 0.0f, 0.0f);
-    Lake->Transforms.Rotation[Entity->Slot]        = Mat4Identity();
-    Lake->Transforms.AngularVelocity[Entity->Slot] = Vector3(0.0f, 0.0f, 0.0f);
-    Lake->Transforms.Tint[Entity->Slot]            = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
-
-    Entity->MeshHandle     = MeshHandle;
-    Entity->MaterialHandle = MaterialHandle;
+    Lake->Transforms.Position[Entity->Slot]       = Position;
+    Lake->Transforms.PrevPosition[Entity->Slot]   = Position;
+    Lake->Transforms.Rotation[Entity->Slot]       = Mat4Identity();
+    Lake->Transforms.PrevRotation[Entity->Slot]   = Mat4Identity();
+    Lake->Transforms.Tint[Entity->Slot]           = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+    Lake->Transforms.EntityID[Entity->Slot]       = Entity->ID;
+    Lake->Transforms.MeshHandle[Entity->Slot]     = MeshHandle;
+    Lake->Transforms.MaterialHandle[Entity->Slot] = MaterialHandle;
+    Lake->Transforms.Static[Entity->Slot]         = false;
 
     return Entity;
 }

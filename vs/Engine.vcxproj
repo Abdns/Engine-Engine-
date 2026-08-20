@@ -64,7 +64,7 @@
     <ClInclude Include="..\shared\EngaFormat.h" />
     <ClInclude Include="..\engine\source\Physics\Physics.cpp" />
     <ClInclude Include="..\engine\source\Physics\Raycast.cpp" />
-    <ClInclude Include="..\engine\source\Physics\Geometry.h" />
+    <ClInclude Include="..\engine\source\Physics\Collider.h" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\Vulkan.h" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\VulkanRender.h" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\shaders\ShaderInterop.h" />

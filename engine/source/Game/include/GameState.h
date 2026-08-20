@@ -24,9 +24,7 @@ struct game_state
     uint32    ColliderCapacity;
     uint32    SelectedEntityID;
 
-    physics_body *Bodies;
-    uint32       *BodySlots;
-    hull         *MeshHulls;
+    physics_world Physics;
 
     ui_context UI;
     bool32     Paused;

@@ -128,13 +128,18 @@ int CALLBACK WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLi
 
     LARGE_INTEGER LastCounter = Win32GetWallClock();
     LARGE_INTEGER FlipWallClock = Win32GetWallClock();
+    LARGE_INTEGER LastFrameTime = Win32GetWallClock();
     int64 LastCycleCount = __rdtsc();
 
     while (isRunning)
     {
         Win32ReloadGameCodeIfChanged(&Game, Paths.SourceGameCodeDLLFullPath, Paths.TempGameCodeDLLFullPath, Paths.GameCodeLockFullPath);
 
-        NewInput->dtForFrame = TargetSecondsPerFrame;
+        LARGE_INTEGER FrameTime = Win32GetWallClock();
+        real32 FrameDt = Win32GetSecondsElapsed(LastFrameTime, FrameTime);
+        LastFrameTime = FrameTime;
+
+        NewInput->dtForFrame = (FrameDt > 0.25f) ? 0.25f : FrameDt;
         Win32ProcessInput(NewInput, OldInput, &State, Window);
 #if ENGINE_INTERNAL
         Win32UpdateRecordAndPlayback(&State, NewInput);

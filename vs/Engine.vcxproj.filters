@@ -152,7 +152,7 @@
     <ClInclude Include="..\engine\source\Physics\Raycast.cpp">
       <Filter>engine\source\Physics</Filter>
     </ClInclude>
-    <ClInclude Include="..\engine\source\Physics\Geometry.h">
+    <ClInclude Include="..\engine\source\Physics\Collider.h">
       <Filter>engine\source\Physics</Filter>
     </ClInclude>
     <ClInclude Include="..\shared\EngineMath.h">

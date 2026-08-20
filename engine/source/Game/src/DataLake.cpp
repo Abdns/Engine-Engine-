@@ -16,12 +16,16 @@ struct entity;
 
 struct transform_pool
 {
+    uint32  *EntityID;
     Vector3 *Position;
-    Vector3 *Velocity;
     Matrix4 *Rotation;
-    Vector3 *AngularVelocity;
     Vector4 *Tint;
+    uint32  *MeshHandle;
+    uint32  *MaterialHandle;
     uint32   Count;
+    Vector3 *PrevPosition;
+    Matrix4 *PrevRotation;
+    bool32  *Static;
 };
 
 struct widget_pool

@@ -1,18 +1,35 @@
 #include "Types.h"
 #include "EngineMath.h"
-#include "Geometry.h"
+#include "Memory.h"
+#include "Collider.h"
 
-#define PHYSICS_GRAVITY_Y        -9.8f
-#define PHYSICS_MAX_DT            0.05f
+#define PHYSICS_TICK              (1.0f / 60.0f)
+#define PHYSICS_ACCUMULATOR_CAP   (4.0f * PHYSICS_TICK)
 #define PHYSICS_SUBSTEPS          4
+#define PHYSICS_RESTITUTION       0.5f
+#define PHYSICS_RESTITUTION_MIN_SPEED 1.0f
 #define PHYSICS_SOLVER_ITERATIONS 4
 #define PHYSICS_MAX_BIAS_SPEED    1.5f
-#define PHYSICS_MAX_CONTACTS      256
+#define PHYSICS_MAX_CONTACTS      512
 #define PHYSICS_MAX_PAIR_CONTACTS 8
+#define PHYSICS_CONTACT_MERGE_DISTANCE_SQ 0.0001f
 #define PHYSICS_BIAS_FACTOR       0.2f
 #define PHYSICS_PENETRATION_SLOP  0.01f
 #define PHYSICS_FRICTION          0.4f
 #define PHYSICS_ANGULAR_DAMPING   0.5f
+#define PHYSICS_GRAVITY_Y        -9.8f
+
+struct hull_plane
+{
+    Vector3 Normal;
+    real32  Distance;
+};
+
+struct hull
+{
+    hull_plane *Planes;
+    uint32      PlaneCount;
+};
 
 struct physics_body
 {
@@ -35,7 +52,123 @@ struct contact
     Vector3 Point;
     Vector3 Normal;
     real32  Depth;
+    real32  RestitutionBias;
+    real32  AccumulatedNormal;
+    Vector3 AccumulatedFriction;
 };
+
+struct physics_world
+{
+    physics_body *Bodies;
+    uint32        BodyCount;
+    uint32        BodyCapacity;
+
+    hull  *MeshHulls;
+    uint32 MeshHullCapacity;
+
+    real32 Accumulator;
+};
+
+internal uint32 BuildHullPlanes(collision *Mesh, hull_plane *Planes, uint32 MaxPlanes)
+{
+    uint32 Count = 0;
+
+    for (uint32 Index = 0; Index + 3 <= Mesh->IndexCount && Count < MaxPlanes; Index += 3)
+    {
+        Vector3 A = GetCollisionMeshVertex(Mesh, Mesh->Indices[Index + 0]);
+        Vector3 B = GetCollisionMeshVertex(Mesh, Mesh->Indices[Index + 1]);
+        Vector3 C = GetCollisionMeshVertex(Mesh, Mesh->Indices[Index + 2]);
+
+        Vector3 Normal = Cross(B - A, C - A);
+        real32  Len    = Length(Normal);
+        if (Len < Epsilon32)
+        {
+            continue;
+        }
+
+        hull_plane *Plane = Planes + Count++;
+        Plane->Normal   = (1.0f / Len) * Normal;
+        Plane->Distance = Dot(Plane->Normal, A);
+
+        if (Plane->Distance < 0.0f)
+        {
+            Plane->Normal   = -1.0f * Plane->Normal;
+            Plane->Distance = -Plane->Distance;
+        }
+    }
+
+    return Count;
+}
+
+internal bool32 HullDeepestPlane(hull_plane *Planes, uint32 PlaneCount, Vector3 P, uint32 *OutPlane, real32 *OutDepth)
+{
+    real32 BestDepth = REAL32_LARGE;
+    uint32 BestPlane = 0;
+
+    for (uint32 Index = 0; Index < PlaneCount; ++Index)
+    {
+        real32 Depth = Planes[Index].Distance - Dot(Planes[Index].Normal, P);
+        if (Depth < 0.0f)
+        {
+            return false;
+        }
+
+        if (Depth < BestDepth)
+        {
+            BestDepth = Depth;
+            BestPlane = Index;
+        }
+    }
+
+    *OutPlane = BestPlane;
+    *OutDepth = BestDepth;
+
+    return PlaneCount > 0;
+}
+
+internal hull BuildMeshHull(memory_arena *Arena, collision Mesh)
+{
+    uint32 MaxPlanes = Mesh.IndexCount / 3;
+
+    hull Result;
+    Result.Planes     = PushArray(Arena, MaxPlanes, hull_plane);
+    Result.PlaneCount = BuildHullPlanes(&Mesh, Result.Planes, MaxPlanes);
+
+    return Result;
+}
+
+internal void ComputeWorldAABB(Matrix4 LocalToWorld, Vector3 LocalMin, Vector3 LocalMax, Vector3 *OutMin, Vector3 *OutMax)
+{
+    Vector3 Min = Vector3(REAL32_LARGE, REAL32_LARGE, REAL32_LARGE);
+    Vector3 Max = Vector3(-REAL32_LARGE, -REAL32_LARGE, -REAL32_LARGE);
+
+    for (uint32 CornerIndex = 0; CornerIndex < 8; ++CornerIndex)
+    {
+        Vector3 Corner = Vector3((CornerIndex & 1) ? LocalMax.X : LocalMin.X,
+                                 (CornerIndex & 2) ? LocalMax.Y : LocalMin.Y,
+                                 (CornerIndex & 4) ? LocalMax.Z : LocalMin.Z);
+
+        Vector3 P = Mat4Transform(LocalToWorld, Corner, 1.0f);
+
+        for (int Axis = 0; Axis < 3; ++Axis)
+        {
+            Min.Elements[Axis] = Minimum(Min.Elements[Axis], P.Elements[Axis]);
+            Max.Elements[Axis] = Maximum(Max.Elements[Axis], P.Elements[Axis]);
+        }
+    }
+
+    *OutMin = Min;
+    *OutMax = Max;
+}
+
+internal Vector3 ContactRelativeVelocity(contact *Contact)
+{
+    Vector3 rA = Contact->Point - Contact->A->Position;
+    Vector3 rB = Contact->Point - Contact->B->Position;
+
+    return (Contact->A->Velocity + Cross(Contact->A->AngularVelocity, rA))
+         - (Contact->B->Velocity + Cross(Contact->B->AngularVelocity, rB));
+}
 
 internal Matrix4 BodyLocalToWorld(physics_body *Body)
 {
@@ -90,12 +223,31 @@ internal uint32 CollectHullContacts(physics_body *A, physics_body *B, contact *C
             continue;
         }
 
+        Vector3 WorldPoint = Mat4Transform(WorldFromB, P, 1.0f);
+
+        bool32 Duplicate = false;
+        for (uint32 Existing = 0; Existing < Count; ++Existing)
+        {
+            if (LengthSq(Contacts[Existing].Point - WorldPoint) < PHYSICS_CONTACT_MERGE_DISTANCE_SQ)
+            {
+                Duplicate = true;
+                break;
+            }
+        }
+        if (Duplicate)
+        {
+            continue;
+        }
+
         contact *Contact = Contacts + Count++;
         Contact->A      = A;
         Contact->B      = B;
-        Contact->Point  = Mat4Transform(WorldFromB, P, 1.0f);
+        Contact->Point  = WorldPoint;
         Contact->Normal = Normal;
         Contact->Depth  = Depth;
+        Contact->RestitutionBias     = 0.0f;
+        Contact->AccumulatedNormal   = 0.0f;
+        Contact->AccumulatedFriction = Vector3(0.0f, 0.0f, 0.0f);
     }
 
     return Count;
@@ -142,8 +294,7 @@ internal void ApplyContactImpulse(contact *Contact, real32 InvDt)
     Vector3 rA = Contact->Point - A->Position;
     Vector3 rB = Contact->Point - B->Position;
 
-    Vector3 RelVel = (A->Velocity + Cross(A->AngularVelocity, rA))
-                   - (B->Velocity + Cross(B->AngularVelocity, rB));
+    Vector3 RelVel = ContactRelativeVelocity(Contact);
 
     real32 NormalDenom = A->InvMass + B->InvMass
                        + A->InvInertia * LengthSq(Cross(rA, Contact->Normal))
@@ -155,20 +306,20 @@ internal void ApplyContactImpulse(contact *Contact, real32 InvDt)
 
     real32 Bias = PHYSICS_BIAS_FACTOR * InvDt * Maximum(Contact->Depth - PHYSICS_PENETRATION_SLOP, 0.0f);
     Bias = Minimum(Bias, PHYSICS_MAX_BIAS_SPEED);
-    real32 NormalImpulse = (Bias - Dot(RelVel, Contact->Normal)) / NormalDenom;
-    if (NormalImpulse <= 0.0f)
-    {
-        return;
-    }
+    Bias = Maximum(Bias, Contact->RestitutionBias);
 
-    Vector3 Impulse = Contact->Normal * NormalImpulse;
+    real32 NormalDelta = (Bias - Dot(RelVel, Contact->Normal)) / NormalDenom;
+    real32 OldNormal   = Contact->AccumulatedNormal;
+    Contact->AccumulatedNormal = Maximum(OldNormal + NormalDelta, 0.0f);
+    NormalDelta = Contact->AccumulatedNormal - OldNormal;
+
+    Vector3 Impulse = Contact->Normal * NormalDelta;
     A->Velocity        += Impulse * A->InvMass;
     A->AngularVelocity += A->InvInertia * Cross(rA, Impulse);
     B->Velocity        -= Impulse * B->InvMass;
     B->AngularVelocity -= B->InvInertia * Cross(rB, Impulse);
 
-    RelVel = (A->Velocity + Cross(A->AngularVelocity, rA))
-           - (B->Velocity + Cross(B->AngularVelocity, rB));
+    RelVel = ContactRelativeVelocity(Contact);
 
     Vector3 Tangent    = RelVel - Contact->Normal * Dot(RelVel, Contact->Normal);
     real32  TangentLen = Length(Tangent);
@@ -186,12 +337,19 @@ internal void ApplyContactImpulse(contact *Contact, real32 InvDt)
         return;
     }
 
-    real32 TangentImpulse = -Dot(RelVel, Tangent) / TangentDenom;
-    real32 MaxFriction    = PHYSICS_FRICTION * NormalImpulse;
-    if (TangentImpulse >  MaxFriction) TangentImpulse =  MaxFriction;
-    if (TangentImpulse < -MaxFriction) TangentImpulse = -MaxFriction;
+    real32 TangentDelta = -Dot(RelVel, Tangent) / TangentDenom;
 
-    Impulse = Tangent * TangentImpulse;
+    Vector3 OldFriction = Contact->AccumulatedFriction;
+    Vector3 NewFriction = OldFriction + Tangent * TangentDelta;
+    real32  MaxFriction = PHYSICS_FRICTION * Contact->AccumulatedNormal;
+    real32  FrictionLen = Length(NewFriction);
+    if (FrictionLen > MaxFriction)
+    {
+        NewFriction = (MaxFriction > 0.0f) ? NewFriction * (MaxFriction / FrictionLen) : Vector3(0.0f, 0.0f, 0.0f);
+    }
+    Contact->AccumulatedFriction = NewFriction;
+
+    Impulse = NewFriction - OldFriction;
     A->Velocity        += Impulse * A->InvMass;
     A->AngularVelocity += A->InvInertia * Cross(rA, Impulse);
     B->Velocity        -= Impulse * B->InvMass;
@@ -216,8 +374,8 @@ internal void PhysicsSubStep(physics_body *Bodies, uint32 BodyCount, real32 dt)
         ComputeWorldAABB(Body->Collider.LocalToWorld, Body->Collider.Mesh.BoundsMin, Body->Collider.Mesh.BoundsMax, &Body->BoundsMin, &Body->BoundsMax);
     }
 
-    contact Contacts[PHYSICS_MAX_CONTACTS];
-    uint32  ContactCount = 0;
+    local_persist contact Contacts[PHYSICS_MAX_CONTACTS];
+    uint32 ContactCount = 0;
 
     for (uint32 IndexA = 0; IndexA < BodyCount && ContactCount < PHYSICS_MAX_CONTACTS; ++IndexA)
     {
@@ -225,6 +383,14 @@ internal void PhysicsSubStep(physics_body *Bodies, uint32 BodyCount, real32 dt)
         {
             ContactCount += CollectPairContacts(Bodies + IndexA, Bodies + IndexB, Contacts + ContactCount, PHYSICS_MAX_CONTACTS - ContactCount);
         }
+    }
+
+    for (uint32 Index = 0; Index < ContactCount; ++Index)
+    {
+        contact *Contact = Contacts + Index;
+
+        real32 ApproachSpeed = -Dot(ContactRelativeVelocity(Contact), Contact->Normal);
+        Contact->RestitutionBias = (ApproachSpeed > PHYSICS_RESTITUTION_MIN_SPEED) ? PHYSICS_RESTITUTION * ApproachSpeed : 0.0f;
     }
 
     real32 InvDt = 1.0f / dt;
@@ -237,9 +403,8 @@ internal void PhysicsSubStep(physics_body *Bodies, uint32 BodyCount, real32 dt)
     }
 }
 
-internal void PhysicsStep(physics_body *Bodies, uint32 BodyCount, real32 dt)
+internal void PhysicsStepBodies(physics_body *Bodies, uint32 BodyCount, real32 dt)
 {
-    dt = Minimum(dt, PHYSICS_MAX_DT);
     if (dt <= 0.0f)
     {
         return;
@@ -250,4 +415,60 @@ internal void PhysicsStep(physics_body *Bodies, uint32 BodyCount, real32 dt)
     {
         PhysicsSubStep(Bodies, BodyCount, SubDt);
     }
+}
+
+internal void PhysicsInit(physics_world *World, memory_arena *Arena, uint32 BodyCapacity, uint32 MeshHullCapacity)
+{
+    World->Bodies       = PushArray(Arena, BodyCapacity, physics_body);
+    World->BodyCount    = 0;
+    World->BodyCapacity = BodyCapacity;
+
+    World->MeshHulls        = PushArray(Arena, MeshHullCapacity, hull);
+    World->MeshHullCapacity = MeshHullCapacity;
+
+    World->Accumulator = 0.0f;
+}
+
+internal void PhysicsSetMeshHull(physics_world *World, memory_arena *Arena, uint32 MeshHandle, collision Mesh)
+{
+    Assert(MeshHandle < World->MeshHullCapacity);
+
+    World->MeshHulls[MeshHandle] = BuildMeshHull(Arena, Mesh);
+}
+
+internal physics_body *PhysicsAddBody(physics_world *World)
+{
+    if (World->BodyCount >= World->BodyCapacity)
+    {
+        return 0;
+    }
+
+    return World->Bodies + World->BodyCount++;
+}
+
+internal void PhysicsAccumulate(physics_world *World, real32 dt)
+{
+    World->Accumulator = Minimum(World->Accumulator + dt, PHYSICS_ACCUMULATOR_CAP);
+}
+
+internal bool32 PhysicsNextTick(physics_world *World)
+{
+    if (World->Accumulator < PHYSICS_TICK)
+    {
+        return false;
+    }
+
+    World->Accumulator -= PHYSICS_TICK;
+
+    return true;
+}
+
+internal real32 PhysicsRenderAlpha(physics_world *World)
+{
+    return World->Accumulator / PHYSICS_TICK;
+}
+
+internal void PhysicsStep(physics_world *World)
+{
+    PhysicsStepBodies(World->Bodies, World->BodyCount, PHYSICS_TICK);
 }
