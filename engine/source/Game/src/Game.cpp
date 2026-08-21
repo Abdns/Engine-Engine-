@@ -86,11 +86,11 @@ internal uint32 AddEntityAt(game_state *GameState, entity_type Type, world_posit
 
     low_entity *Stored = GetLowEntity(&GameState->Storage, StorageIndex);
 
-    Stored->Sim.Flags          = EntityFlag_Visible | EntityFlag_Simulates | (Static ? EntityFlag_Static : 0);
-    Stored->Sim.MeshHandle     = MeshHandle;
-    Stored->Sim.MaterialHandle = MaterialHandle;
+    Stored->SimVariant.Flags          = EntityFlag_Visible | EntityFlag_Simulates | (Static ? EntityFlag_Static : 0);
+    Stored->SimVariant.MeshHandle     = MeshHandle;
+    Stored->SimVariant.MaterialHandle = MaterialHandle;
 
-    PhysicsSetMass(&GameState->Physics, &Stored->Sim, Static);
+    PhysicsSetMass(&GameState->Physics, &Stored->SimVariant, Static);
 
     return StorageIndex;
 }
@@ -108,7 +108,7 @@ internal void ClearSpawnedEntities(game_state *GameState)
     {
         low_entity *Stored = Storage->LowEntities + StorageIndex;
 
-        if (Stored->Sim.Type == Entity_Null || (Stored->Sim.Flags & EntityFlag_Static))
+        if (Stored->SimVariant.Type == Entity_Null || (Stored->SimVariant.Flags & EntityFlag_Static))
         {
             continue;
         }
@@ -130,7 +130,7 @@ internal void ShootBall(game_state *GameState, sim_region *Region, ray Aim)
     }
 
     low_entity *Stored = GetLowEntity(&GameState->Storage, StorageIndex);
-    Stored->Sim.dP = Aim.Direction * BALL_SPEED;
+    Stored->SimVariant.dP = Aim.Direction * BALL_SPEED;
 
     Vector3 SimSpaceP = GetSimSpaceP(Region, Stored);
     AddEntityToRegion(Region, StorageIndex, Stored, SimSpaceP, SimSpaceP);

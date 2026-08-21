@@ -11,6 +11,7 @@ struct world_position
     int32   ChunkX;
     int32   ChunkY;
     int32   ChunkZ;
+
     Vector3 Offset;
 };
 

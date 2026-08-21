@@ -141,7 +141,7 @@ internal uint32 RayGatherCandidates(ray SimRay, sim_region *Region, asset_store 
             continue;
         }
 
-        Vector3    P           = Entity->PrevP + Alpha * (Entity->P - Entity->PrevP);
+        Vector3    P           = Entity->PrevPosition + Alpha * (Entity->Position - Entity->PrevPosition);
         Quaternion Orientation = QuatNLerp(Entity->PrevOrientation, Entity->Orientation, Alpha);
 
         Vector3 BoundsMin, BoundsMax;

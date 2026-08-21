@@ -60,7 +60,7 @@ internal sim_entity *GetEntityByStorageIndex(sim_region *Region, uint32 StorageI
 
 internal Vector3 GetSimSpaceP(sim_region *Region, low_entity *Stored)
 {
-    return WorldSubtract(Region->World, &Stored->P, &Region->Origin);
+    return WorldSubtract(Region->World, &Stored->Position, &Region->Origin);
 }
 
 internal sim_entity *AddEntityRaw(sim_region *Region, uint32 StorageIndex, low_entity *Source)
@@ -91,7 +91,7 @@ internal sim_entity *AddEntityRaw(sim_region *Region, uint32 StorageIndex, low_e
 
     if (Source)
     {
-        *Entity = Source->Sim;
+        *Entity = Source->SimVariant;
     }
     else
     {
@@ -110,8 +110,8 @@ internal sim_entity *AddEntityToRegion(sim_region *Region, uint32 StorageIndex, 
 
     if (Entity)
     {
-        Entity->P         = SimSpaceP;
-        Entity->PrevP     = SimSpacePrevP;
+        Entity->Position         = SimSpaceP;
+        Entity->PrevPosition     = SimSpacePrevP;
         Entity->Updatable = Rect3Contains(Region->UpdatableBounds, SimSpaceP);
     }
 
@@ -132,13 +132,13 @@ internal void LoadEntityReference(sim_region *Region, sim_entity_reference *Refe
     if (!Entity)
     {
         low_entity *Stored = GetLowEntity(Region->Storage, StorageIndex);
-        if (Stored && Stored->Sim.Type != Entity_Null)
+        if (Stored && Stored->SimVariant.Type != Entity_Null)
         {
             Entity = AddEntityRaw(Region, StorageIndex, Stored);
             if (Entity)
             {
-                Entity->P     = GetSimSpaceP(Region, Stored);
-                Entity->PrevP = WorldSubtract(Region->World, &Stored->PrevP, &Region->Origin);
+                Entity->Position     = GetSimSpaceP(Region, Stored);
+                Entity->PrevPosition = WorldSubtract(Region->World, &Stored->PrevPosition, &Region->Origin);
             }
         }
     }
@@ -189,7 +189,7 @@ internal sim_region *BeginSim(memory_arena *SimArena, world *World, entity_stora
                         uint32      StorageIndex = Block->StorageIndex[Index];
                         low_entity *Stored       = Storage->LowEntities + StorageIndex;
 
-                        if (Stored->Sim.Type == Entity_Null)
+                        if (Stored->SimVariant.Type == Entity_Null)
                         {
                             continue;
                         }
@@ -200,7 +200,7 @@ internal sim_region *BeginSim(memory_arena *SimArena, world *World, entity_stora
                             continue;
                         }
 
-                        Vector3 SimSpacePrevP = WorldSubtract(World, &Stored->PrevP, &Region->Origin);
+                        Vector3 SimSpacePrevP = WorldSubtract(World, &Stored->PrevPosition, &Region->Origin);
 
                         AddEntityToRegion(Region, StorageIndex, Stored, SimSpaceP, SimSpacePrevP);
                     }
@@ -222,9 +222,9 @@ internal void EndSim(sim_region *Region, memory_arena *Arena)
         sim_entity *Entity = Region->Entities + Index;
         low_entity *Stored = Storage->LowEntities + Entity->StorageIndex;
 
-        Stored->Sim   = *Entity;
-        Stored->PrevP = MapIntoChunkSpace(World, Region->Origin, Entity->PrevP);
+        Stored->SimVariant   = *Entity;
+        Stored->PrevPosition = MapIntoChunkSpace(World, Region->Origin, Entity->PrevPosition);
 
-        ChangeEntityLocation(Arena, World, Storage, Entity->StorageIndex, MapIntoChunkSpace(World, Region->Origin, Entity->P));
+        ChangeEntityLocation(Arena, World, Storage, Entity->StorageIndex, MapIntoChunkSpace(World, Region->Origin, Entity->Position));
     }
 }

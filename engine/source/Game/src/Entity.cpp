@@ -32,18 +32,17 @@ union sim_entity_reference
 struct sim_entity
 {
     uint32      StorageIndex;
-    bool32      Updatable;
 
     entity_type Type;
     uint32      Flags;
 
-    Vector3     P;
-    Quaternion  Orientation;
+    Vector3     Position;
+    Vector3     PrevPosition;
     Vector3     dP;
-    Vector3     dOrientation;
 
-    Vector3     PrevP;
+    Quaternion  Orientation;
     Quaternion  PrevOrientation;
+    Vector3     dOrientation;
 
     real32      InvMass;
     real32      InvInertia;
@@ -54,23 +53,27 @@ struct sim_entity
 
     Vector3     BoundsMin;
     Vector3     BoundsMax;
+
+    bool32      Updatable;
 };
 
 struct low_entity
 {
-    world_position P;
-    world_position PrevP;
-    sim_entity     Sim;
+    world_position Position;
+    world_position PrevPosition;
+
+    sim_entity     SimVariant;
+
     char           Name[ENTITY_MAX_NAME];
 };
 
 struct entity_storage
 {
-    low_entity *LowEntities;
     uint32      Count;
     uint32      Capacity;
+    low_entity *LowEntities;
 
-    uint32     *FreeIndex;
+    uint32     *FreeIndices;
     uint32      FreeCount;
 };
 
@@ -81,10 +84,10 @@ internal void EntityStorageInit(entity_storage *Storage, memory_arena *Arena, ui
     Storage->FreeCount = 0;
 
     Storage->LowEntities = PushArray(Arena, Capacity, low_entity);
-    Storage->FreeIndex   = PushArray(Arena, Capacity, uint32);
+    Storage->FreeIndices = PushArray(Arena, Capacity, uint32);
 
     ZeroStruct(Storage->LowEntities[ENTITY_STORAGE_NONE]);
-    Storage->LowEntities[ENTITY_STORAGE_NONE].P = NullWorldPosition();
+    Storage->LowEntities[ENTITY_STORAGE_NONE].Position = NullWorldPosition();
 }
 
 internal low_entity *GetLowEntity(entity_storage *Storage, uint32 StorageIndex)
@@ -108,12 +111,12 @@ internal void ChangeEntityLocation(memory_arena *Arena, world *World, entity_sto
 {
     low_entity *Entity = Storage->LowEntities + StorageIndex;
 
-    world_position *OldP = IsWorldPositionValid(Entity->P) ? &Entity->P : 0;
+    world_position *OldP = IsWorldPositionValid(Entity->Position) ? &Entity->Position : 0;
     world_position *NextP = IsWorldPositionValid(NewP) ? &NewP : 0;
 
     ChangeEntityLocationRaw(Arena, World, StorageIndex, OldP, NextP);
 
-    Entity->P = NewP;
+    Entity->Position = NewP;
 }
 
 internal uint32 AddLowEntity(memory_arena *Arena, world *World, entity_storage *Storage, entity_type Type, world_position P, const char *Name)
@@ -122,7 +125,7 @@ internal uint32 AddLowEntity(memory_arena *Arena, world *World, entity_storage *
 
     if (Storage->FreeCount)
     {
-        StorageIndex = Storage->FreeIndex[--Storage->FreeCount];
+        StorageIndex = Storage->FreeIndices[--Storage->FreeCount];
     }
     else
     {
@@ -139,13 +142,13 @@ internal uint32 AddLowEntity(memory_arena *Arena, world *World, entity_storage *
 
     ZeroStruct(*Entity);
 
-    Entity->P                 = NullWorldPosition();
-    Entity->PrevP             = P;
-    Entity->Sim.StorageIndex  = StorageIndex;
-    Entity->Sim.Type          = Type;
-    Entity->Sim.Orientation   = QuatIdentity();
-    Entity->Sim.PrevOrientation = QuatIdentity();
-    Entity->Sim.Tint          = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
+    Entity->Position                 = NullWorldPosition();
+    Entity->PrevPosition             = P;
+    Entity->SimVariant.StorageIndex  = StorageIndex;
+    Entity->SimVariant.Type          = Type;
+    Entity->SimVariant.Orientation   = QuatIdentity();
+    Entity->SimVariant.PrevOrientation = QuatIdentity();
+    Entity->SimVariant.Tint          = Vector4(1.0f, 1.0f, 1.0f, 1.0f);
 
     Entity->Name[0] = 0;
     if (Name)
@@ -161,19 +164,19 @@ internal uint32 AddLowEntity(memory_arena *Arena, world *World, entity_storage *
 internal void RemoveLowEntity(memory_arena *Arena, world *World, entity_storage *Storage, uint32 StorageIndex)
 {
     low_entity *Entity = GetLowEntity(Storage, StorageIndex);
-    if (!Entity || Entity->Sim.Type == Entity_Null)
+    if (!Entity || Entity->SimVariant.Type == Entity_Null)
     {
         return;
     }
 
     ChangeEntityLocation(Arena, World, Storage, StorageIndex, NullWorldPosition());
 
-    Entity->Sim.Type  = Entity_Null;
-    Entity->Sim.Flags = 0;
+    Entity->SimVariant.Type  = Entity_Null;
+    Entity->SimVariant.Flags = 0;
     Entity->Name[0]   = 0;
 
     Assert(Storage->FreeCount < Storage->Capacity);
-    Storage->FreeIndex[Storage->FreeCount++] = StorageIndex;
+    Storage->FreeIndices[Storage->FreeCount++] = StorageIndex;
 }
 
 internal uint32 FindLowEntityByName(entity_storage *Storage, const char *Name)
@@ -182,7 +185,7 @@ internal uint32 FindLowEntityByName(entity_storage *Storage, const char *Name)
 
     for (uint32 Index = 1; Index < Storage->Count; ++Index)
     {
-        if (Storage->LowEntities[Index].Sim.Type != Entity_Null && StringsAreEqual(Storage->LowEntities[Index].Name, Name))
+        if (Storage->LowEntities[Index].SimVariant.Type != Entity_Null && StringsAreEqual(Storage->LowEntities[Index].Name, Name))
         {
             return Index;
         }
