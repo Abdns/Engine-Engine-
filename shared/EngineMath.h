@@ -275,22 +275,178 @@ inline void Mat4SetColumn(Matrix4 *M, int Column, Vector3 V)
     M->Elements[Column][2] = V.Z;
 }
 
-inline Matrix4 Mat4LerpRotation(Matrix4 A, Matrix4 B, real32 T)
+union Quaternion
 {
-    Matrix4 Result = Mat4Identity();
+    struct { real32 X, Y, Z, W; };
+    struct { Vector3 XYZ; real32 W_; };
+    real32 Elements[4];
 
-    Vector3 AxisX = Mat4Column(A, 0) + T * (Mat4Column(B, 0) - Mat4Column(A, 0));
-    Vector3 AxisY = Mat4Column(A, 1) + T * (Mat4Column(B, 1) - Mat4Column(A, 1));
+    Quaternion() = default;
+    Quaternion(real32 InX, real32 InY, real32 InZ, real32 InW) { X = InX; Y = InY; Z = InZ; W = InW; }
+};
 
-    AxisX = Normalize(AxisX);
-    Vector3 AxisZ = Normalize(Cross(AxisX, AxisY));
-    AxisY = Cross(AxisZ, AxisX);
+inline Quaternion QuatIdentity(void)
+{
+    return Quaternion(0.0f, 0.0f, 0.0f, 1.0f);
+}
 
-    Mat4SetColumn(&Result, 0, AxisX);
-    Mat4SetColumn(&Result, 1, AxisY);
-    Mat4SetColumn(&Result, 2, AxisZ);
+inline real32 QuatDot(Quaternion A, Quaternion B)
+{
+    return A.X * B.X + A.Y * B.Y + A.Z * B.Z + A.W * B.W;
+}
+
+inline Quaternion QuatNormalize(Quaternion Q)
+{
+    real32 LengthSquared = QuatDot(Q, Q);
+    if (LengthSquared < Epsilon32)
+    {
+        return QuatIdentity();
+    }
+
+    real32 InvLength = 1.0f / SquareRoot(LengthSquared);
+
+    return Quaternion(Q.X * InvLength, Q.Y * InvLength, Q.Z * InvLength, Q.W * InvLength);
+}
+
+inline Quaternion QuatConjugate(Quaternion Q)
+{
+    return Quaternion(-Q.X, -Q.Y, -Q.Z, Q.W);
+}
+
+inline Quaternion QuatMultiply(Quaternion A, Quaternion B)
+{
+    return Quaternion(A.W * B.X + A.X * B.W + A.Y * B.Z - A.Z * B.Y,
+                      A.W * B.Y - A.X * B.Z + A.Y * B.W + A.Z * B.X,
+                      A.W * B.Z + A.X * B.Y - A.Y * B.X + A.Z * B.W,
+                      A.W * B.W - A.X * B.X - A.Y * B.Y - A.Z * B.Z);
+}
+
+inline Quaternion QuatFromAxisAngle(Vector3 Axis, real32 Angle)
+{
+    real32  HalfAngle = 0.5f * Angle;
+    real32  SinHalf   = Sin(HalfAngle);
+    Vector3 Normal    = Normalize(Axis);
+
+    return Quaternion(Normal.X * SinHalf, Normal.Y * SinHalf, Normal.Z * SinHalf, Cos(HalfAngle));
+}
+
+inline Vector3 QuatRotate(Quaternion Q, Vector3 V)
+{
+    Vector3 Axis  = Vector3(Q.X, Q.Y, Q.Z);
+    Vector3 Twice = 2.0f * Cross(Axis, V);
+
+    return V + Q.W * Twice + Cross(Axis, Twice);
+}
+
+inline Vector3 QuatInverseRotate(Quaternion Q, Vector3 V)
+{
+    return QuatRotate(QuatConjugate(Q), V);
+}
+
+inline Quaternion QuatIntegrate(Quaternion Q, Vector3 AngularVelocity, real32 dt)
+{
+    Quaternion Spin  = Quaternion(AngularVelocity.X, AngularVelocity.Y, AngularVelocity.Z, 0.0f);
+    Quaternion Delta = QuatMultiply(Spin, Q);
+    real32     Half  = 0.5f * dt;
+
+    return QuatNormalize(Quaternion(Q.X + Half * Delta.X,
+                                    Q.Y + Half * Delta.Y,
+                                    Q.Z + Half * Delta.Z,
+                                    Q.W + Half * Delta.W));
+}
+
+inline Quaternion QuatNLerp(Quaternion A, Quaternion B, real32 T)
+{
+    real32 Sign = (QuatDot(A, B) < 0.0f) ? -1.0f : 1.0f;
+
+    return QuatNormalize(Quaternion(A.X + T * (Sign * B.X - A.X),
+                                    A.Y + T * (Sign * B.Y - A.Y),
+                                    A.Z + T * (Sign * B.Z - A.Z),
+                                    A.W + T * (Sign * B.W - A.W)));
+}
+
+inline Matrix4 Mat4FromQuaternion(Quaternion Q)
+{
+    real32 X2 = Q.X + Q.X;
+    real32 Y2 = Q.Y + Q.Y;
+    real32 Z2 = Q.Z + Q.Z;
+
+    real32 XX = Q.X * X2, XY = Q.X * Y2, XZ = Q.X * Z2;
+    real32 YY = Q.Y * Y2, YZ = Q.Y * Z2, ZZ = Q.Z * Z2;
+    real32 WX = Q.W * X2, WY = Q.W * Y2, WZ = Q.W * Z2;
+
+    Matrix4 Result = {};
+
+    Result.Elements[0][0] = 1.0f - (YY + ZZ);
+    Result.Elements[0][1] = XY + WZ;
+    Result.Elements[0][2] = XZ - WY;
+
+    Result.Elements[1][0] = XY - WZ;
+    Result.Elements[1][1] = 1.0f - (XX + ZZ);
+    Result.Elements[1][2] = YZ + WX;
+
+    Result.Elements[2][0] = XZ + WY;
+    Result.Elements[2][1] = YZ - WX;
+    Result.Elements[2][2] = 1.0f - (XX + YY);
+
+    Result.Elements[3][3] = 1.0f;
 
     return Result;
+}
+
+inline Matrix4 Mat4Rigid(Vector3 Position, Quaternion Orientation)
+{
+    Matrix4 Result = Mat4FromQuaternion(Orientation);
+
+    Result.Elements[3][0] = Position.X;
+    Result.Elements[3][1] = Position.Y;
+    Result.Elements[3][2] = Position.Z;
+
+    return Result;
+}
+
+struct rectangle3
+{
+    Vector3 Min;
+    Vector3 Max;
+};
+
+inline rectangle3 Rect3MinMax(Vector3 Min, Vector3 Max)
+{
+    rectangle3 Result;
+    Result.Min = Min;
+    Result.Max = Max;
+
+    return Result;
+}
+
+inline rectangle3 Rect3CenterHalfDim(Vector3 Center, Vector3 HalfDim)
+{
+    return Rect3MinMax(Center - HalfDim, Center + HalfDim);
+}
+
+inline rectangle3 Rect3CenterRadius(Vector3 Center, real32 Radius)
+{
+    return Rect3CenterHalfDim(Center, Vector3(Radius, Radius, Radius));
+}
+
+inline rectangle3 Rect3AddRadius(rectangle3 Rect, real32 Radius)
+{
+    Vector3 R = Vector3(Radius, Radius, Radius);
+
+    return Rect3MinMax(Rect.Min - R, Rect.Max + R);
+}
+
+inline Vector3 Rect3Center(rectangle3 Rect)
+{
+    return 0.5f * (Rect.Min + Rect.Max);
+}
+
+inline bool32 Rect3Contains(rectangle3 Rect, Vector3 P)
+{
+    return (P.X >= Rect.Min.X && P.X <= Rect.Max.X &&
+            P.Y >= Rect.Min.Y && P.Y <= Rect.Max.Y &&
+            P.Z >= Rect.Min.Z && P.Z <= Rect.Max.Z);
 }
 
 #define REAL32_LARGE 1.0e30f

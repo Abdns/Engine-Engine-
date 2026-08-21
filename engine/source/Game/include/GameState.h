@@ -9,8 +9,13 @@ struct game_state
     real32 tSine;
 
     memory_arena WorldArena;
-    data_lake Lake;
-    materials Materials;
+    memory_arena FrameArena;
+
+    asset_store    Assets;
+    materials      Materials;
+    world         *World;
+    entity_storage Storage;
+    physics_state  Physics;
 
     uint32 SkyHandle;
     uint32 FontHandle;
@@ -20,18 +25,10 @@ struct game_state
 
     camera Camera;
 
-    collider *Colliders;
-    uint32    ColliderCapacity;
-    uint32    SelectedEntityID;
-
-    physics_world Physics;
+    uint32 SelectedStorageIndex;
 
     ui_context UI;
     bool32     Paused;
-
-    uint32 PauseButton;
-    uint32 SpawnButton;
-    uint32 ClearButton;
 };
 
 #endif

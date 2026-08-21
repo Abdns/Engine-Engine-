@@ -1,12 +1,19 @@
 #include "Types.h"
 #include "EngineMath.h"
+#include "Memory.h"
 #include "Collider.h"
 
 struct raycast_hit
 {
-    uint32  ColliderHandle;
+    uint32  StorageIndex;
     real32  Distance;
     Vector3 Point;
+};
+
+struct raycast_candidate
+{
+    uint32 EntityIndex;
+    real32 EnterDistance;
 };
 
 internal bool32 RayIntersectsAABB(ray Ray, Vector3 BoxMin, Vector3 BoxMax, real32 *OutDistance)
@@ -121,33 +128,94 @@ internal bool32 RayIntersectsMesh(collision *Mesh, ray LocalRay, real32 *OutDist
     return Hit;
 }
 
-internal uint32 RayCastColliders(ray WorldRay, collider *Colliders, uint32 ColliderCount, raycast_hit *OutHit)
+internal uint32 RayGatherCandidates(ray SimRay, sim_region *Region, asset_store *Assets, real32 Alpha, raycast_candidate *Candidates, uint32 MaxCandidates)
 {
-    raycast_hit Hit = {};
-    real32 BestDistance = REAL32_LARGE;
+    uint32 Count = 0;
 
-    for (uint32 Index = 0; Index < ColliderCount; ++Index)
+    for (uint32 Index = 0; Index < Region->EntityCount && Count < MaxCandidates; ++Index)
     {
-        collider *Current = Colliders + Index;
+        sim_entity *Entity = Region->Entities + Index;
 
-        Matrix4 ToLocal = Mat4InverseRigid(Current->LocalToWorld);
+        if (!(Entity->Flags & EntityFlag_Visible) || Entity->MeshHandle >= Assets->MeshCount)
+        {
+            continue;
+        }
+
+        Vector3    P           = Entity->PrevP + Alpha * (Entity->P - Entity->PrevP);
+        Quaternion Orientation = QuatNLerp(Entity->PrevOrientation, Entity->Orientation, Alpha);
+
+        Vector3 BoundsMin, BoundsMax;
+        ComputeWorldAABB(P, Orientation, Assets->MeshBoundsMin[Entity->MeshHandle], Assets->MeshBoundsMax[Entity->MeshHandle], &BoundsMin, &BoundsMax);
+
+        real32 EnterDistance;
+        if (!RayIntersectsAABB(SimRay, BoundsMin, BoundsMax, &EnterDistance))
+        {
+            continue;
+        }
+
+        raycast_candidate *Candidate = Candidates + Count++;
+        Candidate->EntityIndex   = Index;
+        Candidate->EnterDistance = EnterDistance;
+    }
+
+    for (uint32 Index = 1; Index < Count; ++Index)
+    {
+        raycast_candidate Candidate = Candidates[Index];
+
+        uint32 Scan = Index;
+        while (Scan > 0 && Candidates[Scan - 1].EnterDistance > Candidate.EnterDistance)
+        {
+            Candidates[Scan] = Candidates[Scan - 1];
+            --Scan;
+        }
+
+        Candidates[Scan] = Candidate;
+    }
+
+    return Count;
+}
+
+internal bool32 RayCastSim(ray SimRay, sim_region *Region, asset_store *Assets, memory_arena *FrameArena, real32 Alpha, raycast_hit *OutHit)
+{
+    temporary_memory Scratch = BeginTemporaryMemory(FrameArena);
+
+    raycast_candidate *Candidates = PushArray(FrameArena, Region->EntityCount, raycast_candidate);
+    uint32             Count      = RayGatherCandidates(SimRay, Region, Assets, Alpha, Candidates, Region->EntityCount);
+
+    raycast_hit Hit = {};
+    real32      BestDistance = REAL32_LARGE;
+
+    for (uint32 Index = 0; Index < Count; ++Index)
+    {
+        if (Candidates[Index].EnterDistance > BestDistance)
+        {
+            break;
+        }
+
+        sim_entity *Entity  = Region->Entities + Candidates[Index].EntityIndex;
+        Matrix4     ToLocal = Mat4InverseRigid(SimEntityRenderTransform(Entity, Alpha));
 
         ray LocalRay;
-        LocalRay.Origin    = Mat4Transform(ToLocal, WorldRay.Origin, 1.0f);
-        LocalRay.Direction = Mat4Transform(ToLocal, WorldRay.Direction, 0.0f);
+        LocalRay.Origin    = Mat4Transform(ToLocal, SimRay.Origin, 1.0f);
+        LocalRay.Direction = Mat4Transform(ToLocal, SimRay.Direction, 0.0f);
+
+        collision Mesh = AssetCollisionMesh(Assets, Entity->MeshHandle);
 
         real32 Distance;
-        if (RayIntersectsMesh(&Current->Mesh, LocalRay, &Distance) && Distance < BestDistance)
+        if (RayIntersectsMesh(&Mesh, LocalRay, &Distance) && Distance < BestDistance)
         {
-            BestDistance = Distance;
-            Hit.ColliderHandle   = Current->Handle;
+            BestDistance      = Distance;
+            Hit.StorageIndex  = Entity->StorageIndex;
         }
     }
 
-    if (Hit.ColliderHandle)
+    EndTemporaryMemory(Scratch);
+
+    bool32 Found = (Hit.StorageIndex != ENTITY_STORAGE_NONE);
+    if (Found)
     {
         Hit.Distance = BestDistance;
-        Hit.Point    = WorldRay.Origin + WorldRay.Direction * BestDistance;
+        Hit.Point    = SimRay.Origin + SimRay.Direction * BestDistance;
     }
 
     if (OutHit)
@@ -155,5 +223,5 @@ internal uint32 RayCastColliders(ray WorldRay, collider *Colliders, uint32 Colli
         *OutHit = Hit;
     }
 
-    return Hit.ColliderHandle;
+    return Found;
 }

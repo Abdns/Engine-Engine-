@@ -19,6 +19,9 @@
     <Filter Include="engine\source\PlatformApi">
       <UniqueIdentifier>{a1000000-0000-0000-0000-0000000000c0}</UniqueIdentifier>
     </Filter>
+    <Filter Include="engine\source\Assets">
+      <UniqueIdentifier>{a1000000-0000-0000-0000-0000000000e1}</UniqueIdentifier>
+    </Filter>
     <Filter Include="engine\source\Physics">
       <UniqueIdentifier>{a1000000-0000-0000-0000-0000000000e0}</UniqueIdentifier>
     </Filter>
@@ -104,13 +107,19 @@
     <ClInclude Include="..\engine\source\Platform\win32\src\Win32Window.cpp">
       <Filter>engine\source\Platform\win32\src</Filter>
     </ClInclude>
-    <ClInclude Include="..\engine\source\Game\src\DataLake.cpp">
-      <Filter>engine\source\Game\src</Filter>
+    <ClInclude Include="..\engine\source\Assets\AssetStore.cpp">
+      <Filter>engine\source\Assets</Filter>
     </ClInclude>
     <ClInclude Include="..\engine\source\Game\src\Camera.cpp">
       <Filter>engine\source\Game\src</Filter>
     </ClInclude>
+    <ClInclude Include="..\engine\source\Game\src\World.cpp">
+      <Filter>engine\source\Game\src</Filter>
+    </ClInclude>
     <ClInclude Include="..\engine\source\Game\src\Entity.cpp">
+      <Filter>engine\source\Game\src</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\source\Game\src\SimRegion.cpp">
       <Filter>engine\source\Game\src</Filter>
     </ClInclude>
     <ClInclude Include="..\engine\source\Game\src\Material.cpp">
@@ -147,6 +156,12 @@
       <Filter>shared</Filter>
     </ClInclude>
     <ClInclude Include="..\engine\source\Physics\Physics.cpp">
+      <Filter>engine\source\Physics</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\source\Physics\Shapes.cpp">
+      <Filter>engine\source\Physics</Filter>
+    </ClInclude>
+    <ClInclude Include="..\engine\source\Physics\Broadphase.cpp">
       <Filter>engine\source\Physics</Filter>
     </ClInclude>
     <ClInclude Include="..\engine\source\Physics\Raycast.cpp">

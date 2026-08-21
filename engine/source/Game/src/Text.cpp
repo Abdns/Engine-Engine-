@@ -44,19 +44,19 @@ internal uint32 NextCodepoint(const char **At)
     return Codepoint;
 }
 
-internal void DrawText(render_commands *Commands, data_lake *Lake, uint32 FontHandle, Vector2 P, Vector4 Color, const char *Text)
+internal void DrawText(render_commands *Commands, asset_store *Assets, uint32 FontHandle, Vector2 P, Vector4 Color, const char *Text)
 {
-    if (FontHandle >= Lake->FontCount)
+    if (FontHandle >= Assets->FontCount)
     {
         return;
     }
 
     uint32 Slot = FontHandle;
 
-    asset_font_info *Font     = Lake->FontInfo + Slot;
-    uint16          *Map      = LakeFontMap(Lake, Slot);
-    real32          *Advances = LakeFontAdvance(Lake, Slot);
-    uint32           Texture  = Lake->FontTextureHandle[Slot];
+    asset_font_info *Font     = Assets->FontInfo + Slot;
+    uint16          *Map      = AssetFontMap(Assets, Slot);
+    real32          *Advances = AssetFontAdvance(Assets, Slot);
+    uint32           Texture  = Assets->FontTextureHandle[Slot];
     uint32           Columns  = Font->AtlasSize / Font->CellWidth;
     real32           InvSize  = 1.0f / (real32)Font->AtlasSize;
 
@@ -88,16 +88,16 @@ internal void DrawText(render_commands *Commands, data_lake *Lake, uint32 FontHa
     }
 }
 
-internal real32 TextWidth(data_lake *Lake, uint32 FontHandle, const char *Text)
+internal real32 TextWidth(asset_store *Assets, uint32 FontHandle, const char *Text)
 {
     real32 Width = 0.0f;
 
-    if (FontHandle >= Lake->FontCount)
+    if (FontHandle >= Assets->FontCount)
     {
         return Width;
     }
 
-    real32 *Advances = LakeFontAdvance(Lake, FontHandle);
+    real32 *Advances = AssetFontAdvance(Assets, FontHandle);
 
     for (const char *At = Text; *At;)
     {
@@ -111,12 +111,12 @@ internal real32 TextWidth(data_lake *Lake, uint32 FontHandle, const char *Text)
     return Width;
 }
 
-internal real32 TextLineAdvance(data_lake *Lake, uint32 FontHandle)
+internal real32 TextLineAdvance(asset_store *Assets, uint32 FontHandle)
 {
-    if (FontHandle >= Lake->FontCount)
+    if (FontHandle >= Assets->FontCount)
     {
         return 0.0f;
     }
 
-    return Lake->FontInfo[FontHandle].LineAdvance;
+    return Assets->FontInfo[FontHandle].LineAdvance;
 }

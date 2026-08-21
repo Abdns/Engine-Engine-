@@ -4,10 +4,10 @@
 
 struct camera
 {
-    Vector3 Position;
-    real32  Yaw;
-    real32  Pitch;
-    real32  FovY;
+    world_position P;
+    real32         Yaw;
+    real32         Pitch;
+    real32         FovY;
 };
 
 struct camera_basis
@@ -17,15 +17,15 @@ struct camera_basis
     Vector3 Forward;
 };
 
-internal void InitCamera(camera* Camera, Vector3 P, real32 FovY)
+internal void InitCamera(camera *Camera, world_position P, real32 FovY)
 {
-    Camera->Position = P;
+    Camera->P     = P;
     Camera->Yaw   = 0.0f;
     Camera->Pitch = 0.0f;
     Camera->FovY  = FovY;
 }
 
-internal camera_basis GetCameraBasis(camera* Camera)
+internal camera_basis GetCameraBasis(camera *Camera)
 {
     real32 cy = Cos(Camera->Yaw);
     real32 sy = Sin(Camera->Yaw);
@@ -40,21 +40,21 @@ internal camera_basis GetCameraBasis(camera* Camera)
     return Result;
 }
 
-internal Matrix4 CameraView(camera* Camera)
+internal Matrix4 CameraView(camera *Camera, Vector3 SimSpaceP)
 {
-    Vector3 Position = Camera->Position;
-
-    return Mat4Multiply(Mat4RotationX(-Camera->Pitch), Mat4Multiply(Mat4RotationY(-Camera->Yaw), Mat4Translation(-Position.X, -Position.Y, -Position.Z)));
+    return Mat4Multiply(Mat4RotationX(-Camera->Pitch),
+                        Mat4Multiply(Mat4RotationY(-Camera->Yaw),
+                                     Mat4Translation(-SimSpaceP.X, -SimSpaceP.Y, -SimSpaceP.Z)));
 }
 
-internal ray CameraRayFromScreen(camera* Camera, real32 MouseX, real32 MouseY, real32 ViewportWidth, real32 ViewportHeight)
+internal ray CameraRayFromScreen(camera *Camera, Vector3 SimSpaceP, real32 MouseX, real32 MouseY, real32 ViewportWidth, real32 ViewportHeight)
 {
     camera_basis Basis = GetCameraBasis(Camera);
 
-    return RayFromScreen(MouseX, MouseY, ViewportWidth, ViewportHeight, Camera->FovY, Camera->Position, Basis.Right, Basis.Up, Basis.Forward);
+    return RayFromScreen(MouseX, MouseY, ViewportWidth, ViewportHeight, Camera->FovY, SimSpaceP, Basis.Right, Basis.Up, Basis.Forward);
 }
 
-internal void UpdateCamera(camera* Camera, game_input* Input)
+internal void UpdateCamera(camera *Camera, world *World, game_input *Input)
 {
     real32 dMouseX = (real32)(Input->MouseX - Input->LastMouseX);
     real32 dMouseY = (real32)(Input->MouseY - Input->LastMouseY);
@@ -72,7 +72,7 @@ internal void UpdateCamera(camera* Camera, game_input* Input)
     Vector3 Right   = Basis.Right;
     Vector3 WorldUp = Vector3(0.0f, 1.0f, 0.0f);
 
-    game_controller_input* Keyboard = &Input->Controllers[0];
+    game_controller_input *Keyboard = &Input->Controllers[0];
     Vector3 Move = Vector3(0.0f, 0.0f, 0.0f);
     if (Keyboard->Up.EndedDown)            Move += Forward;
     if (Keyboard->Down.EndedDown)          Move -= Forward;
@@ -82,5 +82,6 @@ internal void UpdateCamera(camera* Camera, game_input* Input)
     if (Keyboard->LeftShoulder.EndedDown)  Move -= WorldUp;
 
     real32 Speed = 4.0f;
-    Camera->Position += (Speed * Input->dtForFrame) * Move;
+
+    Camera->P = MapIntoChunkSpace(World, Camera->P, (Speed * Input->dtForFrame) * Move);
 }

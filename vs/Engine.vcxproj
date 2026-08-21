@@ -23,7 +23,7 @@
     <NMakeCleanCommandLine>if exist "$(ProjectDir)..\build" rd /s /q "$(ProjectDir)..\build"</NMakeCleanCommandLine>
     <NMakeOutput>$(ProjectDir)..\build\Engine.exe</NMakeOutput>
     <NMakePreprocessorDefinitions>ENGINE_INTERNAL=1;ENGINE_SLOW=1;ENGINE_WIN32=1;VK_USE_PLATFORM_WIN32_KHR;UNICODE;_UNICODE;_DEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
-    <NMakeIncludeSearchPath>$(ProjectDir)..\engine\source;$(ProjectDir)..\shared;$(ProjectDir)..\engine\source\Game\include;$(ProjectDir)..\engine\source\Game\src;$(ProjectDir)..\engine\source\PlatformApi;$(ProjectDir)..\engine\source\Physics;$(ProjectDir)..\engine\source\Platform\win32\include;$(ProjectDir)..\engine\source\Platform\win32\src;$(ProjectDir)..\engine\source\Graphics\Vulkan;$(VULKAN_SDK)\Include;$(VC_IncludePath);$(WindowsSDK_IncludePath);$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
+    <NMakeIncludeSearchPath>$(ProjectDir)..\engine\source;$(ProjectDir)..\shared;$(ProjectDir)..\third_party;$(ProjectDir)..\engine\source\Game\include;$(ProjectDir)..\engine\source\Game\src;$(ProjectDir)..\engine\source\PlatformApi;$(ProjectDir)..\engine\source\Physics;$(ProjectDir)..\engine\source\Assets;$(ProjectDir)..\engine\source\Platform\win32\include;$(ProjectDir)..\engine\source\Platform\win32\src;$(ProjectDir)..\engine\source\Graphics\Vulkan;$(VULKAN_SDK)\Include;$(VC_IncludePath);$(WindowsSDK_IncludePath);$(NMakeIncludeSearchPath)</NMakeIncludeSearchPath>
     <LocalDebuggerCommand>$(ProjectDir)..\build\Engine.exe</LocalDebuggerCommand>
     <LocalDebuggerWorkingDirectory>$(ProjectDir)..\build</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
@@ -51,9 +51,11 @@
     <ClInclude Include="..\engine\source\Platform\win32\src\Win32Sound.cpp" />
     <ClInclude Include="..\engine\source\Platform\win32\src\Win32Timer.cpp" />
     <ClInclude Include="..\engine\source\Platform\win32\src\Win32Window.cpp" />
-    <ClInclude Include="..\engine\source\Game\src\DataLake.cpp" />
+    <ClInclude Include="..\engine\source\Assets\AssetStore.cpp" />
     <ClInclude Include="..\engine\source\Game\src\Camera.cpp" />
+    <ClInclude Include="..\engine\source\Game\src\World.cpp" />
     <ClInclude Include="..\engine\source\Game\src\Entity.cpp" />
+    <ClInclude Include="..\engine\source\Game\src\SimRegion.cpp" />
     <ClInclude Include="..\engine\source\Game\src\Material.cpp" />
     <ClInclude Include="..\engine\source\Game\src\UI.cpp" />
     <ClInclude Include="..\engine\source\Game\src\Text.cpp" />
@@ -63,6 +65,8 @@
     <ClInclude Include="..\engine\source\PlatformApi\RenderCommands.h" />
     <ClInclude Include="..\shared\EngaFormat.h" />
     <ClInclude Include="..\engine\source\Physics\Physics.cpp" />
+    <ClInclude Include="..\engine\source\Physics\Shapes.cpp" />
+    <ClInclude Include="..\engine\source\Physics\Broadphase.cpp" />
     <ClInclude Include="..\engine\source\Physics\Raycast.cpp" />
     <ClInclude Include="..\engine\source\Physics\Collider.h" />
     <ClInclude Include="..\engine\source\Graphics\Vulkan\Vulkan.h" />

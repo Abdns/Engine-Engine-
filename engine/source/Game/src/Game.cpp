@@ -1,34 +1,29 @@
 #include "Game.h"
 
-#include "Raycast.cpp"
-#include "Physics.cpp"
-#include "DataLake.cpp"
-#include "Camera.cpp"
+#include "AssetStore.cpp"
+#include "World.cpp"
 #include "Entity.cpp"
+#include "SimRegion.cpp"
+#include "Shapes.cpp"
+#include "Broadphase.cpp"
+#include "Physics.cpp"
+#include "Raycast.cpp"
+#include "Camera.cpp"
 #include "Material.cpp"
-#include "UI.cpp"
 #include "Text.cpp"
+#include "UI.cpp"
 
 #include "GameState.h"
 
+#define FRAME_ARENA_SIZE      Megabytes(8)
+#define WORLD_CHUNK_DIM       16.0f
+#define ENTITY_CAPACITY       4096
+#define SIM_MAX_ENTITIES      4096
+#define SIM_HALF_DIM          48.0f
+#define BALL_SPEED            15.0f
+
 internal void GameOutputSound(game_state* GameState, game_sound_output_buffer* SoundBuffer)
 {
-   /* int ToneHz = 256;
-    int16 ToneVolume = 3000;
-    int WavePeriod = SoundBuffer->SamplesPerSecond / ToneHz;
-
-    int16* SampleOut = SoundBuffer->Samples;
-
-    for (int SampleIndex = 0; SampleIndex < SoundBuffer->SampleCount; ++SampleIndex)
-    {
-        real32 SineValue = Sin(GameState->tSine);
-        int16 SampleValue = (int16)(SineValue * ToneVolume);
-
-        *SampleOut++ = SampleValue;
-        *SampleOut++ = SampleValue;
-
-        GameState->tSine += 2.0f * Pi32 * 1.0f / (real32)WavePeriod;
-    }*/
 }
 
 internal texture_format TextureFormatFromAsset(uint32 AssetFormat)
@@ -36,213 +31,199 @@ internal texture_format TextureFormatFromAsset(uint32 AssetFormat)
     return (AssetFormat == (uint32)ImageFormat_RGBA16F) ? TextureFormat_RGBA16F : TextureFormat_RGBA8;
 }
 
-internal void PushLakeToRender(data_lake *Lake, render_commands *Commands)
+internal void PushAssetsToRender(asset_store *Assets, render_commands *Commands)
 {
-    for (uint32 Slot = 0; Slot < Lake->MeshCount; ++Slot)
+    for (uint32 Handle = 0; Handle < Assets->MeshCount; ++Handle)
     {
-        PushLoadMesh(Commands, Slot, LakeMeshVertices(Lake, Slot), Lake->MeshVertexCount[Slot], LakeMeshIndices(Lake, Slot), Lake->MeshIndexCount[Slot]);
+        PushLoadMesh(Commands, Handle, AssetMeshVertices(Assets, Handle), Assets->MeshVertexCount[Handle], AssetMeshIndices(Assets, Handle), Assets->MeshIndexCount[Handle]);
     }
 
-    for (uint32 Slot = 0; Slot < Lake->TextureCount; ++Slot)
+    for (uint32 Handle = 0; Handle < Assets->TextureCount; ++Handle)
     {
-        PushLoadTexture(Commands, Slot, LakeTexturePixels(Lake, Slot), Lake->TextureWidth[Slot], Lake->TextureHeight[Slot], Lake->TextureSRGB[Slot], TextureFormatFromAsset(Lake->TextureFormat[Slot]));
+        PushLoadTexture(Commands, Handle, AssetTexturePixels(Assets, Handle), Assets->TextureWidth[Handle], Assets->TextureHeight[Handle], Assets->TextureSRGB[Handle], TextureFormatFromAsset(Assets->TextureFormat[Handle]));
     }
 
-    for (uint32 Slot = 0; Slot < Lake->CubemapCount; ++Slot)
+    for (uint32 Handle = 0; Handle < Assets->CubemapCount; ++Handle)
     {
-        PushLoadCubemap(Commands, Slot, LakeCubemapPixels(Lake, Slot), Lake->CubemapFaceSize[Slot], TextureFormatFromAsset(Lake->CubemapFormat[Slot]));
+        PushLoadCubemap(Commands, Handle, AssetCubemapPixels(Assets, Handle), Assets->CubemapFaceSize[Handle], TextureFormatFromAsset(Assets->CubemapFormat[Handle]));
     }
 }
 
-internal void LoadENGA(char* name, game_memory *Memory, game_state* GameState)
+internal void LoadAssetPack(const char *Name, game_memory *Memory, game_state *GameState)
 {
-    file_data PackFile = Memory->PlatformReadEntireFile(name);
-    LakeLoadENGA(&GameState->Lake, PackFile.Data, PackFile.Size);
+    file_data PackFile = Memory->PlatformReadEntireFile((char *)Name);
+
+    asset_store_budget Budget = AssetStoreBudgetFromPack(PackFile.Data, PackFile.Size);
+
+    AssetStoreInit(&GameState->Assets, &GameState->WorldArena, Budget);
+    AssetStoreLoadPack(&GameState->Assets, PackFile.Data, PackFile.Size);
+
     Memory->PlatformFreeFileMemory(PackFile.Data);
 }
 
-internal collision LakeCollisionMesh(data_lake *Lake, uint32 Slot)
+internal void BuildMeshShapes(game_state *GameState, memory_arena *Arena)
 {
-    collision Mesh = {};
-    Mesh.Vertices     = LakeMeshVertices(Lake, Slot);
-    Mesh.VertexStride = sizeof(enga_vertex);
-    Mesh.VertexCount  = Lake->MeshVertexCount[Slot];
-    Mesh.Indices      = LakeMeshIndices(Lake, Slot);
-    Mesh.IndexCount   = Lake->MeshIndexCount[Slot];
-    Mesh.BoundsMin    = Lake->MeshBoundsMin[Slot];
-    Mesh.BoundsMax    = Lake->MeshBoundsMax[Slot];
+    asset_store *Assets = &GameState->Assets;
 
-    return Mesh;
-}
-
-internal uint32 BuildEntityColliders(data_lake *Lake, real32 Alpha, collider *Colliders, uint32 MaxColliders)
-{
-    uint32 Count = Minimum(Lake->Transforms.Count, MaxColliders);
-
-    for (uint32 Slot = 0; Slot < Count; ++Slot)
+    for (uint32 MeshHandle = 0; MeshHandle < Assets->MeshCount; ++MeshHandle)
     {
-        Colliders[Slot] = MakeCollider(Lake->Transforms.EntityID[Slot], EntityRenderTransform(Lake, Slot, Alpha), LakeCollisionMesh(Lake, Lake->Transforms.MeshHandle[Slot]));
-    }
-
-    return Count;
-}
-
-internal void BuildMeshHulls(game_state *GameState, memory_arena *Arena)
-{
-    data_lake *Lake = &GameState->Lake;
-
-    for (uint32 Slot = 0; Slot < Lake->MeshCount; ++Slot)
-    {
-        PhysicsSetMeshHull(&GameState->Physics, Arena, Slot, LakeCollisionMesh(Lake, Slot));
+        PhysicsSetMeshShape(&GameState->Physics, Arena, MeshHandle, AssetCollisionMesh(Assets, MeshHandle));
     }
 }
 
-internal void AddPhysicsBody(game_state *GameState, uint32 Slot)
+inline world_position WorldOrigin(void)
 {
-    data_lake      *Lake       = &GameState->Lake;
-    transform_pool *Transforms = &Lake->Transforms;
+    return WorldPositionFromChunk(0, 0, 0, Vector3(0.0f, 0.0f, 0.0f));
+}
 
-    physics_body *Body = PhysicsAddBody(&GameState->Physics);
-    if (!Body)
+internal uint32 AddEntityAt(game_state *GameState, entity_type Type, world_position P, uint32 MeshHandle, uint32 MaterialHandle, bool32 Static, const char *Name)
+{
+    uint32 StorageIndex = AddLowEntity(&GameState->WorldArena, GameState->World, &GameState->Storage, Type, P, Name);
+    if (StorageIndex == ENTITY_STORAGE_NONE)
+    {
+        return ENTITY_STORAGE_NONE;
+    }
+
+    low_entity *Stored = GetLowEntity(&GameState->Storage, StorageIndex);
+
+    Stored->Sim.Flags          = EntityFlag_Visible | EntityFlag_Simulates | (Static ? EntityFlag_Static : 0);
+    Stored->Sim.MeshHandle     = MeshHandle;
+    Stored->Sim.MaterialHandle = MaterialHandle;
+
+    PhysicsSetMass(&GameState->Physics, &Stored->Sim, Static);
+
+    return StorageIndex;
+}
+
+internal uint32 AddEntity(game_state *GameState, entity_type Type, Vector3 Offset, uint32 MeshHandle, uint32 MaterialHandle, bool32 Static, const char *Name)
+{
+    return AddEntityAt(GameState, Type, MapIntoChunkSpace(GameState->World, WorldOrigin(), Offset), MeshHandle, MaterialHandle, Static, Name);
+}
+
+internal void ClearSpawnedEntities(game_state *GameState)
+{
+    entity_storage *Storage = &GameState->Storage;
+
+    for (uint32 StorageIndex = 1; StorageIndex < Storage->Count; ++StorageIndex)
+    {
+        low_entity *Stored = Storage->LowEntities + StorageIndex;
+
+        if (Stored->Sim.Type == Entity_Null || (Stored->Sim.Flags & EntityFlag_Static))
+        {
+            continue;
+        }
+
+        RemoveLowEntity(&GameState->WorldArena, GameState->World, Storage, StorageIndex);
+    }
+
+    GameState->SelectedStorageIndex = ENTITY_STORAGE_NONE;
+}
+
+internal void ShootBall(game_state *GameState, sim_region *Region, ray Aim)
+{
+    world_position P = MapIntoChunkSpace(GameState->World, Region->Origin, Aim.Origin + Aim.Direction);
+
+    uint32 StorageIndex = AddEntityAt(GameState, Entity_Ball, P, GameState->SpawnMeshHandles[1], GameState->SpawnMaterialHandles[0], false, 0);
+    if (StorageIndex == ENTITY_STORAGE_NONE)
     {
         return;
     }
 
-    uint32 MeshHandle = Transforms->MeshHandle[Slot];
+    low_entity *Stored = GetLowEntity(&GameState->Storage, StorageIndex);
+    Stored->Sim.dP = Aim.Direction * BALL_SPEED;
 
-    Body->Position        = Transforms->Position[Slot];
-    Body->Rotation        = Transforms->Rotation[Slot];
-    Body->Velocity        = Vector3(0.0f, 0.0f, 0.0f);
-    Body->AngularVelocity = Vector3(0.0f, 0.0f, 0.0f);
-    Body->Collider        = MakeCollider(Transforms->EntityID[Slot], EntityLocalToWorld(Lake, Slot), LakeCollisionMesh(Lake, MeshHandle));
-    Body->Hull            = GameState->Physics.MeshHulls[MeshHandle];
-
-    if (Transforms->Static[Slot])
-    {
-        Body->InvMass    = 0.0f;
-        Body->InvInertia = 0.0f;
-    }
-    else
-    {
-        real32 Radius = 0.5f * Length(Body->Collider.Mesh.BoundsMax - Body->Collider.Mesh.BoundsMin);
-        Body->InvMass    = 1.0f;
-        Body->InvInertia = 1.0f / (0.4f * Radius * Radius);
-    }
-
-    ComputeWorldAABB(Body->Collider.LocalToWorld, Body->Collider.Mesh.BoundsMin, Body->Collider.Mesh.BoundsMax, &Body->BoundsMin, &Body->BoundsMax);
+    Vector3 SimSpaceP = GetSimSpaceP(Region, Stored);
+    AddEntityToRegion(Region, StorageIndex, Stored, SimSpaceP, SimSpaceP);
 }
 
-internal void SyncPhysicsBodies(game_state *GameState)
+internal void PushEntitiesToRender(sim_region *Region, render_commands *Commands, uint32 SelectedStorageIndex, real32 Alpha)
 {
-    uint32 SlotCount = Minimum(GameState->Lake.Transforms.Count, GameState->Physics.BodyCapacity);
-
-    while (GameState->Physics.BodyCount < SlotCount)
+    for (uint32 Index = 0; Index < Region->EntityCount; ++Index)
     {
-        AddPhysicsBody(GameState, GameState->Physics.BodyCount);
-    }
-}
+        sim_entity *Entity = Region->Entities + Index;
 
-internal void ApplyPhysicsPoses(data_lake *Lake, physics_body *Bodies, uint32 BodyCount)
-{
-    for (uint32 Slot = 0; Slot < BodyCount; ++Slot)
-    {
-        Lake->Transforms.Position[Slot] = Bodies[Slot].Position;
-        Lake->Transforms.Rotation[Slot] = Bodies[Slot].Rotation;
-    }
-}
+        if (!(Entity->Flags & EntityFlag_Visible))
+        {
+            continue;
+        }
 
-internal void PushEntitiesToRender(data_lake *Lake, render_commands *Commands, uint32 SelectedID, real32 Alpha)
-{
-    for (uint32 Slot = 0; Slot < Lake->Transforms.Count; ++Slot)
-    {
-        Vector4 Tint = Lake->Transforms.Tint[Slot];
-        if (SelectedID && Lake->Transforms.EntityID[Slot] == SelectedID)
+        Vector4 Tint = Entity->Tint;
+        if (Entity->StorageIndex == SelectedStorageIndex)
         {
             Tint = Vector4(1.0f, 0.85f, 0.2f, Tint.W);
         }
 
-        PushRenderMesh(Commands, EntityRenderTransform(Lake, Slot, Alpha), Tint, Lake->Transforms.MeshHandle[Slot], Lake->Transforms.MaterialHandle[Slot]);
+        PushRenderMesh(Commands, SimEntityRenderTransform(Entity, Alpha), Tint, Entity->MeshHandle, Entity->MaterialHandle);
     }
 }
 
-internal uint32 AddUIButton(data_lake *Lake, const char *Name, rect2 Rect)
+internal void InitGame(game_memory *Memory, game_state *GameState, render_commands *RenderCommands)
 {
-    entity *Entity = AddWidgetEntity(Lake, Name, Entity_UIButton, Rect.Min, Rect.Max, 0.0f);
+    GameState->tSine = 0.0f;
 
-    return Entity ? Entity->ID : 0;
-}
+    InitializeArena(&GameState->WorldArena, Memory->PermanentStorageSize - sizeof(game_state), (uint8 *)Memory->PermanentStorage + sizeof(game_state));
 
-internal rect2 EntityRect(data_lake *Lake, entity *Entity)
-{
-    Assert(Entity->Type == Entity_UIButton || Entity->Type == Entity_UISlider || Entity->Type == Entity_UIList);
+    memory_arena *WorldArena = &GameState->WorldArena;
+    SubArena(&GameState->FrameArena, WorldArena, FRAME_ARENA_SIZE);
 
-    rect2 Result;
-    Result.Min = Lake->Widgets.RectMin[Entity->Slot];
-    Result.Max = Lake->Widgets.RectMax[Entity->Slot];
+    LoadAssetPack(ENGA_PACK_PATH, Memory, GameState);
 
-    return Result;
-}
+    asset_store *Assets = &GameState->Assets;
 
-internal bool32 UIEntityButton(ui_context *UI, data_lake *Lake, uint32 FontHandle, uint32 Handle)
-{
-    entity *Entity = GetEntity(Lake, Handle);
-    rect2   Rect   = EntityRect(Lake, Entity);
+    PushAssetsToRender(Assets, RenderCommands);
 
-    bool32 Clicked = UIButton(UI, Handle, Rect);
+    GameState->World = PushStruct(WorldArena, world);
+    WorldInit(GameState->World, WORLD_CHUNK_DIM);
 
-    const char *Label = EntityName(Lake, Entity);
-    Vector2 LabelP = Vector2(Rect.Min.X + 0.5f * ((Rect.Max.X - Rect.Min.X) - TextWidth(Lake, FontHandle, Label)),
-                             Rect.Min.Y + 0.5f * ((Rect.Max.Y - Rect.Min.Y) - TextLineAdvance(Lake, FontHandle)));
+    EntityStorageInit(&GameState->Storage, WorldArena, ENTITY_CAPACITY);
 
-    DrawText(UI->Commands, Lake, FontHandle, LabelP, Vector4(1.0f, 1.0f, 1.0f, 1.0f), Label);
+    PhysicsInit(&GameState->Physics, WorldArena, SIM_MAX_ENTITIES, Assets->MeshCount);
+    BuildMeshShapes(GameState, WorldArena);
 
-    return Clicked;
-}
+    uint32 TexTestHandle = AssetTextureHandle(Assets, "test");
 
-internal uint32 SpawnEntity(game_state *GameState, Vector3 Position, uint32 MeshHandle, uint32 MaterialHandle)
-{
-    entity *Entity = AddMeshEntity(&GameState->Lake, 0, Position, MeshHandle, MaterialHandle);
+    GameState->SkyHandle  = AssetCubemapHandle(Assets, "sky");
+    GameState->FontHandle = AssetFontHandle(Assets, "DejaVuSansMono24");
 
-    return Entity ? Entity->ID : 0;
-}
+    GameState->SpawnMeshHandles[0] = AssetMeshHandle(Assets, "cube");
+    GameState->SpawnMeshHandles[1] = AssetMeshHandle(Assets, "sphere");
 
-#define BALL_SPEED 15.0f
+    materials *Materials = &GameState->Materials;
+    GameState->SpawnMaterialHandles[0] = AddMaterial(Materials, UnlitMaterial(Vector4(1.0f, 1.0f, 1.0f, 1.0f), TexTestHandle));
+    GameState->SpawnMaterialHandles[1] = GameState->SpawnMaterialHandles[0];
+    GameState->SpawnMaterialHandles[2] = GameState->SpawnMaterialHandles[0];
 
-internal void ShootBall(game_state *GameState, ray Aim)
-{
-    data_lake *Lake = &GameState->Lake;
+    uint32 LitMaterialHandle   = AddMaterial(Materials, LitMaterial(Vector4(0.9f, 0.5f, 0.2f, 1.0f)));
+    uint32 FloorMaterialHandle = AddMaterial(Materials, LitMaterial(Vector4(0.45f, 0.45f, 0.5f, 1.0f)));
 
-    entity *Ball = AddMeshEntity(Lake, 0, Aim.Origin + Aim.Direction, GameState->SpawnMeshHandles[1], GameState->SpawnMaterialHandles[0]);
-    if (!Ball)
+    PushMaterialsToRender(Materials, RenderCommands);
+
+    AddEntity(GameState, Entity_Floor, Vector3(0.0f, -2.1f, 0.0f), AssetMeshHandle(Assets, "plane"), FloorMaterialHandle, true, "floor");
+
+    for (uint32 SpawnIndex = 0; SpawnIndex < 3; ++SpawnIndex)
     {
-        return;
+        real32 Angle  = (real32)SpawnIndex * 2.39996f;
+        real32 Radius = 0.9f * SquareRoot((real32)SpawnIndex + 1.0f);
+
+        Vector3 Position = Vector3(Cos(Angle) * Radius, 0.0f, Sin(Angle) * Radius);
+
+        uint32 MeshHandle     = GameState->SpawnMeshHandles[SpawnIndex % ArrayCount(GameState->SpawnMeshHandles)];
+        uint32 MaterialHandle = GameState->SpawnMaterialHandles[SpawnIndex % ArrayCount(GameState->SpawnMaterialHandles)];
+
+        AddEntity(GameState, Entity_Prop, Position, MeshHandle, MaterialHandle, false, 0);
     }
 
-    SyncPhysicsBodies(GameState);
-    GameState->Physics.Bodies[Ball->Slot].Velocity = Aim.Direction * BALL_SPEED;
-}
+    AddEntity(GameState, Entity_Prop, Vector3(-2.5f, 0.0f, 0.0f), GameState->SpawnMeshHandles[1], LitMaterialHandle, false, 0);
+    AddEntity(GameState, Entity_Prop, Vector3( 2.5f, 0.0f, 0.0f), GameState->SpawnMeshHandles[0], LitMaterialHandle, false, 0);
 
-internal real32 UpdatePhysics(game_state* GameState, real32 dt)
-{
-    data_lake* Lake = &GameState->Lake;
+    InitCamera(&GameState->Camera, MapIntoChunkSpace(GameState->World, WorldOrigin(), Vector3(0.0f, 0.0f, 4.0f)), DegToRad(75.0f));
 
-    physics_world *World = &GameState->Physics;
+    GameState->SelectedStorageIndex = ENTITY_STORAGE_NONE;
 
-    SyncPhysicsBodies(GameState);
-    PhysicsAccumulate(World, dt);
+    GameState->UI.Style = DefaultUIStyle();
+    GameState->Paused   = false;
 
-    while (PhysicsNextTick(World))
-    {
-        EntityUpdatePreviousTrasform(Lake);
-
-        if (!GameState->Paused)
-        {
-            PhysicsStep(World);
-            ApplyPhysicsPoses(Lake, World->Bodies, World->BodyCount);
-        }
-    }
-
-    return PhysicsRenderAlpha(World);
+    DebugLog("World arena: %llu KB used of %llu KB\n", WorldArena->Used / 1024, WorldArena->Size / 1024);
 }
 
 extern "C" __declspec(dllexport)
@@ -250,111 +231,84 @@ GAME_UPDATE_AND_RENDER(GameUpdateAndRender)
 {
     Assert(sizeof(game_state) <= Memory->PermanentStorageSize);
 
-    game_state* GameState = (game_state*)Memory->PermanentStorage;
-    data_lake* Lake = &GameState->Lake;
+    game_state *GameState = (game_state *)Memory->PermanentStorage;
 
     if (!Memory->IsInitialized)
     {
-        GameState->tSine = 0.0f;
-
-        InitializeArena(&GameState->WorldArena, Memory->PermanentStorageSize - sizeof(game_state), (uint8*)Memory->PermanentStorage + sizeof(game_state));
-        memory_arena* WorldArena = &GameState->WorldArena;
-
-        LakeInit(&GameState->Lake, &GameState->WorldArena);
-
-        LoadENGA(ENGA_PACK_PATH, Memory, GameState);
-        PushLakeToRender(Lake, RenderCommands);
-
-        InitEntities(Lake, WorldArena);
-
-        GameState->ColliderCapacity = Lake->EntityCapacity;
-        GameState->Colliders = PushArray(WorldArena, GameState->ColliderCapacity, collider);
-
-        PhysicsInit(&GameState->Physics, WorldArena, Lake->EntityCapacity, Lake->MeshCapacity);
-        BuildMeshHulls(GameState, WorldArena);
-
-        uint32    TexTestHandle = LakeGetTextureHandle(Lake, "test");
-
-        GameState->SkyHandle  = LakeGetCubemapHandle(Lake, "sky");
-        GameState->FontHandle = LakeGetFontHandle(Lake, "DejaVuSansMono24");
-
-        GameState->SpawnMeshHandles[0] = LakeGetMeshHandle(Lake, "cube");
-        GameState->SpawnMeshHandles[1] = LakeGetMeshHandle(Lake, "sphere");
-
-        materials* Materials = &GameState->Materials;
-        GameState->SpawnMaterialHandles[0] = AddMaterial(Materials, UnlitMaterial(Vector4(1.0f, 1.0f, 1.0f, 1.0f), TexTestHandle));
-        GameState->SpawnMaterialHandles[1] = GameState->SpawnMaterialHandles[0];
-        GameState->SpawnMaterialHandles[2] = GameState->SpawnMaterialHandles[0];
-
-        uint32 LitMaterialHandle   = AddMaterial(Materials, LitMaterial(Vector4(0.9f, 0.5f, 0.2f, 1.0f)));
-        uint32 FloorMaterialHandle = AddMaterial(Materials, LitMaterial(Vector4(0.45f, 0.45f, 0.5f, 1.0f)));
-
-        PushMaterialsToRender(Materials, RenderCommands);
-
-        entity *Floor = AddMeshEntity(Lake, "floor", Vector3(0.0f, -2.1f, 0.0f), LakeGetMeshHandle(Lake, "plane"), FloorMaterialHandle);
-        if (Floor)
-        {
-            Lake->Transforms.Static[Floor->Slot] = true;
-        }
-
-        for (uint32 SpawnIndex = 0; SpawnIndex < 3; ++SpawnIndex)
-        {
-            uint32 Index  = Lake->Transforms.Count;
-            real32 Angle  = (real32)Index * 2.39996f;
-            real32 Radius = 0.9f * SquareRoot((real32)Index + 1.0f);
-
-            Vector3 Position = Vector3(Cos(Angle) * Radius, 0.0f, Sin(Angle) * Radius);
-
-            uint32 MeshHandle     = GameState->SpawnMeshHandles[Index % ArrayCount(GameState->SpawnMeshHandles)];
-            uint32 MaterialHandle = GameState->SpawnMaterialHandles[Index % ArrayCount(GameState->SpawnMaterialHandles)];
-
-            SpawnEntity(GameState, Position, MeshHandle, MaterialHandle);
-        }
-
-        SpawnEntity(GameState, Vector3(-2.5f, 0.0f, 0.0f), GameState->SpawnMeshHandles[1], LitMaterialHandle);
-        SpawnEntity(GameState, Vector3( 2.5f, 0.0f, 0.0f), GameState->SpawnMeshHandles[0], LitMaterialHandle);
-
-        InitCamera(&GameState->Camera, Vector3(0.0f, 0.0f, 4.0f), DegToRad(75.0f));
-
-        GameState->SelectedEntityID = 0;
-
-        GameState->UI.Style = DefaultUIStyle();
-        GameState->Paused   = false;
-
-
-        GameState->PauseButton = AddUIButton(Lake, "pause", RectMinDim(20.0f, 20.0f, 140.0f, 36.0f));
-        GameState->SpawnButton = AddUIButton(Lake, "spawn", RectMinDim(20.0f, 66.0f, 140.0f, 36.0f));
+        InitGame(Memory, GameState, RenderCommands);
 
         Memory->IsInitialized = true;
     }
 
-    ui_context *UI = &GameState->UI;
+    ResetArena(&GameState->FrameArena);
+
+    asset_store *Assets = &GameState->Assets;
+    camera      *Camera = &GameState->Camera;
+    ui_context  *UI     = &GameState->UI;
+
     BeginUI(UI, Input, RenderCommands);
 
-    if (UIEntityButton(UI, Lake, GameState->FontHandle, GameState->PauseButton))
+    if (UILabeledButton(UI, Assets, GameState->FontHandle, "pause", RectMinDim(20.0f, 20.0f, 140.0f, 36.0f)))
     {
         GameState->Paused = !GameState->Paused;
     }
 
-    real32 RenderAlpha = UpdatePhysics(GameState, Input->dtForFrame);
+    if (UILabeledButton(UI, Assets, GameState->FontHandle, "spawn", RectMinDim(20.0f, 66.0f, 140.0f, 36.0f)))
+    {
+        AddEntity(GameState, Entity_Prop, Vector3(0.0f, 3.0f, 0.0f), GameState->SpawnMeshHandles[0], GameState->SpawnMaterialHandles[0], false, 0);
+    }
 
-    camera* Camera = &GameState->Camera;
-    UpdateCamera(Camera, Input);
+    if (UILabeledButton(UI, Assets, GameState->FontHandle, "clear", RectMinDim(20.0f, 112.0f, 140.0f, 36.0f)))
+    {
+        ClearSpawnedEntities(GameState);
+    }
+
+    rectangle3  SimBounds = Rect3CenterRadius(Vector3(0.0f, 0.0f, 0.0f), SIM_HALF_DIM);
+    sim_region *Region    = BeginSim(&GameState->FrameArena, GameState->World, &GameState->Storage, Camera->P, SimBounds, SIM_MAX_ENTITIES);
+
+    local_persist uint32 LastSimCount = 0xFFFFFFFF;
+    if (Region->EntityCount != LastSimCount)
+    {
+        LastSimCount = Region->EntityCount;
+        DebugLog("Sim region: %u simulated of %u stored, origin chunk (%d %d %d)\n",
+                 Region->EntityCount, GameState->Storage.Count - 1, Region->Origin.ChunkX, Region->Origin.ChunkY, Region->Origin.ChunkZ);
+    }
+
+    PhysicsAccumulate(&GameState->Physics, Input->dtForFrame);
+
+    while (PhysicsNextTick(&GameState->Physics))
+    {
+        SimSavePreviousTransforms(Region);
+
+        if (!GameState->Paused)
+        {
+            PhysicsStep(&GameState->Physics, Region);
+        }
+    }
+
+    real32 RenderAlpha = PhysicsRenderAlpha(&GameState->Physics);
+
+    UpdateCamera(Camera, GameState->World, Input);
+
+    Vector3 CameraSimP = WorldSubtract(GameState->World, &Camera->P, &Region->Origin);
 
     bool32 PickedThisFrame = (UI->MousePressed && !UI->Active);
     if (PickedThisFrame && Input->RenderWidth > 0 && Input->RenderHeight > 0)
     {
-        ray PickRay = CameraRayFromScreen(Camera, (real32)Input->MouseX, (real32)Input->MouseY, (real32)Input->RenderWidth, (real32)Input->RenderHeight);
-        uint32 ColliderCount = BuildEntityColliders(Lake, RenderAlpha, GameState->Colliders, GameState->ColliderCapacity);
-        GameState->SelectedEntityID = RayCastColliders(PickRay, GameState->Colliders, ColliderCount, 0);
+        ray PickRay = CameraRayFromScreen(Camera, CameraSimP, (real32)Input->MouseX, (real32)Input->MouseY, (real32)Input->RenderWidth, (real32)Input->RenderHeight);
 
-        ShootBall(GameState, PickRay);
+        raycast_hit Hit;
+        GameState->SelectedStorageIndex = RayCastSim(PickRay, Region, Assets, &GameState->FrameArena, RenderAlpha, &Hit) ? Hit.StorageIndex : ENTITY_STORAGE_NONE;
+
+        ShootBall(GameState, Region, PickRay);
     }
 
-    PushRenderCamera(RenderCommands, CameraView(Camera), Camera->FovY);
-    PushRenderLight(RenderCommands, Vector3(30,0,0));
+    PushRenderCamera(RenderCommands, CameraView(Camera, CameraSimP), Camera->FovY);
+    PushRenderLight(RenderCommands, Vector3(30.0f, 0.0f, 0.0f));
     PushRenderSkybox(RenderCommands, GameState->SkyHandle);
-    PushEntitiesToRender(Lake, RenderCommands, GameState->SelectedEntityID, RenderAlpha);
+    PushEntitiesToRender(Region, RenderCommands, GameState->SelectedStorageIndex, RenderAlpha);
+
+    EndSim(Region, &GameState->WorldArena);
 
     EndUI(UI);
 }

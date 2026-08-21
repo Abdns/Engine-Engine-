@@ -226,3 +226,28 @@ internal void UIPanel(ui_context *UI, rect2 Rect, Vector4 Color)
 {
     PushRenderRect(UI->Commands, Rect.Min, Rect.Max, Color);
 }
+
+internal uint32 UIIDFromString(const char *Name)
+{
+    uint32 Hash = 2166136261u;
+
+    for (const char *At = Name; *At; ++At)
+    {
+        Hash ^= (uint32)(uint8)*At;
+        Hash *= 16777619u;
+    }
+
+    return Hash ? Hash : 1;
+}
+
+internal bool32 UILabeledButton(ui_context *UI, asset_store *Assets, uint32 FontHandle, const char *Label, rect2 Rect)
+{
+    bool32 Clicked = UIButton(UI, UIIDFromString(Label), Rect);
+
+    Vector2 LabelP = Vector2(Rect.Min.X + 0.5f * ((Rect.Max.X - Rect.Min.X) - TextWidth(Assets, FontHandle, Label)),
+                             Rect.Min.Y + 0.5f * ((Rect.Max.Y - Rect.Min.Y) - TextLineAdvance(Assets, FontHandle)));
+
+    DrawText(UI->Commands, Assets, FontHandle, LabelP, Vector4(1.0f, 1.0f, 1.0f, 1.0f), Label);
+
+    return Clicked;
+}
